@@ -5,6 +5,7 @@ import time
 import re
 import base64
 import os
+import shutil # 🔥 Added for Cloud
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
@@ -69,14 +70,39 @@ def clean_phone_for_wa(phone):
         return None
     return f"https://wa.me/{clean}"
 
-# 🔥 PHONE TEXT CLEANER (Displays only numbers)
+# 🔥 PHONE TEXT CLEANER
 def clean_phone_display(text):
     if not text: return "N/A"
-    # Removes all letters, keeps digits, spaces, and +
     clean = re.sub(r'[^\d+\s]', '', text).strip()
     return clean
 
-# --- 4. STYLING ---
+# --- 4. CLOUD COMPATIBLE DRIVER SETUP (THE FIX) ---
+def get_driver():
+    options = Options()
+    options.add_argument("--headless") # Essential for Cloud
+    options.add_argument("--no-sandbox")
+    options.add_argument("--disable-dev-shm-usage")
+    options.add_argument("--disable-gpu")
+    options.add_argument("--window-size=1920,1080")
+    
+    # Try to find Chromium binary (Streamlit Cloud uses 'chromium')
+    chromium_path = shutil.which("chromium") or shutil.which("chromium-browser")
+    if chromium_path:
+        options.binary_location = chromium_path
+
+    try:
+        # Method 1: Use WebDriver Manager (Works Local)
+        service = Service(ChromeDriverManager().install())
+        return webdriver.Chrome(service=service, options=options)
+    except Exception:
+        try:
+            # Method 2: Direct System Path (Works on Cloud if packages.txt is present)
+            return webdriver.Chrome(options=options)
+        except Exception as e:
+            st.error(f"❌ Driver Error: {str(e)}. Make sure 'packages.txt' is in GitHub.")
+            return None
+
+# --- 5. STYLING (YOUR DARK MODE) ---
 bg_color = "#0f111a"
 card_bg = "#1a1f2e"
 text_color = "#FFFFFF"
@@ -140,7 +166,7 @@ st.markdown(f"""
     </style>
 """, unsafe_allow_html=True)
 
-# --- 5. HEADER ---
+# --- 6. HEADER ---
 c_spacer, c_main, c_spacer2 = st.columns([1, 6, 1])
 with c_main:
     logo_b64 = get_image_base64("chatscrape.png")
@@ -157,7 +183,7 @@ with c_main:
     if st.session_state.progress_val > 0: update_bar(st.session_state.progress_val, st.session_state.status_txt)
     else: update_bar(0, "SYSTEM READY")
 
-# --- 6. MAIN FORM ---
+# --- 7. MAIN FORM ---
 with st.container():
     c1, c2, c3, c4 = st.columns([3, 3, 1.5, 1.5])
     with c1: niche = st.text_input("🔍 Business Niche", "")
@@ -173,18 +199,8 @@ with st.container():
         w_phone = opts[0].checkbox("Phone", True)
         w_web = opts[1].checkbox("Web", True)
         w_email = opts[2].checkbox("Email", False)
-        
-        # 🔥 ADDED TOOLTIPS HERE
-        opts[3].checkbox(
-            "Strict", 
-            value=True, 
-            help="Enables Exact Match: Only saves leads where the City address matches your input exactly."
-        )
-        opts[4].checkbox(
-            "Sync", 
-            value=True, 
-            help="High Precision Mode: Slows down scraping slightly to ensure all data (like Emails) is fully loaded."
-        )
+        opts[3].checkbox("Strict", value=True, help="Exact Match Address")
+        opts[4].checkbox("Sync", value=True, help="Slow down for better accuracy")
 
     with col_btn:
         st.write("")
@@ -199,7 +215,7 @@ with st.container():
             if st.button("STOP", type="secondary", use_container_width=True): 
                 st.session_state.running = False; st.session_state.status_txt = "STOPPED"; st.rerun()
 
-# --- 7. LOGIC & DASHBOARD ---
+# --- 8. LOGIC & EXECUTION ---
 t1, t2 = st.tabs(["⚡ LIVE ANALYTICS", "📜 ARCHIVE BASE"])
 
 with t1:
@@ -231,79 +247,82 @@ with t1:
         run_query("INSERT INTO sessions (query, date) VALUES (?, ?)", (f"{niche} in {city}", time.strftime("%Y-%m-%d %H:%M")))
         s_id = run_query("SELECT id FROM sessions ORDER BY id DESC LIMIT 1", is_select=True)[0][0]
         
-        options = Options(); options.add_argument("--headless")
-        driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
+        # 🔥 USE THE CLOUD-READY DRIVER FUNCTION
+        driver = get_driver()
         
-        try:
-            update_bar(5, "INITIALIZING...")
-            driver.get(f"https://www.google.com/maps/search/{niche}+in+{city}")
-            time.sleep(4)
-            
-            scroll_div = driver.find_element(By.CSS_SELECTOR, 'div[role="feed"]')
-            for i in range(scrolls):
-                if not st.session_state.running: break
-                driver.execute_script('arguments[0].scrollTop = arguments[0].scrollHeight', scroll_div)
-                time.sleep(1)
-                prog = 10 + int((i / scrolls) * 40)
-                update_bar(prog, "SCROLLING...")
-            
-            items = driver.find_elements(By.CLASS_NAME, "hfpxzc")[:limit*2]
-            links = [el.get_attribute("href") for el in items]
-            
-            total = len(links) if links else 1
-            for idx, link in enumerate(links):
-                if not st.session_state.running or len(results) >= limit: break
+        if driver:
+            try:
+                update_bar(5, "INITIALIZING...")
+                driver.get(f"https://www.google.com/maps/search/{niche}+in+{city}")
+                time.sleep(4)
                 
-                prog = 50 + int((idx / total) * 50)
-                update_bar(prog, f"EXTRACTING {len(results)+1}/{limit}")
-                driver.get(link)
-                time.sleep(1.5)
-                try:
-                    name = driver.find_element(By.CSS_SELECTOR, "h1.DUwDvf").text
-                    if any(d['Name'] == name for d in results): continue
+                scroll_div = driver.find_element(By.CSS_SELECTOR, 'div[role="feed"]')
+                for i in range(scrolls):
+                    if not st.session_state.running: break
+                    driver.execute_script('arguments[0].scrollTop = arguments[0].scrollHeight', scroll_div)
+                    time.sleep(1)
+                    prog = 10 + int((i / scrolls) * 40)
+                    update_bar(prog, "SCROLLING...")
+                
+                items = driver.find_elements(By.CLASS_NAME, "hfpxzc")[:limit*2]
+                links = [el.get_attribute("href") for el in items]
+                
+                total = len(links) if links else 1
+                for idx, link in enumerate(links):
+                    if not st.session_state.running or len(results) >= limit: break
                     
-                    try: addr = driver.find_element(By.CSS_SELECTOR, 'div.Io6YTe.fontBodyMedium').text
-                    except: addr = "N/A"
-                    row = {"Name": name, "Address": addr}
-                    if w_phone:
-                        try: 
-                            p_raw = driver.find_element(By.XPATH, '//*[contains(@data-item-id, "phone:tel")]').get_attribute("aria-label")
-                            # 🔥 CLEAN DISPLAY (Shows only numbers)
-                            row["Phone"] = clean_phone_display(p_raw)
-                            # 🔥 SMART WA LINK (Based on raw number)
-                            row["WhatsApp"] = clean_phone_for_wa(p_raw) 
-                        except: row["Phone"] = "N/A"; row["WhatsApp"] = None
-                    if w_web:
-                        try: row["Website"] = driver.find_element(By.CSS_SELECTOR, 'a[data-item-id="authority"]').get_attribute("href")
-                        except: row["Website"] = "N/A"
-                    if w_email: row["Email"] = fetch_email(driver, row.get("Website", "N/A"))
+                    prog = 50 + int((idx / total) * 50)
+                    update_bar(prog, f"EXTRACTING {len(results)+1}/{limit}")
+                    driver.get(link)
+                    time.sleep(1.5)
+                    try:
+                        name = driver.find_element(By.CSS_SELECTOR, "h1.DUwDvf").text
+                        if any(d['Name'] == name for d in results): continue
+                        
+                        try: addr = driver.find_element(By.CSS_SELECTOR, 'div.Io6YTe.fontBodyMedium').text
+                        except: addr = "N/A"
+                        row = {"Name": name, "Address": addr}
+                        if w_phone:
+                            try: 
+                                p_raw = driver.find_element(By.XPATH, '//*[contains(@data-item-id, "phone:tel")]').get_attribute("aria-label")
+                                row["Phone"] = clean_phone_display(p_raw)
+                                row["WhatsApp"] = clean_phone_for_wa(p_raw)
+                            except: row["Phone"] = "N/A"; row["WhatsApp"] = None
+                        if w_web:
+                            try: row["Website"] = driver.find_element(By.CSS_SELECTOR, 'a[data-item-id="authority"]').get_attribute("href")
+                            except: row["Website"] = "N/A"
+                        if w_email: row["Email"] = fetch_email(driver, row.get("Website", "N/A"))
 
-                    results.append(row)
-                    st.session_state.results_df = pd.DataFrame(results)
-                    
-                    with metrics_placeholder.container():
-                        m1, m2, m3, m4 = st.columns(4)
-                        df = st.session_state.results_df
-                        m1.metric("Total Leads", len(df), "🎯 Scraped")
-                        m2.metric("Valid Phones", len(df[df['WhatsApp'].notnull()]), "📱 WhatsApp")
-                        m3.metric("Websites", len(df[df['Website'] != "N/A"]), "🌐 Digital")
-                        m4.metric("Emails", len(df[df['Email'] != "N/A"]) if 'Email' in df.columns else 0, "📧 B2B")
+                        results.append(row)
+                        st.session_state.results_df = pd.DataFrame(results)
+                        
+                        with metrics_placeholder.container():
+                            m1, m2, m3, m4 = st.columns(4)
+                            df = st.session_state.results_df
+                            m1.metric("Total Leads", len(df), "🎯 Scraped")
+                            m2.metric("Valid Phones", len(df[df['WhatsApp'].notnull()]), "📱 WhatsApp")
+                            m3.metric("Websites", len(df[df['Website'] != "N/A"]), "🌐 Digital")
+                            m4.metric("Emails", len(df[df['Email'] != "N/A"]) if 'Email' in df.columns else 0, "📧 B2B")
 
-                    table_placeholder.dataframe(
-                        st.session_state.results_df, use_container_width=True,
-                        column_config={
-                            "WhatsApp": st.column_config.LinkColumn("Fast Action", display_text="Chat 💬"),
-                            "Website": st.column_config.LinkColumn("Site"),
-                        }
-                    )
-                    
-                    run_query("INSERT INTO leads (session_id, name, phone, website, email, address, whatsapp) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                              (s_id, name, row.get("Phone", "N/A"), row.get("Website", "N/A"), row.get("Email", "N/A"), addr, row.get("WhatsApp", "")))
-                except: continue
-            
-            update_bar(100, "COMPLETED")
-        finally:
-            driver.quit(); st.session_state.running = False
+                        table_placeholder.dataframe(
+                            st.session_state.results_df, use_container_width=True,
+                            column_config={
+                                "WhatsApp": st.column_config.LinkColumn("Fast Action", display_text="Chat 💬"),
+                                "Website": st.column_config.LinkColumn("Site"),
+                            }
+                        )
+                        
+                        run_query("INSERT INTO leads (session_id, name, phone, website, email, address, whatsapp) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                                  (s_id, name, row.get("Phone", "N/A"), row.get("Website", "N/A"), row.get("Email", "N/A"), addr, row.get("WhatsApp", "")))
+                    except: continue
+                
+                update_bar(100, "COMPLETED")
+            finally:
+                driver.quit()
+                st.session_state.running = False
+        else:
+             st.error("Failed to start browser engine.")
+             st.session_state.running = False
 
 with t2:
     sessions = run_query("SELECT * FROM sessions ORDER BY id DESC", is_select=True)
