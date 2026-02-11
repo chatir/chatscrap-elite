@@ -14,12 +14,13 @@ from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
+from webdriver_manager.chrome import ChromeDriverManager
 
-# --- 1. CONFIG & ELITE DESIGN (RESTORED) ---
+# --- 1. إعدادات الصفحة والديزاين (Dark Elite Theme) ---
 st.set_page_config(page_title="ChatScrap Elite", layout="wide")
 st.session_state.theme = 'Dark'
 
-# تعريف الألوان (الديزاين الأصلي)
+# تعريف الألوان ضروري قبل استعمالها في CSS
 bg_color = "#0f111a"
 card_bg = "#1a1f2e"
 text_color = "#FFFFFF"
@@ -52,7 +53,7 @@ st.markdown(f"""
     </style>
 """, unsafe_allow_html=True)
 
-# --- 2. GLOBAL UTILS ---
+# --- 2. دوال المساعدة (Utils) ---
 def get_image_base64(file_path):
     if os.path.exists(file_path):
         with open(file_path, "rb") as f: return base64.b64encode(f.read()).decode()
@@ -78,7 +79,7 @@ def clean_phone_for_wa(phone):
 def clean_phone_display(text):
     return re.sub(r'[^\d+\s]', '', text).strip() if text else "N/A"
 
-# 🔥 DRIVER FIX (SYSTEM DRIVER ONLY - NO DOWNLOADS)
+# 🔥 FIX: SYSTEM DRIVER ONLY (الحل النهائي لمشكل الدرايفر)
 @st.cache_resource(show_spinner=False)
 def get_driver():
     options = Options()
@@ -88,19 +89,23 @@ def get_driver():
     options.add_argument("--disable-gpu")
     options.add_argument("--window-size=1920,1080")
     
-    # تحديد مسار الكروم
+    # تحديد مسار المتصفح في السيرفر
     options.binary_location = "/usr/bin/chromium"
     
     try:
-        # تحديد مسار الدرايفر يدوياً
+        # تحديد مسار الدرايفر يدوياً لتفادي عدم التوافق
         service = Service(executable_path="/usr/bin/chromedriver")
         driver = webdriver.Chrome(service=service, options=options)
         return driver
     except Exception as e:
-        st.error(f"❌ Driver Error: {str(e)}")
-        return None
+        # في حالة فشل المسار اليدوي، نجرب الطريقة التلقائية كخطة بديلة
+        try:
+            return webdriver.Chrome(options=options)
+        except Exception as final_e:
+            st.error(f"❌ Driver Error: {str(final_e)}")
+            return None
 
-# --- 3. DATABASE ---
+# --- 3. قاعدة البيانات (Database) ---
 def run_query(query, params=(), is_select=False):
     with sqlite3.connect('scraper_pro_final.db', timeout=30) as conn:
         curr = conn.cursor()
@@ -133,7 +138,7 @@ def update_user_status(username, status):
 def delete_user_db(username):
     run_query("DELETE FROM user_credits WHERE username=?", (username,))
 
-# --- 4. AUTH ---
+# --- 4. تسجيل الدخول (Authentication) ---
 CONFIG_FILE = 'config.yaml'
 def load_config():
     try:
@@ -159,7 +164,7 @@ if st.session_state["authentication_status"] is False:
 elif st.session_state["authentication_status"] is None:
     st.warning('Please enter your username and password'); st.stop()
 
-# --- 5. INITIALIZE STATE ---
+# --- 5. تهيئة التطبيق (State Initialization) ---
 if 'results_df' not in st.session_state: st.session_state.results_df = None
 if 'progress_val' not in st.session_state: st.session_state.progress_val = 0
 if 'status_txt' not in st.session_state: st.session_state.status_txt = "SYSTEM READY"
@@ -173,7 +178,7 @@ account_status = user_data[1]
 if account_status == 'suspended' and current_user != 'admin':
     st.error("🚫 Your account has been suspended."); st.stop()
 
-# --- 6. SWITCH MODE (Admin / App) ---
+# --- 6. واجهة التطبيق (App Logic) ---
 app_mode = "Scraper App"
 if current_user == 'admin':
     with st.sidebar:
@@ -182,6 +187,7 @@ if current_user == 'admin':
         st.divider()
 
 if app_mode == "Admin Panel":
+    # ---------------- ADMIN PANEL ----------------
     st.title("🛡️ Client Management")
     tab1, tab2, tab3 = st.tabs(["📊 Dashboard", "➕ Add Client", "⚙️ Manage"])
     with tab1:
@@ -212,6 +218,7 @@ if app_mode == "Admin Panel":
                 if st.button("🗑️ Delete User"): del config['credentials']['usernames'][sel]; save_config(config); delete_user_db(sel); st.rerun()
 
 else:
+    # ---------------- SCRAPER APP ----------------
     with st.sidebar:
         st.write(f"👤 **{st.session_state['name']}**")
         st.info(f"💎 Credits: {current_balance}")
@@ -237,10 +244,133 @@ else:
         
         st.markdown("<br>", unsafe_allow_html=True)
         col_opt, col_btn = st.columns([5, 3])
+        
+        # 🔥 تصحيح الـ Syntax هنا بدقة
         with col_opt:
             st.write("⚙️ Filters:")
-            opts = st.columns(6)
-            w_phone = opts[0].checkbox("Phone", True)
-            w_web = opts[1].checkbox("Web", True)
-            w_email = opts[2].checkbox("Email", False)
-            w_no_site = opts[3].
+            c_filters = st.columns(6)
+            w_phone = c_filters[0].checkbox("Phone", True)
+            w_web = c_filters[1].checkbox("Web", True)
+            w_email = c_filters[2].checkbox("Email", False)
+            w_no_site = c_filters[3].checkbox("No Site", False)
+            w_strict = c_filters[4].checkbox("Strict", True)
+            c_filters[5].checkbox("Sync", True)
+
+        with col_btn:
+            st.write("")
+            b1, b2 = st.columns([2, 1.5])
+            with b1:
+                # زر Start مع Force Rerun لتحديث الحالة
+                if st.button("START ENGINE", type="primary", use_container_width=True): 
+                    if not niche or not city_input: st.error("Missing Info!")
+                    elif current_balance <= 0: st.error("❌ No Credits!")
+                    else: 
+                        st.session_state.running = True
+                        st.session_state.progress_val = 0
+                        st.session_state.status_txt = "STARTING..."
+                        st.session_state.results_df = None
+                        st.rerun() 
+            with b2:
+                if st.button("STOP", type="secondary", use_container_width=True): 
+                    st.session_state.running = False
+                    st.session_state.status_txt = "STOPPED"
+                    st.rerun()
+
+    t1, t2, t3 = st.tabs(["⚡ LIVE", "📜 ARCHIVE", "🤖 AI KIT"])
+    
+    with t1:
+        if st.session_state.results_df is not None:
+             st.dataframe(st.session_state.results_df, use_container_width=True, column_config={"WhatsApp": st.column_config.LinkColumn("Chat"), "Website": st.column_config.LinkColumn("Site")})
+
+        if st.session_state.running:
+            results = []
+            target_cities = [c.strip() for c in city_input.split(',') if c.strip()]
+            
+            # 🔥 استدعاء الدرايفر (System Driver)
+            driver = get_driver()
+            
+            if driver:
+                try:
+                    for city_idx, city in enumerate(target_cities):
+                        if not st.session_state.running: break
+                        
+                        run_query("INSERT INTO sessions (query, date) VALUES (?, ?)", (f"{niche} in {city}", time.strftime("%Y-%m-%d %H:%M"))); s_id = run_query("SELECT id FROM sessions ORDER BY id DESC LIMIT 1", is_select=True)[0][0]
+                        
+                        st.session_state.status_txt = f"TARGETING: {city.upper()}"
+                        st.session_state.progress_val = int(((city_idx) / len(target_cities)) * 100)
+                        
+                        driver.get(f"https://www.google.com/maps/search/{niche}+in+{city}")
+                        time.sleep(4)
+                        
+                        try:
+                            scroll_div = driver.find_element(By.CSS_SELECTOR, 'div[role="feed"]')
+                            for i in range(scrolls):
+                                if not st.session_state.running: break
+                                driver.execute_script('arguments[0].scrollTop = arguments[0].scrollHeight', scroll_div)
+                                time.sleep(1)
+                        except: pass
+                        
+                        items = driver.find_elements(By.CLASS_NAME, "hfpxzc")[:limit*2]
+                        links = [el.get_attribute("href") for el in items]
+                        
+                        for idx, link in enumerate(links):
+                            if get_user_info(current_user)[0] <= 0: 
+                                st.error("Credits Exhausted!")
+                                st.session_state.running = False
+                                break
+                            
+                            if not st.session_state.running or len(results) >= limit*(city_idx+1): break
+                            
+                            try:
+                                driver.get(link)
+                                time.sleep(1.5)
+                                name = driver.find_element(By.CSS_SELECTOR, "h1.DUwDvf").text
+                                if any(d['Name']==name for d in results): continue
+                                
+                                try: addr = driver.find_element(By.CSS_SELECTOR, 'div.Io6YTe.fontBodyMedium').text
+                                except: addr = "N/A"
+                                
+                                if w_strict and city.lower() not in addr.lower(): continue
+                                
+                                website = "N/A"
+                                if w_web:
+                                    try: website = driver.find_element(By.CSS_SELECTOR, 'a[data-item-id="authority"]').get_attribute("href")
+                                    except: website = "N/A"
+                                
+                                if w_no_site and website!="N/A": continue
+                                
+                                row = {"Name": name, "Address": addr, "Website": website, "City": city}
+                                if w_phone:
+                                    try: p_raw = driver.find_element(By.XPATH, '//*[contains(@data-item-id, "phone:tel")]').get_attribute("aria-label"); row["Phone"] = clean_phone_display(p_raw); row["WhatsApp"] = clean_phone_for_wa(p_raw)
+                                    except: row["Phone"] = "N/A"; row["WhatsApp"] = None
+                                
+                                if w_email: row["Email"] = fetch_email(driver, row.get("Website", "N/A"))
+                                
+                                results.append(row)
+                                update_user_balance(current_user, -1)
+                                st.session_state.results_df = pd.DataFrame(results)
+                                
+                                run_query("INSERT INTO leads (session_id, name, phone, website, email, address, whatsapp) VALUES (?, ?, ?, ?, ?, ?, ?)", (s_id, name, row.get("Phone", "N/A"), row.get("Website", "N/A"), row.get("Email", "N/A"), addr, row.get("WhatsApp", "")))
+                            except: continue
+                    
+                    st.session_state.status_txt = "COMPLETED"
+                    st.session_state.progress_val = 100
+                    st.rerun()
+
+                finally: 
+                    st.session_state.running = False
+            else:
+                st.error("❌ System Driver Failed. Please check packages.txt")
+                st.session_state.running = False
+
+    with t2:
+        sessions = run_query("SELECT * FROM sessions ORDER BY id DESC", is_select=True)
+        for sid, q, d in sessions:
+            with st.expander(f"📦 {d} | {q}"):
+                data = run_query(f"SELECT name, phone, website, email, address, whatsapp FROM leads WHERE session_id={sid}", is_select=True); df = pd.DataFrame(data, columns=["Name", "Phone", "Website", "Email", "Address", "WhatsApp"]); st.dataframe(df, use_container_width=True); st.download_button("Export CSV", df.to_csv(index=False).encode('utf-8-sig'), f"leads_{sid}.csv", key=f"dl_{sid}")
+    
+    with t3:
+        st.subheader("🤖 AI Cold Outreach"); c1, c2 = st.columns(2); offer = c1.selectbox("Offer", ["Web Design", "SEO"]); aud = c2.text_input("Audience", value=niche or "Business")
+        if st.button("Generate"): st.code(f"Subject: Help {aud}...\n\nHello...", language="text")
+
+st.markdown(f'<div class="footer">Designed by Chatir ❤ | Worldwide Lead Generation 🌍</div>', unsafe_allow_html=True)
