@@ -111,7 +111,7 @@ if st.session_state["authentication_status"]:
     if 'running' not in st.session_state: st.session_state.running = False
     if 'progress_val' not in st.session_state: st.session_state.progress_val = 0
 
-    # --- SIDEBAR (ENHANCED) ---
+    # --- SIDEBAR (ENHANCED NAVIGATION) ---
     with st.sidebar:
         st.title("👤 User Profile")
         st.write(f"Logged as: **{st.session_state['name']}**")
@@ -119,10 +119,11 @@ if st.session_state["authentication_status"]:
         if current_user == "admin":
             st.success("💎 Credits: **Unlimited ♾️**")
             st.divider()
+            # Navigation ONLY for Admin
             choice = st.radio("MAIN MENU", ["🚀 SCRAPER ENGINE", "🛠️ USER MANAGEMENT"], index=0)
         else:
             st.warning(f"💎 Credits: **{user_balance}**")
-            choice = "🚀 SCRAPER ENGINE"
+            choice = "🚀 SCRAPER ENGINE" # Users go straight to scraper
         
         st.divider()
         if st.button("Logout", type="secondary", use_container_width=True):
@@ -134,7 +135,7 @@ if st.session_state["authentication_status"]:
         <style>
         .stApp {{ background-color: #0f111a; }}
         .stApp p, .stApp label, h1, h2, h3 {{ color: #FFFFFF !important; font-family: 'Segoe UI', sans-serif; }}
-        /* Orange Glow Filter */
+        /* Orange Glow Filter for Logo */
         .logo-img {{ width: 280px; filter: drop-shadow(0 0 10px rgba(255,140,0,0.6)) saturate(180%) hue-rotate(-5deg); margin-bottom: 25px; }}
         .progress-wrapper {{ width: 100%; max-width: 650px; margin: 0 auto 30px auto; text-align: center; }}
         .progress-container {{ width: 100%; background-color: rgba(255, 140, 0, 0.1); border-radius: 50px; padding: 4px; border: 1px solid {orange_c}; }}
@@ -162,7 +163,8 @@ if st.session_state["authentication_status"]:
                     except: hashed_pw = stauth.Hasher([new_p]).generate()[0]
                     config['credentials']['usernames'][new_u] = {'name': new_n, 'password': hashed_pw, 'email': f"{new_u}@mail.com"}
                     with open('config.yaml', 'w') as f: yaml.dump(config, f, default_flow_style=False)
-                    get_user_data(new_u); st.success(f"Added {new_u}!"); time.sleep(1); st.rerun()
+                    run_query("INSERT INTO user_credits (username, balance, status) VALUES (?, ?, ?)", (new_u, 5, 'active'))
+                    st.success(f"Added {new_u}!"); time.sleep(1); st.rerun()
 
         with c2:
             st.markdown("### ⚙️ User Actions")
@@ -231,16 +233,16 @@ if st.session_state["authentication_status"]:
         t1, t2 = st.tabs(["⚡ LIVE ANALYTICS", "📜 ARCHIVE BASE"])
         
         with t1:
-            table_spot = st.empty()
+            m_placeholder = st.empty(); table_placeholder = st.empty()
             if st.session_state.results_df is not None:
                 st.divider()
                 # 🔥 EXPORT TO GOOGLE SHEETS
                 if w_sync:
-                    gs_url = st.text_input("Google Sheet URL for Export")
+                    gs_url = st.text_input("Google Sheet URL for Sync")
                     if st.button("🚀 Export to Sheet"):
                         if sync_to_gsheet(st.session_state.results_df, gs_url): st.success("Exported Successfully!")
                 
-                table_spot.dataframe(st.session_state.results_df, use_container_width=True)
+                table_placeholder.dataframe(st.session_state.results_df, use_container_width=True)
 
             if st.session_state.running:
                 results = []
@@ -278,7 +280,7 @@ if st.session_state["authentication_status"]:
                                 except: pass
                                 if w_no_site and website != "N/A": continue
                                 
-                                # 🔥 DIRECT WHATSAPP LINK
+                                # 🔥 WHATSAPP DIRECT LINK
                                 phone = "N/A"; wa_link = None
                                 try:
                                     p_raw = driver.find_element(By.XPATH, '//*[contains(@data-item-id, "phone:tel")]').get_attribute("aria-label")
@@ -289,14 +291,14 @@ if st.session_state["authentication_status"]:
                                 row = {"Name": name, "Phone": phone, "WhatsApp": wa_link, "Website": website, "Address": adr}
                                 results.append(row); deduct_credit(current_user)
                                 st.session_state.results_df = pd.DataFrame(results)
-                                table_spot.dataframe(st.session_state.results_df, use_container_width=True)
+                                table_placeholder.dataframe(st.session_state.results_df, use_container_width=True)
                                 run_query("INSERT INTO leads (session_id, name, phone, website, address, whatsapp) VALUES (?, ?, ?, ?, ?, ?)", (s_id, name, phone, website, adr, wa_link))
                             except: continue
                         update_bar(100, "COMPLETED")
                     finally: driver.quit(); st.session_state.running = False
 
         with t2:
-            st.subheader("📜 Search History")
+            st.subheader("📜 History")
             hists = run_query("SELECT * FROM sessions ORDER BY id DESC", is_select=True)
             for h in hists:
                 with st.expander(f"📦 {h[2]} | {h[1]}"):
