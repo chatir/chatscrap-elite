@@ -51,7 +51,7 @@ st.markdown(f"""
     </style>
 """, unsafe_allow_html=True)
 
-# --- 2. DRIVER SYSTEM (SMART DETECT) ---
+# --- 2. DRIVER SYSTEM (SMART DETECT & DEBUG) ---
 @st.cache_resource(show_spinner=False)
 def get_driver():
     options = Options()
@@ -61,25 +61,27 @@ def get_driver():
     options.add_argument("--disable-gpu")
     options.add_argument("--window-size=1920,1080")
     
-    # 1. البحث عن المتصفح (Chromium)
-    # كنقلبو عليه فكاع البلايص الممكنة
-    chrome_bin = shutil.which("chromium") or shutil.which("google-chrome") or "/usr/bin/chromium"
-    options.binary_location = chrome_bin
-    
-    # 2. البحث عن الدرايفر (Driver)
-    # كنقلبو على سميتو الحقيقية فالسيرفر
-    driver_bin = shutil.which("chromedriver") or shutil.which("chromium-driver") or "/usr/bin/chromedriver"
-    
-    if not driver_bin:
-        st.error("❌ Critical Error: Driver not found on system path.")
+    # 1. البحث عن المتصفح (Chrome)
+    chrome_path = shutil.which("chromium") or shutil.which("google-chrome") or "/usr/bin/chromium"
+    if chrome_path:
+        options.binary_location = chrome_path
+        # st.toast(f"✅ Found Chrome at: {chrome_path}", icon="🖥️") # Debug Info
+    else:
+        st.error("❌ Chrome Browser Not Found!")
         return None
 
+    # 2. البحث عن الدرايفر (Driver)
+    driver_path = shutil.which("chromedriver") or shutil.which("chromium-driver") or "/usr/bin/chromedriver"
+    if not driver_path:
+        st.error("❌ Chromedriver Not Found! Check packages.txt")
+        return None
+        
     try:
-        service = Service(executable_path=driver_bin)
+        service = Service(executable_path=driver_path)
         driver = webdriver.Chrome(service=service, options=options)
         return driver
     except Exception as e:
-        st.error(f"❌ Driver Crash: {str(e)}")
+        st.error(f"❌ Driver Crash Details: {str(e)}")
         return None
 
 # --- 3. UTILS ---
@@ -192,11 +194,13 @@ if current_user == 'admin':
 if app_mode == "Admin Panel":
     # ---------------- ADMIN PANEL ----------------
     st.title("🛡️ Admin Dashboard")
-    t1, t2, t3 = st.tabs(["📊 Overview", "➕ Add Client", "⚙️ Manage"])
-    with t1:
+    tab1, tab2, tab3 = st.tabs(["📊 Overview", "➕ Add Client", "⚙️ Manage"])
+    with tab1:
+        st.subheader("All Clients")
         all_users = run_query("SELECT username, balance, status FROM user_credits", is_select=True)
         if all_users: st.dataframe(pd.DataFrame(all_users, columns=['Username', 'Credits', 'Status']), use_container_width=True)
-    with t2:
+    with tab2:
+        st.subheader("Create New Account")
         with st.form("new_c"):
             u = st.text_input("Username"); p = st.text_input("Password", type="password")
             n = st.text_input("Name"); e = st.text_input("Email"); c = st.number_input("Credits", 100)
@@ -208,7 +212,7 @@ if app_mode == "Admin Panel":
                     save_config(config); run_query("INSERT INTO user_credits VALUES (?, ?, ?)", (u, c, 'active'))
                     st.success(f"User {u} created!"); time.sleep(1); st.rerun()
                 except Exception as err: st.error(f"Error: {err}")
-    with t3:
+    with tab3:
         users = [x for x in config['credentials']['usernames'] if x != 'admin']
         sel = st.selectbox("Select", users)
         if sel:
@@ -290,7 +294,6 @@ else:
                 try:
                     for city_idx, city in enumerate(target_cities):
                         if not st.session_state.running: break
-                        
                         run_query("INSERT INTO sessions (query, date) VALUES (?, ?)", (f"{niche} in {city}", time.strftime("%Y-%m-%d %H:%M"))); s_id = run_query("SELECT id FROM sessions ORDER BY id DESC LIMIT 1", is_select=True)[0][0]
                         st.session_state.status_txt = f"TARGETING: {city.upper()}"
                         st.session_state.progress_val = int(((city_idx) / len(target_cities)) * 100)
@@ -335,7 +338,8 @@ else:
                 finally: 
                     st.session_state.running = False
             else:
-                st.error("❌ Driver Initialization Failed. Please refresh or check logs.")
+                # هذا الميساج غايطلع ليك إلا كان باقي شي مشكل، وغايقوليك السبب
+                # st.error("Driver Failed") # بدلتها بالفوقانية باش تعطي التفاصيل
                 st.session_state.running = False
 
     with t2:
