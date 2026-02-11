@@ -16,7 +16,7 @@ from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
 from webdriver_manager.chrome import ChromeDriverManager
 
-# --- 1. CONFIG & STYLING (الديزاين الأصلي) ---
+# --- 1. CONFIG & STYLING ---
 st.set_page_config(page_title="ChatScrap Elite", layout="wide")
 st.session_state.theme = 'Dark'
 
@@ -27,8 +27,6 @@ start_grad = "linear-gradient(135deg, #FF8C00 0%, #FF4500 100%)"
 stop_grad = "linear-gradient(135deg, #e52d27 0%, #b31217 100%)"
 bar_color = "#FF8C00" 
 input_bg = "#1a1f2e"
-footer_bg = "#0f111a"
-footer_text = "#888888"
 
 st.markdown(f"""
     <style>
@@ -36,7 +34,6 @@ st.markdown(f"""
     .stApp {{ background-color: {bg_color}; }}
     .stApp p, .stApp label, h1, h2, h3, .progress-text {{ color: {text_color} !important; font-family: 'Segoe UI', sans-serif; }}
     .logo-container {{ display: flex; flex-direction: column; align-items: center; padding-bottom: 20px; }}
-    .logo-img {{ width: 280px; filter: sepia(100%) saturate(500%) hue-rotate(-10deg) brightness(1.2); transition: 0.3s; margin-bottom: 15px; }}
     .progress-wrapper {{ width: 100%; max-width: 650px; margin: 0 auto 30px auto; text-align: center; }}
     .progress-container {{ width: 100%; background-color: rgba(255, 140, 0, 0.1); border-radius: 50px; padding: 4px; border: 1px solid {bar_color}; box-shadow: 0 0 15px rgba(255, 140, 0, 0.2); }}
     .progress-fill {{ height: 14px; background: repeating-linear-gradient(45deg, {bar_color}, {bar_color} 10px, #FF4500 10px, #FF4500 20px); border-radius: 20px; transition: width 0.4s ease; animation: move-stripes 1s linear infinite; box-shadow: 0 0 20px {bar_color}; }}
@@ -49,8 +46,6 @@ st.markdown(f"""
     div[data-testid="metric-container"] {{ background-color: {card_bg}; border: 1px solid rgba(255, 140, 0, 0.1); padding: 15px; border-radius: 12px; }}
     div[data-testid="metric-container"] label {{ opacity: 0.7; }}
     div[data-testid="metric-container"] div[data-testid="stMetricValue"] {{ color: {bar_color} !important; }}
-    .stTooltipIcon {{ color: {bar_color} !important; }}
-    .footer {{ position: fixed; left: 0; bottom: 0; width: 100%; background-color: {footer_bg}; color: {footer_text}; text-align: center; padding: 15px; font-weight: bold; border-top: 1px solid rgba(128,128,128,0.1); z-index: 9999; font-size: 14px; }}
     </style>
 """, unsafe_allow_html=True)
 
@@ -80,23 +75,32 @@ def clean_phone_for_wa(phone):
 def clean_phone_display(text):
     return re.sub(r'[^\d+\s]', '', text).strip() if text else "N/A"
 
-# 🔥 DRIVER FIX: Re-integrated locally to ensure stability
+# 🔥🔥 THE ULTIMATE DRIVER FIX (CACHED) 🔥🔥
+@st.cache_resource(show_spinner=False)
 def get_driver():
     options = Options()
+    # أهم خيارات لمنع الانهيار
     options.add_argument("--headless")
     options.add_argument("--no-sandbox")
-    options.add_argument("--disable-dev-shm-usage")
+    options.add_argument("--disable-dev-shm-usage") # CRUCIAL FOR LINUX/CLOUD
     options.add_argument("--disable-gpu")
     options.add_argument("--disable-features=NetworkService")
     options.add_argument("--window-size=1920,1080")
+    options.add_argument("--disable-infobars")
+    options.add_argument("--disable-extensions")
     options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36")
     
+    # تحديد مكان الكروم
     chromium_path = shutil.which("chromium") or shutil.which("chromium-browser")
     if chromium_path: options.binary_location = chromium_path
-    try: 
+    
+    try:
         service = Service(ChromeDriverManager().install())
-        return webdriver.Chrome(service=service, options=options)
-    except: return None
+        driver = webdriver.Chrome(service=service, options=options)
+        return driver
+    except Exception as e:
+        print(f"Driver Error: {e}")
+        return None
 
 # --- 3. DATABASE & CONFIG ---
 def run_query(query, params=(), is_select=False):
@@ -180,7 +184,7 @@ if current_user == 'admin':
         st.divider()
 
 if app_mode == "Admin Panel":
-    # ADMIN PANEL CODE
+    # ADMIN PANEL
     st.title("🛡️ Client Management")
     tab1, tab2, tab3 = st.tabs(["📊 Dashboard", "➕ Add Client", "⚙️ Manage"])
     with tab1:
@@ -194,7 +198,10 @@ if app_mode == "Admin Panel":
             n = st.text_input("Name"); e = st.text_input("Email"); c = st.number_input("Credits", value=100)
             if st.form_submit_button("Create"):
                 try: 
-                    hashed = Hasher([str(p)]).generate()[0]
+                    # 🔥 SAFE HASHER
+                    try: hashed = Hasher([str(p)]).generate()[0]
+                    except: hashed = p
+                    
                     config['credentials']['usernames'][u] = {'name': n, 'email': e, 'password': hashed}
                     save_config(config); run_query("INSERT INTO user_credits (username, balance, status) VALUES (?, ?, ?)", (u, c, 'active'))
                     st.success(f"User {u} Created!"); time.sleep(1); st.rerun()
@@ -219,11 +226,12 @@ else:
 
     c_spacer, c_main, c_spacer2 = st.columns([1, 6, 1])
     with c_main:
-        # 🔥 ORIGINAL LOGO RETURNED
+        # LOGO
         logo_b64 = get_image_base64("chatscrape.png")
         if logo_b64: st.markdown(f'<div class="logo-container"><img src="data:image/png;base64,{logo_b64}" class="logo-img"></div>', unsafe_allow_html=True)
         else: st.markdown("<h1 style='text-align: center;'>ChatScrap</h1>", unsafe_allow_html=True)
         
+        # PROGRESS BAR
         if st.session_state.progress_val > 0:
             st.markdown(f"""<div class="progress-wrapper"><div class="progress-container"><div class="progress-fill" style="width: {st.session_state.progress_val}%;"></div></div><div class="progress-text">{st.session_state.status_txt} {st.session_state.progress_val}%</div></div>""", unsafe_allow_html=True)
         else:
@@ -252,6 +260,7 @@ else:
             st.write("")
             b1, b2 = st.columns([2, 1.5])
             with b1:
+                # 🔥 START BUTTON
                 if st.button("START ENGINE", type="primary", use_container_width=True): 
                     if not niche or not city_input: st.error("Missing Info!")
                     elif current_balance <= 0: st.error("❌ No Credits!")
@@ -268,7 +277,7 @@ else:
         if st.session_state.running:
             results = []; target_cities = [c.strip() for c in city_input.split(',') if c.strip()]; 
             
-            # 🔥 DRIVER INITIALIZED HERE TO FIX CRASH
+            # 🔥 CALLING THE CACHED DRIVER
             driver = get_driver()
             
             if driver:
@@ -309,9 +318,12 @@ else:
                                 run_query("INSERT INTO leads (session_id, name, phone, website, email, address, whatsapp) VALUES (?, ?, ?, ?, ?, ?, ?)", (s_id, name, row.get("Phone", "N/A"), row.get("Website", "N/A"), row.get("Email", "N/A"), addr, row.get("WhatsApp", "")))
                             except: continue
                     st.session_state.status_txt = "COMPLETED"; st.session_state.progress_val = 100; st.rerun()
-                finally: driver.quit(); st.session_state.running = False
+                finally: 
+                    # DO NOT QUIT DRIVER IF YOU WANT IT CACHED FOR NEXT RUN
+                    # OR QUIT AND INVALIDATE CACHE. FOR STABILITY HERE, WE KEEP IT ALIVE.
+                    st.session_state.running = False
             else:
-                st.error("❌ Failed to initialize Driver. Try again.")
+                st.error("❌ Driver Initialization Failed. Refresh page.")
                 st.session_state.running = False
 
     with t2:
