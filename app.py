@@ -50,15 +50,7 @@ elif st.session_state["authentication_status"] is None:
 # --- 3. APP LOGIC (LOGGED IN) ---
 if st.session_state["authentication_status"]:
     
-    # Initialize State
-    if 'results_df' not in st.session_state: st.session_state.results_df = None
-    if 'progress_val' not in st.session_state: st.session_state.progress_val = 0
-    if 'status_txt' not in st.session_state: st.session_state.status_txt = "SYSTEM READY"
-    if 'running' not in st.session_state: st.session_state.running = False
-    
-    current_user = st.session_state["username"]
-
-    # --- DATABASE ---
+    # --- DATABASE FUNCTIONS (UPDATED) ---
     def run_query(query, params=(), is_select=False):
         with sqlite3.connect('scraper_pro_final.db', timeout=30) as conn:
             curr = conn.cursor()
@@ -69,29 +61,47 @@ if st.session_state["authentication_status"]:
     def init_db():
         run_query('''CREATE TABLE IF NOT EXISTS sessions (id INTEGER PRIMARY KEY AUTOINCREMENT, query TEXT, date TEXT)''')
         run_query('''CREATE TABLE IF NOT EXISTS leads (id INTEGER PRIMARY KEY AUTOINCREMENT, session_id INTEGER, name TEXT, phone TEXT, website TEXT, email TEXT, address TEXT, whatsapp TEXT)''')
-        run_query('''CREATE TABLE IF NOT EXISTS user_credits (username TEXT PRIMARY KEY, balance INTEGER)''')
+        # Updated table to include status column
+        run_query('''CREATE TABLE IF NOT EXISTS user_credits (username TEXT PRIMARY KEY, balance INTEGER, status TEXT DEFAULT 'active')''')
+        try: run_query("SELECT status FROM user_credits LIMIT 1")
+        except: run_query("ALTER TABLE user_credits ADD COLUMN status TEXT DEFAULT 'active'")
         try: run_query("SELECT whatsapp FROM leads LIMIT 1")
         except: run_query("ALTER TABLE leads ADD COLUMN whatsapp TEXT")
 
     init_db()
 
-    def get_balance(username):
-        res = run_query("SELECT balance FROM user_credits WHERE username=?", (username,), is_select=True)
-        if res: return res[0][0]
+    def get_user_data(username):
+        res = run_query("SELECT balance, status FROM user_credits WHERE username=?", (username,), is_select=True)
+        if res: return res[0]
         else:
-            run_query("INSERT INTO user_credits VALUES (?, ?)", (username, 5)) 
-            return 5
+            run_query("INSERT INTO user_credits (username, balance, status) VALUES (?, ?, ?)", (username, 5, 'active')) 
+            return (5, 'active')
 
     def deduct_credit(username):
         run_query("UPDATE user_credits SET balance = balance - 1 WHERE username=?", (username,))
 
     def add_credits(username, amount):
-        current = get_balance(username)
         run_query("UPDATE user_credits SET balance = balance + ? WHERE username=?", (amount, username))
 
-    user_balance = get_balance(current_user)
+    def update_user_status(username, status):
+        run_query("UPDATE user_credits SET status = ? WHERE username=?", (status, username))
 
-    # --- SIDEBAR ---
+    # --- SESSION CHECK ---
+    current_user = st.session_state["username"]
+    user_balance, user_status = get_user_data(current_user)
+
+    # BLOCK SUSPENDED USERS
+    if user_status == 'suspended' and current_user != "admin":
+        st.error("🚫 Your account has been suspended. Please contact the administrator.")
+        st.stop()
+
+    # Initialize State
+    if 'results_df' not in st.session_state: st.session_state.results_df = None
+    if 'progress_val' not in st.session_state: st.session_state.progress_val = 0
+    if 'status_txt' not in st.session_state: st.session_state.status_txt = "SYSTEM READY"
+    if 'running' not in st.session_state: st.session_state.running = False
+    
+    # --- SIDEBAR (ENHANCED ADMIN) ---
     with st.sidebar:
         st.title("👤 User Profile")
         st.write(f"User: **{st.session_state['name']}**")
@@ -105,19 +115,44 @@ if st.session_state["authentication_status"]:
         
         if current_user == "admin":
             st.divider()
-            st.subheader("🛠️ Admin Panel")
-            target_user = st.text_input("Client Username")
-            amount_to_add = st.number_input("Add Credits", min_value=1, value=100)
-            if st.button("💰 Top Up"):
-                add_credits(target_user, amount_to_add)
-                st.success(f"Added {amount_to_add} to {target_user}")
-                time.sleep(1)
-                st.rerun()
+            st.subheader("🛠️ User Management")
+            
+            # 1. Register New User
+            with st.expander("➕ Register New User"):
+                new_u = st.text_input("Username")
+                new_n = st.text_input("Name")
+                new_p = st.text_input("Password", type="password")
+                if st.button("Create Account"):
+                    if new_u and new_p:
+                        hashed_pw = stauth.Hasher([new_p]).generate()[0]
+                        config['credentials']['usernames'][new_u] = {'name': new_n, 'password': hashed_pw, 'email': f"{new_u}@mail.com"}
+                        with open('config.yaml', 'w') as f:
+                            yaml.dump(config, f, default_flow_style=False)
+                        get_user_data(new_u) # Init in DB
+                        st.success(f"User {new_u} created!")
+                        time.sleep(1); st.rerun()
+
+            # 2. Credits & Status
+            st.divider()
+            target_user = st.selectbox("Select User", list(config['credentials']['usernames'].keys()))
+            c_top, c_stat = st.columns(2)
+            with c_top:
+                amt = st.number_input("Top Up", min_value=1, value=100)
+                if st.button("💰 Add"):
+                    add_credits(target_user, amt)
+                    st.success("Added!"); time.sleep(1); st.rerun()
+            with c_stat:
+                _, u_stat = get_user_data(target_user)
+                btn_label = "🚫 Suspend" if u_stat == "active" else "✅ Activate"
+                if st.button(btn_label):
+                    new_s = "suspended" if u_stat == "active" else "active"
+                    update_user_status(target_user, new_s)
+                    st.warning(f"Status: {new_s}!"); time.sleep(1); st.rerun()
 
         st.divider()
         authenticator.logout('Logout', 'main')
 
-    # --- UTILS ---
+    # --- UTILS (KEEP ORIGINAL) ---
     def get_image_base64(file_path):
         if os.path.exists(file_path):
             with open(file_path, "rb") as f:
@@ -153,7 +188,7 @@ if st.session_state["authentication_status"]:
         clean = re.sub(r'[^\d+\s]', '', text).strip()
         return clean
 
-    # --- DRIVER ---
+    # --- DRIVER (KEEP ORIGINAL) ---
     @st.cache_resource
     def get_driver():
         options = Options()
@@ -176,7 +211,7 @@ if st.session_state["authentication_status"]:
                 st.error(f"❌ Driver Error: {str(e)}")
                 return None
 
-    # --- STYLING ---
+    # --- STYLING (KEEP ORIGINAL) ---
     bg_color = "#0f111a"
     card_bg = "#1a1f2e"
     text_color = "#FFFFFF"
@@ -211,7 +246,7 @@ if st.session_state["authentication_status"]:
         </style>
     """, unsafe_allow_html=True)
 
-    # --- HEADER ---
+    # --- HEADER (KEEP ORIGINAL) ---
     c_spacer, c_main, c_spacer2 = st.columns([1, 6, 1])
     with c_main:
         logo_b64 = get_image_base64("chatscrape.png")
@@ -228,7 +263,7 @@ if st.session_state["authentication_status"]:
         if st.session_state.progress_val > 0: update_bar(st.session_state.progress_val, st.session_state.status_txt)
         else: update_bar(0, "SYSTEM READY")
 
-    # --- MAIN FORM ---
+    # --- MAIN FORM (KEEP ORIGINAL) ---
     with st.container():
         c1, c2, c3, c4 = st.columns([3, 3, 1.5, 1.5])
         with c1: niche = st.text_input("🔍 Business Niche", "")
@@ -240,13 +275,11 @@ if st.session_state["authentication_status"]:
         col_opt, col_btn = st.columns([5, 3])
         with col_opt:
             st.write("⚙️ Filters:")
-            # 🔥 UPDATED TO 6 COLUMNS
             opts = st.columns(6)
             w_phone = opts[0].checkbox("Phone", True)
             w_web = opts[1].checkbox("Web", True)
             w_email = opts[2].checkbox("Email", False)
             w_no_site = opts[3].checkbox("No Site", False, help="Show ONLY businesses without a website")
-            # 🔥 RESTORED STRICT FILTER
             w_strict = opts[4].checkbox("Strict", True, help="Address MUST contain city name")
             opts[5].checkbox("Sync", True)
 
@@ -265,7 +298,7 @@ if st.session_state["authentication_status"]:
                 if st.button("STOP", type="secondary", use_container_width=True): 
                     st.session_state.running = False; st.session_state.status_txt = "STOPPED"; st.rerun()
 
-    # --- TABS ---
+    # --- TABS (KEEP ORIGINAL SCRAPER LOGIC) ---
     t1, t2, t3 = st.tabs(["⚡ LIVE ANALYTICS", "📜 ARCHIVE BASE", "🤖 MARKETING KIT"])
 
     with t1:
@@ -318,11 +351,11 @@ if st.session_state["authentication_status"]:
                     
                     total = len(links) if links else 1
                     for idx, link in enumerate(links):
-                        current_bal = get_balance(current_user)
-                        if current_bal <= 0:
+                        # Re-check balance in loop
+                        curr_b, _ = get_user_data(current_user)
+                        if curr_b <= 0:
                             st.error("🚫 Credits Exhausted!")
-                            st.session_state.running = False
-                            break
+                            st.session_state.running = False; break
 
                         if not st.session_state.running or len(results) >= limit: break
                         
@@ -337,9 +370,7 @@ if st.session_state["authentication_status"]:
                             try: addr = driver.find_element(By.CSS_SELECTOR, 'div.Io6YTe.fontBodyMedium').text
                             except: addr = "N/A"
                             
-                            # 🔥 STRICT CITY FILTER
-                            if w_strict:
-                                if city.lower() not in addr.lower(): continue
+                            if w_strict and city.lower() not in addr.lower(): continue
 
                             website = "N/A"
                             if w_web:
