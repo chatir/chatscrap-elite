@@ -15,11 +15,10 @@ from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
 
-# --- 1. CONFIG & DESIGN (Elite Theme) ---
+# --- 1. CONFIG & DESIGN (ELITE DARK) ---
 st.set_page_config(page_title="ChatScrap Elite", layout="wide")
 st.session_state.theme = 'Dark'
 
-# تعريف الألوان
 bg_color = "#0f111a"
 card_bg = "#1a1f2e"
 text_color = "#FFFFFF"
@@ -52,8 +51,7 @@ st.markdown(f"""
     </style>
 """, unsafe_allow_html=True)
 
-# --- 2. DRIVER SYSTEM (System Only) ---
-# هذا هو الكود اللي غايحل المشكل: كنخدمو بدرايفر السيرفر نيشان
+# --- 2. DRIVER SYSTEM (SMART DETECT) ---
 @st.cache_resource(show_spinner=False)
 def get_driver():
     options = Options()
@@ -63,16 +61,25 @@ def get_driver():
     options.add_argument("--disable-gpu")
     options.add_argument("--window-size=1920,1080")
     
-    # 1. تحديد مكان Chrome
-    options.binary_location = "/usr/bin/chromium"
+    # 1. البحث عن المتصفح (Chromium)
+    # كنقلبو عليه فكاع البلايص الممكنة
+    chrome_bin = shutil.which("chromium") or shutil.which("google-chrome") or "/usr/bin/chromium"
+    options.binary_location = chrome_bin
     
+    # 2. البحث عن الدرايفر (Driver)
+    # كنقلبو على سميتو الحقيقية فالسيرفر
+    driver_bin = shutil.which("chromedriver") or shutil.which("chromium-driver") or "/usr/bin/chromedriver"
+    
+    if not driver_bin:
+        st.error("❌ Critical Error: Driver not found on system path.")
+        return None
+
     try:
-        # 2. تحديد مكان Driver المتوافق معه
-        service = Service(executable_path="/usr/bin/chromedriver")
+        service = Service(executable_path=driver_bin)
         driver = webdriver.Chrome(service=service, options=options)
         return driver
     except Exception as e:
-        st.error(f"❌ Driver Critical Error: {str(e)}")
+        st.error(f"❌ Driver Crash: {str(e)}")
         return None
 
 # --- 3. UTILS ---
@@ -174,15 +181,16 @@ account_status = user_data[1]
 if account_status == 'suspended' and current_user != 'admin':
     st.error("🚫 Your account has been suspended."); st.stop()
 
-# --- 7. MAIN LOGIC (Mode Switch) ---
+# --- 7. MODE SWITCH ---
 app_mode = "Scraper App"
 if current_user == 'admin':
     with st.sidebar:
         st.title("🛡️ Admin Controls")
-        app_mode = st.radio("Mode", ["Scraper App", "Admin Panel"])
+        app_mode = st.radio("Choose Mode", ["Scraper App", "Admin Panel"])
         st.divider()
 
 if app_mode == "Admin Panel":
+    # ---------------- ADMIN PANEL ----------------
     st.title("🛡️ Admin Dashboard")
     t1, t2, t3 = st.tabs(["📊 Overview", "➕ Add Client", "⚙️ Manage"])
     with t1:
@@ -215,7 +223,7 @@ if app_mode == "Admin Panel":
                 if st.button("Delete User"): del config['credentials']['usernames'][sel]; save_config(config); delete_user_db(sel); st.rerun()
 
 else:
-    # --- SCRAPER APP ---
+    # ---------------- SCRAPER APP ----------------
     with st.sidebar:
         st.write(f"👤 **{st.session_state['name']}**")
         st.info(f"💎 Credits: {current_balance}")
@@ -256,7 +264,7 @@ else:
             st.write("")
             b1, b2 = st.columns([2, 1.5])
             with b1:
-                # 🔥 START ENGINE (FIXED)
+                # START LOGIC
                 if st.button("START ENGINE", type="primary", use_container_width=True): 
                     if not niche or not city_input: st.error("Missing Info!")
                     elif current_balance <= 0: st.error("❌ No Credits!")
@@ -275,12 +283,14 @@ else:
         if st.session_state.running:
             results = []; target_cities = [c.strip() for c in city_input.split(',') if c.strip()]; 
             
+            # 🔥 CALL SMART DRIVER
             driver = get_driver()
             
             if driver:
                 try:
                     for city_idx, city in enumerate(target_cities):
                         if not st.session_state.running: break
+                        
                         run_query("INSERT INTO sessions (query, date) VALUES (?, ?)", (f"{niche} in {city}", time.strftime("%Y-%m-%d %H:%M"))); s_id = run_query("SELECT id FROM sessions ORDER BY id DESC LIMIT 1", is_select=True)[0][0]
                         st.session_state.status_txt = f"TARGETING: {city.upper()}"
                         st.session_state.progress_val = int(((city_idx) / len(target_cities)) * 100)
@@ -325,7 +335,7 @@ else:
                 finally: 
                     st.session_state.running = False
             else:
-                st.error("❌ Driver Initialization Failed. Please check packages.txt")
+                st.error("❌ Driver Initialization Failed. Please refresh or check logs.")
                 st.session_state.running = False
 
     with t2:
