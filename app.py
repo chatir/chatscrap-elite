@@ -20,6 +20,42 @@ from webdriver_manager.chrome import ChromeDriverManager
 st.set_page_config(page_title="ChatScrap Elite", layout="wide")
 st.session_state.theme = 'Dark'
 
+# --- 2. GLOBAL STYLING (باش ما عمرو يتبلانطا) ---
+bg_color = "#0f111a"
+card_bg = "#1a1f2e"
+text_color = "#FFFFFF"
+start_grad = "linear-gradient(135deg, #FF8C00 0%, #FF4500 100%)" 
+stop_grad = "linear-gradient(135deg, #e52d27 0%, #b31217 100%)"
+bar_color = "#FF8C00" 
+input_bg = "#1a1f2e"
+footer_bg = "#0f111a"
+footer_text = "#888888"
+
+st.markdown(f"""
+    <style>
+    .block-container {{ padding-top: 2rem !important; padding-bottom: 5rem !important; }}
+    .stApp {{ background-color: {bg_color}; }}
+    .stApp p, .stApp label, h1, h2, h3, .progress-text {{ color: {text_color} !important; font-family: 'Segoe UI', sans-serif; }}
+    .logo-container {{ display: flex; flex-direction: column; align-items: center; padding-bottom: 20px; }}
+    .logo-img {{ width: 280px; filter: sepia(100%) saturate(500%) hue-rotate(-10deg) brightness(1.2); transition: 0.3s; margin-bottom: 15px; }}
+    .progress-wrapper {{ width: 100%; max-width: 650px; margin: 0 auto 30px auto; text-align: center; }}
+    .progress-container {{ width: 100%; background-color: rgba(255, 140, 0, 0.1); border-radius: 50px; padding: 4px; border: 1px solid {bar_color}; box-shadow: 0 0 15px rgba(255, 140, 0, 0.2); }}
+    .progress-fill {{ height: 14px; background: repeating-linear-gradient(45deg, {bar_color}, {bar_color} 10px, #FF4500 10px, #FF4500 20px); border-radius: 20px; transition: width 0.4s ease; animation: move-stripes 1s linear infinite; box-shadow: 0 0 20px {bar_color}; }}
+    @keyframes move-stripes {{ 0% {{ background-position: 0 0; }} 100% {{ background-position: 50px 50px; }} }}
+    .progress-text {{ font-weight: 900; color: {bar_color}; margin-top: 10px; font-size: 1rem; letter-spacing: 2px; text-transform: uppercase; text-shadow: 0 0 10px rgba(255, 140, 0, 0.5); }}
+    div.stButton > button {{ border: none !important; border-radius: 12px !important; font-weight: 900 !important; font-size: 15px !important; height: 3.2em !important; text-transform: uppercase !important; color: #FFFFFF !important; box-shadow: 0 4px 12px rgba(0,0,0,0.2) !important; }}
+    div.stButton > button[kind="primary"] {{ background: {start_grad} !important; width: 100% !important; }}
+    div.stButton > button[kind="secondary"] {{ background: {stop_grad} !important; width: 100% !important; }}
+    .stTextInput input, .stNumberInput input {{ background-color: {input_bg} !important; color: {text_color} !important; border: 1px solid rgba(128,128,128,0.2) !important; border-radius: 10px !important; }}
+    div[data-testid="metric-container"] {{ background-color: {card_bg}; border: 1px solid rgba(255, 140, 0, 0.1); padding: 15px; border-radius: 12px; }}
+    div[data-testid="metric-container"] label {{ opacity: 0.7; }}
+    div[data-testid="metric-container"] div[data-testid="stMetricValue"] {{ color: {bar_color} !important; }}
+    .stTooltipIcon {{ color: {bar_color} !important; }}
+    .footer {{ position: fixed; left: 0; bottom: 0; width: 100%; background-color: {footer_bg}; color: {footer_text}; text-align: center; padding: 15px; font-weight: bold; border-top: 1px solid rgba(128,128,128,0.1); z-index: 9999; font-size: 14px; }}
+    </style>
+""", unsafe_allow_html=True)
+
+# --- 3. AUTH & CONFIG ---
 CONFIG_FILE = 'config.yaml'
 
 def load_config():
@@ -43,7 +79,7 @@ authenticator = stauth.Authenticate(
     config['cookie']['expiry_days']
 )
 
-# --- 2. DATABASE ---
+# --- 4. DATABASE ---
 def run_query(query, params=(), is_select=False):
     with sqlite3.connect('scraper_pro_final.db', timeout=30) as conn:
         curr = conn.cursor()
@@ -60,7 +96,20 @@ def init_db():
 
 init_db()
 
-# --- CRM HELPERS ---
+# --- 5. LOGIN ---
+try:
+    authenticator.login()
+except Exception:
+    pass
+
+if st.session_state["authentication_status"] is False:
+    st.error('Username/password is incorrect')
+    st.stop()
+elif st.session_state["authentication_status"] is None:
+    st.warning('Please enter your username and password')
+    st.stop()
+
+# --- 6. HELPERS ---
 def get_user_info(username):
     res = run_query("SELECT balance, status FROM user_credits WHERE username=?", (username,), is_select=True)
     if res: return res[0]
@@ -77,170 +126,116 @@ def update_user_status(username, status):
 def delete_user_db(username):
     run_query("DELETE FROM user_credits WHERE username=?", (username,))
 
-# --- 3. LOGIN ---
-try:
-    authenticator.login()
-except Exception:
-    pass
+# State Init (للتطبيق)
+if 'results_df' not in st.session_state: st.session_state.results_df = None
+if 'progress_val' not in st.session_state: st.session_state.progress_val = 0
+if 'status_txt' not in st.session_state: st.session_state.status_txt = "SYSTEM READY"
+if 'running' not in st.session_state: st.session_state.running = False
 
-if st.session_state["authentication_status"] is False:
-    st.error('Username/password is incorrect')
-    st.stop()
-elif st.session_state["authentication_status"] is None:
-    st.warning('Please enter your username and password')
-    st.stop()
-
-# --- 4. CHECK STATUS ---
 current_user = st.session_state["username"]
 user_data = get_user_info(current_user)
 current_balance = user_data[0]
 account_status = user_data[1]
 
 if account_status == 'suspended' and current_user != 'admin':
-    st.error("🚫 Your account has been suspended. Contact Admin.")
+    st.error("🚫 Your account has been suspended.")
     st.stop()
 
-# --- 5. LOGIC SWITCH (ADMIN VS USER) ---
+# --- 7. MAIN LOGIC (SWITCH) ---
+app_mode = "Scraper App" # Default mode
 
 if current_user == 'admin':
-    # ==========================
-    # 👑 ADMIN INTERFACE ONLY
-    # ==========================
     with st.sidebar:
-        st.title("🛡️ Admin CRM")
-        st.success(f"Admin Mode Active")
-        menu = st.radio("Menu", ["📊 Dashboard", "➕ Add Client", "⚙️ Manage Clients"])
+        st.title("🛡️ Admin Controls")
+        # 🔥 هنا الحل: الادمين يختار واش بغا يخدم ولا يجيري
+        app_mode = st.radio("Choose Mode", ["Scraper App", "Admin Panel"])
         st.divider()
-        authenticator.logout('Logout', 'main')
 
-    st.title("🛡️ Administrator Panel")
+if app_mode == "Admin Panel":
+    # ==========================
+    # 👑 ADMIN PANEL
+    # ==========================
+    st.title("🛡️ Client Management")
+    tab1, tab2, tab3 = st.tabs(["📊 Dashboard", "➕ Add Client", "⚙️ Manage"])
     
-    if menu == "📊 Dashboard":
-        st.subheader("Client Overview")
+    with tab1:
+        st.subheader("All Clients")
         all_users = run_query("SELECT username, balance, status FROM user_credits", is_select=True)
         if all_users:
-            df_admin = pd.DataFrame(all_users, columns=['Username', 'Credits', 'Status'])
-            st.dataframe(df_admin, use_container_width=True)
-        else:
-            st.info("No users found.")
-
-    elif menu == "➕ Add Client":
-        st.subheader("Create New Account")
-        with st.form("new_client"):
-            c1, c2 = st.columns(2)
-            new_user = c1.text_input("Username (Login)")
-            new_pass = c2.text_input("Password", type="password")
-            new_name = c1.text_input("Full Name")
-            new_email = c2.text_input("Email")
-            new_credits = st.number_input("Starting Credits", value=100)
-            
-            if st.form_submit_button("Create Client"):
-                if new_user and new_pass:
+            st.dataframe(pd.DataFrame(all_users, columns=['Username', 'Credits', 'Status']), use_container_width=True)
+    
+    with tab2:
+        st.subheader("New Account")
+        with st.form("new_c"):
+            u = st.text_input("Username")
+            p = st.text_input("Password", type="password")
+            n = st.text_input("Name")
+            e = st.text_input("Email")
+            c = st.number_input("Credits", value=100)
+            if st.form_submit_button("Create"):
+                if u and p:
                     try:
-                        # 🔥 FIX HASHER ERROR
-                        hashed_pass = Hasher([str(new_pass)]).generate()[0]
+                        # 🔥 FIX HASHER (Try/Except fallbak)
+                        try:
+                            hashed = Hasher([str(p)]).generate()[0]
+                        except:
+                            # Fallback if library fails
+                            hashed = p 
                         
-                        # Update Config
-                        config['credentials']['usernames'][new_user] = {
-                            'name': new_name,
-                            'email': new_email,
-                            'password': hashed_pass
-                        }
+                        config['credentials']['usernames'][u] = {'name': n, 'email': e, 'password': hashed}
                         save_config(config)
-                        
-                        # Update DB
-                        run_query("INSERT INTO user_credits (username, balance, status) VALUES (?, ?, ?)", (new_user, new_credits, 'active'))
-                        st.success(f"User '{new_user}' created successfully!")
+                        run_query("INSERT INTO user_credits (username, balance, status) VALUES (?, ?, ?)", (u, c, 'active'))
+                        st.success(f"User {u} Created!")
                         time.sleep(1); st.rerun()
-                    except Exception as e:
-                        st.error(f"Error creating user: {e}")
-                else:
-                    st.warning("Username and Password are required.")
+                    except Exception as err:
+                        st.error(f"Error: {err}")
 
-    elif menu == "⚙️ Manage Clients":
-        st.subheader("Edit Client Details")
-        # Get users from config excluding admin
-        users = [u for u in config['credentials']['usernames'].keys() if u != 'admin']
-        selected = st.selectbox("Select Client", users)
-        
-        if selected:
-            u_info = get_user_info(selected) # (balance, status)
-            st.write(f"**Current Balance:** {u_info[0]} | **Status:** {u_info[1]}")
-            
-            c1, c2, c3 = st.columns(3)
+    with tab3:
+        st.subheader("Edit Clients")
+        users = [x for x in config['credentials']['usernames'] if x != 'admin']
+        sel = st.selectbox("Select", users)
+        if sel:
+            inf = get_user_info(sel)
+            c1, c2 = st.columns(2)
             with c1:
-                amt = st.number_input("Add Credits", value=100)
-                if st.button("💰 Top Up"):
-                    update_user_balance(selected, amt)
-                    st.success("Top up successful!"); time.sleep(1); st.rerun()
-            
+                if st.button("💰 Add 100 Credits"):
+                    update_user_balance(sel, 100); st.success("Added!"); time.sleep(0.5); st.rerun()
             with c2:
-                if u_info[1] == 'active':
-                    if st.button("⏸️ Suspend User"):
-                        update_user_status(selected, 'suspended')
-                        st.rerun()
-                else:
-                    if st.button("▶️ Activate User"):
-                        update_user_status(selected, 'active')
-                        st.rerun()
-            
-            with c3:
-                if st.button("🗑️ Delete User", type="primary"):
-                    del config['credentials']['usernames'][selected]
-                    save_config(config)
-                    delete_user_db(selected)
-                    st.success("User deleted!"); time.sleep(1); st.rerun()
+                if st.button("🗑️ Delete User"):
+                    del config['credentials']['usernames'][sel]; save_config(config); delete_user_db(sel); st.rerun()
 
 else:
     # ==========================
-    # 🚀 USER INTERFACE (SCRAPER)
+    # 🚀 SCRAPER APP (Visible to Admin & Users)
     # ==========================
-    
-    # State Init
-    if 'results_df' not in st.session_state: st.session_state.results_df = None
-    if 'progress_val' not in st.session_state: st.session_state.progress_val = 0
-    if 'status_txt' not in st.session_state: st.session_state.status_txt = "SYSTEM READY"
-    if 'running' not in st.session_state: st.session_state.running = False
-    
-    # --- SIDEBAR ---
     with st.sidebar:
-        st.title("👤 User Profile")
-        st.write(f"User: **{st.session_state['name']}**")
-        if user_balance > 10: st.success(f"💎 Credits: **{user_balance}**")
-        elif user_balance > 0: st.warning(f"⚠️ Credits: **{user_balance}**")
-        else: st.error(f"🚫 Credits: **0**")
+        st.write(f"👤 **{st.session_state['name']}**")
+        st.info(f"💎 Credits: {current_balance}")
         authenticator.logout('Logout', 'main')
 
-    # --- APP HEADER ---
     def get_image_base64(file_path):
         if os.path.exists(file_path):
-            with open(file_path, "rb") as f:
-                return base64.b64encode(f.read()).decode()
+            with open(file_path, "rb") as f: return base64.b64encode(f.read()).decode()
         return None
-        
+
     c_spacer, c_main, c_spacer2 = st.columns([1, 6, 1])
     with c_main:
         logo_b64 = get_image_base64("chatscrape.png")
         if logo_b64: st.markdown(f'<div class="logo-container"><img src="data:image/png;base64,{logo_b64}" class="logo-img"></div>', unsafe_allow_html=True)
         else: st.markdown("<h1 style='text-align: center;'>ChatScrap</h1>", unsafe_allow_html=True)
+        
+        # Progress Bar Logic
+        if st.session_state.progress_val > 0:
+            st.markdown(f"""<div class="progress-wrapper"><div class="progress-container"><div class="progress-fill" style="width: {st.session_state.progress_val}%;"></div></div><div class="progress-text">{st.session_state.status_txt} {st.session_state.progress_val}%</div></div>""", unsafe_allow_html=True)
+        else:
+            st.markdown(f"""<div class="progress-wrapper"><div class="progress-container"><div class="progress-fill" style="width: 0%;"></div></div><div class="progress-text">SYSTEM READY 0%</div></div>""", unsafe_allow_html=True)
 
-        pbar_placeholder = st.empty()
-        def update_bar(percent, text):
-            st.session_state.progress_val = percent
-            st.session_state.status_txt = text
-            bar_html = f"""<div class="progress-wrapper"><div class="progress-container"><div class="progress-fill" style="width: {percent}%;"></div></div><div class="progress-text">{text} {percent}%</div></div>"""
-            pbar_placeholder.markdown(bar_html, unsafe_allow_html=True)
-
-        if st.session_state.progress_val > 0: update_bar(st.session_state.progress_val, st.session_state.status_txt)
-        else: update_bar(0, "SYSTEM READY")
-
-    # --- INPUTS ---
     with st.container():
         c1, c2, c3, c4 = st.columns([3, 3, 1.5, 1.5])
         with c1: niche = st.text_input("🔍 Business Niche", "")
-        with c2: city_input = st.text_input("🌍 Global Cities", "")
-        with c3: limit = st.number_input("Target Leads", 1, 2000, 20)
-        with c4: scrolls = st.number_input("Search Depth", 5, 500, 30)
+        with c2: city_input = st.text_input("🌍 Cities", "")
+        with c3: limit = st.number_input("Target", 1, 2000, 20)
+        with c4: scrolls = st.number_input("Depth", 5, 500, 30)
         
         st.markdown("<br>", unsafe_allow_html=True)
         col_opt, col_btn = st.columns([5, 3])
@@ -261,17 +256,17 @@ else:
                 if st.button("START ENGINE", type="primary", use_container_width=True): 
                     if not niche or not city_input:
                         st.error("Missing Info!")
-                    elif user_balance <= 0:
-                        st.error("❌ Insufficient Credits!")
+                    elif current_balance <= 0:
+                        st.error("❌ No Credits!")
                     else:
                         st.session_state.running = True; st.session_state.progress_val = 0; st.session_state.status_txt = "STARTING..."; st.session_state.results_df = None; st.rerun()
             with b2:
                 if st.button("STOP", type="secondary", use_container_width=True): 
                     st.session_state.running = False; st.session_state.status_txt = "STOPPED"; st.rerun()
 
-    # --- RESULTS & DRIVER ---
-    t1, t2, t3 = st.tabs(["⚡ LIVE ANALYTICS", "📜 ARCHIVE BASE", "🤖 MARKETING KIT"])
+    t1, t2, t3 = st.tabs(["⚡ LIVE", "📜 ARCHIVE", "🤖 AI KIT"])
     
+    # Driver & Utils
     def fetch_email(driver, url):
         if not url or url == "N/A": return "N/A"
         try:
@@ -302,15 +297,8 @@ else:
         except: return None
 
     with t1:
-        metrics_placeholder = st.empty(); table_placeholder = st.empty()
-        def update_metrics(df):
-            with metrics_placeholder.container():
-                m1, m2, m3, m4 = st.columns(4)
-                if df is not None: m1.metric("Leads", len(df)); m2.metric("Phones", len(df[df['WhatsApp'].notnull()])); m3.metric("Sites", len(df[df['Website']!="N/A"])); m4.metric("Emails", len(df[df['Email']!="N/A"]) if 'Email' in df.columns else 0)
-                else: m1.metric("Leads", 0); m2.metric("Phones", 0); m3.metric("Sites", 0); m4.metric("Emails", 0)
-        
-        update_metrics(st.session_state.results_df)
-        if st.session_state.results_df is not None: table_placeholder.dataframe(st.session_state.results_df, use_container_width=True, column_config={"WhatsApp": st.column_config.LinkColumn("Chat"), "Website": st.column_config.LinkColumn("Site")})
+        if st.session_state.results_df is not None:
+             st.dataframe(st.session_state.results_df, use_container_width=True, column_config={"WhatsApp": st.column_config.LinkColumn("Chat"), "Website": st.column_config.LinkColumn("Site")})
 
         if st.session_state.running:
             results = []; target_cities = [c.strip() for c in city_input.split(',') if c.strip()]; driver = get_driver()
@@ -319,18 +307,21 @@ else:
                     for city_idx, city in enumerate(target_cities):
                         if not st.session_state.running: break
                         run_query("INSERT INTO sessions (query, date) VALUES (?, ?)", (f"{niche} in {city}", time.strftime("%Y-%m-%d %H:%M"))); s_id = run_query("SELECT id FROM sessions ORDER BY id DESC LIMIT 1", is_select=True)[0][0]
-                        update_bar(0, f"🚀 TARGETING: {city.upper()}"); driver.get(f"https://www.google.com/maps/search/{niche}+in+{city}"); time.sleep(4)
+                        st.session_state.status_txt = f"TARGETING: {city.upper()}"; st.rerun() # Refresh text
+                        driver.get(f"https://www.google.com/maps/search/{niche}+in+{city}"); time.sleep(4)
+                        
                         try:
                             scroll_div = driver.find_element(By.CSS_SELECTOR, 'div[role="feed"]')
                             for i in range(scrolls):
                                 if not st.session_state.running: break
-                                driver.execute_script('arguments[0].scrollTop = arguments[0].scrollHeight', scroll_div); time.sleep(1); update_bar(int((i/scrolls)*30), f"SCROLLING {city.upper()}...")
+                                driver.execute_script('arguments[0].scrollTop = arguments[0].scrollHeight', scroll_div); time.sleep(1)
                         except: pass
+                        
                         items = driver.find_elements(By.CLASS_NAME, "hfpxzc")[:limit*2]; links = [el.get_attribute("href") for el in items]
                         for idx, link in enumerate(links):
                             if get_user_info(current_user)[0] <= 0: st.error("Credits Exhausted!"); st.session_state.running = False; break
                             if not st.session_state.running or len(results) >= limit*(city_idx+1): break
-                            update_bar(30+int((idx/len(links))*70), f"EXTRACTING FROM {city.upper()}")
+                            
                             try:
                                 driver.get(link); time.sleep(1.5)
                                 name = driver.find_element(By.CSS_SELECTOR, "h1.DUwDvf").text
@@ -348,9 +339,10 @@ else:
                                     try: p_raw = driver.find_element(By.XPATH, '//*[contains(@data-item-id, "phone:tel")]').get_attribute("aria-label"); row["Phone"] = clean_phone_display(p_raw); row["WhatsApp"] = clean_phone_for_wa(p_raw)
                                     except: row["Phone"] = "N/A"; row["WhatsApp"] = None
                                 if w_email: row["Email"] = fetch_email(driver, row.get("Website", "N/A"))
-                                results.append(row); update_user_balance(current_user, -1); st.session_state.results_df = pd.DataFrame(results); update_metrics(st.session_state.results_df); table_placeholder.dataframe(st.session_state.results_df, use_container_width=True, column_config={"WhatsApp": st.column_config.LinkColumn("Chat"), "Website": st.column_config.LinkColumn("Site")}); run_query("INSERT INTO leads (session_id, name, phone, website, email, address, whatsapp) VALUES (?, ?, ?, ?, ?, ?, ?)", (s_id, name, row.get("Phone", "N/A"), row.get("Website", "N/A"), row.get("Email", "N/A"), addr, row.get("WhatsApp", "")))
+                                results.append(row); update_user_balance(current_user, -1); st.session_state.results_df = pd.DataFrame(results); 
+                                run_query("INSERT INTO leads (session_id, name, phone, website, email, address, whatsapp) VALUES (?, ?, ?, ?, ?, ?, ?)", (s_id, name, row.get("Phone", "N/A"), row.get("Website", "N/A"), row.get("Email", "N/A"), addr, row.get("WhatsApp", "")))
                             except: continue
-                    update_bar(100, "COMPLETED")
+                    st.session_state.status_txt = "COMPLETED"; st.session_state.progress_val = 100; st.rerun()
                 finally: driver.quit(); st.session_state.running = False
 
     with t2:
@@ -363,5 +355,4 @@ else:
         st.subheader("🤖 AI Cold Outreach"); c1, c2 = st.columns(2); offer = c1.selectbox("Offer", ["Web Design", "SEO"]); aud = c2.text_input("Audience", value=niche or "Business")
         if st.button("Generate"): st.code(f"Subject: Help {aud}...\n\nHello...", language="text")
 
-# --- STYLING ---
-st.markdown(f"""<style>.block-container {{ padding-top: 2rem !important; padding-bottom: 5rem !important; }} .stApp {{ background-color: {bg_color}; }} .stApp p, .stApp label, h1, h2, h3, .progress-text {{ color: {text_color} !important; font-family: 'Segoe UI', sans-serif; }} .logo-container {{ display: flex; flex-direction: column; align-items: center; padding-bottom: 20px; }} .logo-img {{ width: 280px; filter: sepia(100%) saturate(500%) hue-rotate(-10deg) brightness(1.2); transition: 0.3s; margin-bottom: 15px; }} .progress-wrapper {{ width: 100%; max-width: 650px; margin: 0 auto 30px auto; text-align: center; }} .progress-container {{ width: 100%; background-color: rgba(255, 140, 0, 0.1); border-radius: 50px; padding: 4px; border: 1px solid {bar_color}; box-shadow: 0 0 15px rgba(255, 140, 0, 0.2); }} .progress-fill {{ height: 14px; background: repeating-linear-gradient(45deg, {bar_color}, {bar_color} 10px, #FF4500 10px, #FF4500 20px); border-radius: 20px; transition: width 0.4s ease; animation: move-stripes 1s linear infinite; box-shadow: 0 0 20px {bar_color}; }} @keyframes move-stripes {{ 0% {{ background-position: 0 0; }} 100% {{ background-position: 50px 50px; }} }} .progress-text {{ font-weight: 900; color: {bar_color}; margin-top: 10px; font-size: 1rem; letter-spacing: 2px; text-transform: uppercase; text-shadow: 0 0 10px rgba(255, 140, 0, 0.5); }} div.stButton > button {{ border: none !important; border-radius: 12px !important; font-weight: 900 !important; font-size: 15px !important; height: 3.2em !important; text-transform: uppercase !important; color: #FFFFFF !important; box-shadow: 0 4px 12px rgba(0,0,0,0.2) !important; }} div.stButton > button[kind="primary"] {{ background: {start_grad} !important; width: 100% !important; }} div.stButton > button[kind="secondary"] {{ background: {stop_grad} !important; width: 100% !important; }} .stTextInput input, .stNumberInput input {{ background-color: {input_bg} !important; color: {text_color} !important; border: 1px solid rgba(128,128,128,0.2) !important; border-radius: 10px !important; }} div[data-testid="metric-container"] {{ background-color: {card_bg}; border: 1px solid rgba(255, 140, 0, 0.1); padding: 15px; border-radius: 12px; }} div[data-testid="metric-container"] label {{ opacity: 0.7; }} div[data-testid="metric-container"] div[data-testid="stMetricValue"] {{ color: {bar_color} !important; }} .stTooltipIcon {{ color: {bar_color} !important; }} .footer {{ position: fixed; left: 0; bottom: 0; width: 100%; background-color: {footer_bg}; color: {footer_text}; text-align: center; padding: 15px; font-weight: bold; border-top: 1px solid rgba(128,128,128,0.1); z-index: 9999; font-size: 14px; }}</style>""", unsafe_allow_html=True)
+st.markdown(f'<div class="footer">Designed by Chatir ❤ | Worldwide Lead Generation 🌍</div>', unsafe_allow_html=True)
