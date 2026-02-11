@@ -23,8 +23,6 @@ st.session_state.theme = 'Dark'
 bg_color = "#0f111a"
 card_bg = "#1a1f2e"
 text_color = "#FFFFFF"
-start_grad = "linear-gradient(135deg, #FF8C00 0%, #FF4500 100%)" 
-stop_grad = "linear-gradient(135deg, #e52d27 0%, #b31217 100%)"
 bar_color = "#FF8C00" 
 input_bg = "#1a1f2e"
 
@@ -40,8 +38,6 @@ st.markdown(f"""
     @keyframes move-stripes {{ 0% {{ background-position: 0 0; }} 100% {{ background-position: 50px 50px; }} }}
     .progress-text {{ font-weight: 900; color: {bar_color}; margin-top: 10px; font-size: 1rem; letter-spacing: 2px; text-transform: uppercase; text-shadow: 0 0 10px rgba(255, 140, 0, 0.5); }}
     div.stButton > button {{ border: none !important; border-radius: 12px !important; font-weight: 900 !important; font-size: 15px !important; height: 3.2em !important; text-transform: uppercase !important; color: #FFFFFF !important; box-shadow: 0 4px 12px rgba(0,0,0,0.2) !important; }}
-    div.stButton > button[kind="primary"] {{ background: {start_grad} !important; width: 100% !important; }}
-    div.stButton > button[kind="secondary"] {{ background: {stop_grad} !important; width: 100% !important; }}
     .stTextInput input, .stNumberInput input {{ background-color: {input_bg} !important; color: {text_color} !important; border: 1px solid rgba(128,128,128,0.2) !important; border-radius: 10px !important; }}
     div[data-testid="metric-container"] {{ background-color: {card_bg}; border: 1px solid rgba(255, 140, 0, 0.1); padding: 15px; border-radius: 12px; }}
     div[data-testid="metric-container"] label {{ opacity: 0.7; }}
@@ -49,7 +45,7 @@ st.markdown(f"""
     </style>
 """, unsafe_allow_html=True)
 
-# --- 2. GLOBAL UTILS ---
+# --- 2. UTILS ---
 def get_image_base64(file_path):
     if os.path.exists(file_path):
         with open(file_path, "rb") as f: return base64.b64encode(f.read()).decode()
@@ -75,34 +71,31 @@ def clean_phone_for_wa(phone):
 def clean_phone_display(text):
     return re.sub(r'[^\d+\s]', '', text).strip() if text else "N/A"
 
-# 🔥🔥 THE ULTIMATE DRIVER FIX (CACHED) 🔥🔥
+# 🔥🔥 DRIVER FIX: THE ORIGINAL STABLE VERSION 🔥🔥
 @st.cache_resource(show_spinner=False)
 def get_driver():
     options = Options()
-    # أهم خيارات لمنع الانهيار
     options.add_argument("--headless")
     options.add_argument("--no-sandbox")
-    options.add_argument("--disable-dev-shm-usage") # CRUCIAL FOR LINUX/CLOUD
+    options.add_argument("--disable-dev-shm-usage")
     options.add_argument("--disable-gpu")
-    options.add_argument("--disable-features=NetworkService")
     options.add_argument("--window-size=1920,1080")
-    options.add_argument("--disable-infobars")
-    options.add_argument("--disable-extensions")
-    options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36")
     
-    # تحديد مكان الكروم
+    # Try finding chromium manually
     chromium_path = shutil.which("chromium") or shutil.which("chromium-browser")
-    if chromium_path: options.binary_location = chromium_path
+    if chromium_path:
+        options.binary_location = chromium_path
     
     try:
         service = Service(ChromeDriverManager().install())
         driver = webdriver.Chrome(service=service, options=options)
         return driver
     except Exception as e:
-        print(f"Driver Error: {e}")
+        # 🔥 هذا السطر غايورينا الخطأ الحقيقي إلا وقع
+        st.error(f"❌ Detailed Driver Error: {str(e)}")
         return None
 
-# --- 3. DATABASE & CONFIG ---
+# --- 3. DATABASE ---
 def run_query(query, params=(), is_select=False):
     with sqlite3.connect('scraper_pro_final.db', timeout=30) as conn:
         curr = conn.cursor()
@@ -161,7 +154,7 @@ if st.session_state["authentication_status"] is False:
 elif st.session_state["authentication_status"] is None:
     st.warning('Please enter your username and password'); st.stop()
 
-# --- 5. APP LOGIC ---
+# --- 5. STATE ---
 if 'results_df' not in st.session_state: st.session_state.results_df = None
 if 'progress_val' not in st.session_state: st.session_state.progress_val = 0
 if 'status_txt' not in st.session_state: st.session_state.status_txt = "SYSTEM READY"
@@ -175,7 +168,7 @@ account_status = user_data[1]
 if account_status == 'suspended' and current_user != 'admin':
     st.error("🚫 Your account has been suspended."); st.stop()
 
-# --- 6. SWITCH MODES ---
+# --- 6. SWITCH ---
 app_mode = "Scraper App"
 if current_user == 'admin':
     with st.sidebar:
@@ -184,7 +177,7 @@ if current_user == 'admin':
         st.divider()
 
 if app_mode == "Admin Panel":
-    # ADMIN PANEL
+    # ADMIN
     st.title("🛡️ Client Management")
     tab1, tab2, tab3 = st.tabs(["📊 Dashboard", "➕ Add Client", "⚙️ Manage"])
     with tab1:
@@ -198,16 +191,13 @@ if app_mode == "Admin Panel":
             n = st.text_input("Name"); e = st.text_input("Email"); c = st.number_input("Credits", value=100)
             if st.form_submit_button("Create"):
                 try: 
-                    # 🔥 SAFE HASHER
                     try: hashed = Hasher([str(p)]).generate()[0]
                     except: hashed = p
-                    
                     config['credentials']['usernames'][u] = {'name': n, 'email': e, 'password': hashed}
                     save_config(config); run_query("INSERT INTO user_credits (username, balance, status) VALUES (?, ?, ?)", (u, c, 'active'))
                     st.success(f"User {u} Created!"); time.sleep(1); st.rerun()
                 except Exception as err: st.error(f"Error: {err}")
     with tab3:
-        st.subheader("Edit Clients")
         users = [x for x in config['credentials']['usernames'] if x != 'admin']
         sel = st.selectbox("Select", users)
         if sel:
@@ -218,7 +208,7 @@ if app_mode == "Admin Panel":
                 if st.button("🗑️ Delete User"): del config['credentials']['usernames'][sel]; save_config(config); delete_user_db(sel); st.rerun()
 
 else:
-    # SCRAPER APP
+    # APP
     with st.sidebar:
         st.write(f"👤 **{st.session_state['name']}**")
         st.info(f"💎 Credits: {current_balance}")
@@ -226,12 +216,10 @@ else:
 
     c_spacer, c_main, c_spacer2 = st.columns([1, 6, 1])
     with c_main:
-        # LOGO
         logo_b64 = get_image_base64("chatscrape.png")
         if logo_b64: st.markdown(f'<div class="logo-container"><img src="data:image/png;base64,{logo_b64}" class="logo-img"></div>', unsafe_allow_html=True)
         else: st.markdown("<h1 style='text-align: center;'>ChatScrap</h1>", unsafe_allow_html=True)
         
-        # PROGRESS BAR
         if st.session_state.progress_val > 0:
             st.markdown(f"""<div class="progress-wrapper"><div class="progress-container"><div class="progress-fill" style="width: {st.session_state.progress_val}%;"></div></div><div class="progress-text">{st.session_state.status_txt} {st.session_state.progress_val}%</div></div>""", unsafe_allow_html=True)
         else:
@@ -260,7 +248,7 @@ else:
             st.write("")
             b1, b2 = st.columns([2, 1.5])
             with b1:
-                # 🔥 START BUTTON
+                # START
                 if st.button("START ENGINE", type="primary", use_container_width=True): 
                     if not niche or not city_input: st.error("Missing Info!")
                     elif current_balance <= 0: st.error("❌ No Credits!")
@@ -277,7 +265,6 @@ else:
         if st.session_state.running:
             results = []; target_cities = [c.strip() for c in city_input.split(',') if c.strip()]; 
             
-            # 🔥 CALLING THE CACHED DRIVER
             driver = get_driver()
             
             if driver:
@@ -286,13 +273,17 @@ else:
                         if not st.session_state.running: break
                         run_query("INSERT INTO sessions (query, date) VALUES (?, ?)", (f"{niche} in {city}", time.strftime("%Y-%m-%d %H:%M"))); s_id = run_query("SELECT id FROM sessions ORDER BY id DESC LIMIT 1", is_select=True)[0][0]
                         st.session_state.status_txt = f"TARGETING: {city.upper()}"; st.rerun()
+                        
+                        # Anti-Crash: Basic Google URL
                         driver.get(f"https://www.google.com/maps/search/{niche}+in+{city}"); time.sleep(4)
+                        
                         try:
                             scroll_div = driver.find_element(By.CSS_SELECTOR, 'div[role="feed"]')
                             for i in range(scrolls):
                                 if not st.session_state.running: break
                                 driver.execute_script('arguments[0].scrollTop = arguments[0].scrollHeight', scroll_div); time.sleep(1)
                         except: pass
+                        
                         items = driver.find_elements(By.CLASS_NAME, "hfpxzc")[:limit*2]; links = [el.get_attribute("href") for el in items]
                         for idx, link in enumerate(links):
                             if get_user_info(current_user)[0] <= 0: st.error("Credits Exhausted!"); st.session_state.running = False; break
@@ -319,11 +310,10 @@ else:
                             except: continue
                     st.session_state.status_txt = "COMPLETED"; st.session_state.progress_val = 100; st.rerun()
                 finally: 
-                    # DO NOT QUIT DRIVER IF YOU WANT IT CACHED FOR NEXT RUN
-                    # OR QUIT AND INVALIDATE CACHE. FOR STABILITY HERE, WE KEEP IT ALIVE.
+                    # Don't Quit, Keep Alive for Speed
                     st.session_state.running = False
             else:
-                st.error("❌ Driver Initialization Failed. Refresh page.")
+                st.error("❌ Driver Failed to Start. Please Check Logs.")
                 st.session_state.running = False
 
     with t2:
