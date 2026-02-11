@@ -1,0 +1,14 @@
+credentials:
+  usernames:
+    admin:
+      name: "chatir"
+      password: "chatir1991"
+      email: "chatir@chatscrap.com"
+    yassin:  # <-- لاحظ: يونس جا تحت ادمين نيشان (نفس الخط)
+      name: "Yassine Eloirtani"
+      password: "yassin2026"
+      email: "yassin@gmail.com"
+cookie:
+  expiry_days: 30
+  key: "random_signature_key"
+  name: "chatscrap_cookie"
