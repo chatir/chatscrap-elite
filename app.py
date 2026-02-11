@@ -16,17 +16,19 @@ from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
 from webdriver_manager.chrome import ChromeDriverManager
 
-# --- 1. GLOBAL CONFIG & STYLING (البداية الصحيحة) ---
+# --- 1. CONFIG & STYLING (الديزاين الأصلي) ---
 st.set_page_config(page_title="ChatScrap Elite", layout="wide")
 st.session_state.theme = 'Dark'
 
 bg_color = "#0f111a"
 card_bg = "#1a1f2e"
 text_color = "#FFFFFF"
-bar_color = "#FF8C00" 
 start_grad = "linear-gradient(135deg, #FF8C00 0%, #FF4500 100%)" 
 stop_grad = "linear-gradient(135deg, #e52d27 0%, #b31217 100%)"
+bar_color = "#FF8C00" 
 input_bg = "#1a1f2e"
+footer_bg = "#0f111a"
+footer_text = "#888888"
 
 st.markdown(f"""
     <style>
@@ -34,6 +36,7 @@ st.markdown(f"""
     .stApp {{ background-color: {bg_color}; }}
     .stApp p, .stApp label, h1, h2, h3, .progress-text {{ color: {text_color} !important; font-family: 'Segoe UI', sans-serif; }}
     .logo-container {{ display: flex; flex-direction: column; align-items: center; padding-bottom: 20px; }}
+    .logo-img {{ width: 280px; filter: sepia(100%) saturate(500%) hue-rotate(-10deg) brightness(1.2); transition: 0.3s; margin-bottom: 15px; }}
     .progress-wrapper {{ width: 100%; max-width: 650px; margin: 0 auto 30px auto; text-align: center; }}
     .progress-container {{ width: 100%; background-color: rgba(255, 140, 0, 0.1); border-radius: 50px; padding: 4px; border: 1px solid {bar_color}; box-shadow: 0 0 15px rgba(255, 140, 0, 0.2); }}
     .progress-fill {{ height: 14px; background: repeating-linear-gradient(45deg, {bar_color}, {bar_color} 10px, #FF4500 10px, #FF4500 20px); border-radius: 20px; transition: width 0.4s ease; animation: move-stripes 1s linear infinite; box-shadow: 0 0 20px {bar_color}; }}
@@ -46,10 +49,12 @@ st.markdown(f"""
     div[data-testid="metric-container"] {{ background-color: {card_bg}; border: 1px solid rgba(255, 140, 0, 0.1); padding: 15px; border-radius: 12px; }}
     div[data-testid="metric-container"] label {{ opacity: 0.7; }}
     div[data-testid="metric-container"] div[data-testid="stMetricValue"] {{ color: {bar_color} !important; }}
+    .stTooltipIcon {{ color: {bar_color} !important; }}
+    .footer {{ position: fixed; left: 0; bottom: 0; width: 100%; background-color: {footer_bg}; color: {footer_text}; text-align: center; padding: 15px; font-weight: bold; border-top: 1px solid rgba(128,128,128,0.1); z-index: 9999; font-size: 14px; }}
     </style>
 """, unsafe_allow_html=True)
 
-# --- 2. GLOBAL HELPER FUNCTIONS (المواكر هنا باش يخدمو ديما) ---
+# --- 2. GLOBAL UTILS ---
 def get_image_base64(file_path):
     if os.path.exists(file_path):
         with open(file_path, "rb") as f: return base64.b64encode(f.read()).decode()
@@ -75,17 +80,25 @@ def clean_phone_for_wa(phone):
 def clean_phone_display(text):
     return re.sub(r'[^\d+\s]', '', text).strip() if text else "N/A"
 
-# 🔥 DRIVER DEFINITION MUST BE GLOBAL FOR CACHING
-@st.cache_resource
+# 🔥 DRIVER FIX: Re-integrated locally to ensure stability
 def get_driver():
     options = Options()
-    options.add_argument("--headless"); options.add_argument("--no-sandbox"); options.add_argument("--disable-dev-shm-usage"); options.add_argument("--disable-gpu"); options.add_argument("--disable-features=NetworkService"); options.add_argument("--window-size=1920,1080"); options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36")
+    options.add_argument("--headless")
+    options.add_argument("--no-sandbox")
+    options.add_argument("--disable-dev-shm-usage")
+    options.add_argument("--disable-gpu")
+    options.add_argument("--disable-features=NetworkService")
+    options.add_argument("--window-size=1920,1080")
+    options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36")
+    
     chromium_path = shutil.which("chromium") or shutil.which("chromium-browser")
     if chromium_path: options.binary_location = chromium_path
-    try: service = Service(ChromeDriverManager().install()); return webdriver.Chrome(service=service, options=options)
+    try: 
+        service = Service(ChromeDriverManager().install())
+        return webdriver.Chrome(service=service, options=options)
     except: return None
 
-# --- 3. DATABASE & CRM LOGIC ---
+# --- 3. DATABASE & CONFIG ---
 def run_query(query, params=(), is_select=False):
     with sqlite3.connect('scraper_pro_final.db', timeout=30) as conn:
         curr = conn.cursor()
@@ -118,7 +131,7 @@ def update_user_status(username, status):
 def delete_user_db(username):
     run_query("DELETE FROM user_credits WHERE username=?", (username,))
 
-# --- 4. AUTH SETUP ---
+# --- 4. AUTH ---
 CONFIG_FILE = 'config.yaml'
 def load_config():
     try:
@@ -136,7 +149,6 @@ authenticator = stauth.Authenticate(
     config['cookie']['expiry_days']
 )
 
-# --- 5. LOGIN FLOW ---
 try: authenticator.login()
 except: pass
 
@@ -145,7 +157,12 @@ if st.session_state["authentication_status"] is False:
 elif st.session_state["authentication_status"] is None:
     st.warning('Please enter your username and password'); st.stop()
 
-# --- 6. CHECK USER STATUS ---
+# --- 5. APP LOGIC ---
+if 'results_df' not in st.session_state: st.session_state.results_df = None
+if 'progress_val' not in st.session_state: st.session_state.progress_val = 0
+if 'status_txt' not in st.session_state: st.session_state.status_txt = "SYSTEM READY"
+if 'running' not in st.session_state: st.session_state.running = False
+
 current_user = st.session_state["username"]
 user_data = get_user_info(current_user)
 current_balance = user_data[0]
@@ -154,13 +171,7 @@ account_status = user_data[1]
 if account_status == 'suspended' and current_user != 'admin':
     st.error("🚫 Your account has been suspended."); st.stop()
 
-# --- 7. APP INIT STATE ---
-if 'results_df' not in st.session_state: st.session_state.results_df = None
-if 'progress_val' not in st.session_state: st.session_state.progress_val = 0
-if 'status_txt' not in st.session_state: st.session_state.status_txt = "SYSTEM READY"
-if 'running' not in st.session_state: st.session_state.running = False
-
-# --- 8. MAIN SWITCH (ADMIN vs APP) ---
+# --- 6. SWITCH MODES ---
 app_mode = "Scraper App"
 if current_user == 'admin':
     with st.sidebar:
@@ -169,35 +180,30 @@ if current_user == 'admin':
         st.divider()
 
 if app_mode == "Admin Panel":
-    # === ADMIN DASHBOARD ===
+    # ADMIN PANEL CODE
     st.title("🛡️ Client Management")
     tab1, tab2, tab3 = st.tabs(["📊 Dashboard", "➕ Add Client", "⚙️ Manage"])
-    
     with tab1:
         st.subheader("All Clients")
         all_users = run_query("SELECT username, balance, status FROM user_credits", is_select=True)
         if all_users: st.dataframe(pd.DataFrame(all_users, columns=['Username', 'Credits', 'Status']), use_container_width=True)
-    
     with tab2:
         st.subheader("New Account")
         with st.form("new_c"):
             u = st.text_input("Username"); p = st.text_input("Password", type="password")
             n = st.text_input("Name"); e = st.text_input("Email"); c = st.number_input("Credits", value=100)
             if st.form_submit_button("Create"):
-                if u and p:
-                    try: 
-                        hashed = Hasher([str(p)]).generate()[0]
-                        config['credentials']['usernames'][u] = {'name': n, 'email': e, 'password': hashed}
-                        save_config(config); run_query("INSERT INTO user_credits (username, balance, status) VALUES (?, ?, ?)", (u, c, 'active'))
-                        st.success(f"User {u} Created!"); time.sleep(1); st.rerun()
-                    except Exception as err: st.error(f"Error: {err}")
-
+                try: 
+                    hashed = Hasher([str(p)]).generate()[0]
+                    config['credentials']['usernames'][u] = {'name': n, 'email': e, 'password': hashed}
+                    save_config(config); run_query("INSERT INTO user_credits (username, balance, status) VALUES (?, ?, ?)", (u, c, 'active'))
+                    st.success(f"User {u} Created!"); time.sleep(1); st.rerun()
+                except Exception as err: st.error(f"Error: {err}")
     with tab3:
         st.subheader("Edit Clients")
         users = [x for x in config['credentials']['usernames'] if x != 'admin']
         sel = st.selectbox("Select", users)
         if sel:
-            inf = get_user_info(sel)
             c1, c2 = st.columns(2)
             with c1:
                 if st.button("💰 Add 100 Credits"): update_user_balance(sel, 100); st.success("Added!"); time.sleep(0.5); st.rerun()
@@ -205,7 +211,7 @@ if app_mode == "Admin Panel":
                 if st.button("🗑️ Delete User"): del config['credentials']['usernames'][sel]; save_config(config); delete_user_db(sel); st.rerun()
 
 else:
-    # === SCRAPER APP ===
+    # SCRAPER APP
     with st.sidebar:
         st.write(f"👤 **{st.session_state['name']}**")
         st.info(f"💎 Credits: {current_balance}")
@@ -213,11 +219,11 @@ else:
 
     c_spacer, c_main, c_spacer2 = st.columns([1, 6, 1])
     with c_main:
+        # 🔥 ORIGINAL LOGO RETURNED
         logo_b64 = get_image_base64("chatscrape.png")
         if logo_b64: st.markdown(f'<div class="logo-container"><img src="data:image/png;base64,{logo_b64}" class="logo-img"></div>', unsafe_allow_html=True)
         else: st.markdown("<h1 style='text-align: center;'>ChatScrap</h1>", unsafe_allow_html=True)
         
-        # UI Progress Bar
         if st.session_state.progress_val > 0:
             st.markdown(f"""<div class="progress-wrapper"><div class="progress-container"><div class="progress-fill" style="width: {st.session_state.progress_val}%;"></div></div><div class="progress-text">{st.session_state.status_txt} {st.session_state.progress_val}%</div></div>""", unsafe_allow_html=True)
         else:
@@ -246,101 +252,67 @@ else:
             st.write("")
             b1, b2 = st.columns([2, 1.5])
             with b1:
-                # 🔥 START BUTTON LOGIC
                 if st.button("START ENGINE", type="primary", use_container_width=True): 
-                    if not niche or not city_input:
-                        st.error("Missing Niche or City!")
-                    elif current_balance <= 0:
-                        st.error("❌ No Credits!")
-                    else:
-                        st.session_state.running = True; st.session_state.progress_val = 0; st.session_state.status_txt = "STARTING..."; st.session_state.results_df = None; st.rerun()
+                    if not niche or not city_input: st.error("Missing Info!")
+                    elif current_balance <= 0: st.error("❌ No Credits!")
+                    else: st.session_state.running = True; st.session_state.progress_val = 0; st.session_state.status_txt = "STARTING..."; st.session_state.results_df = None; st.rerun()
             with b2:
-                if st.button("STOP", type="secondary", use_container_width=True): 
-                    st.session_state.running = False; st.session_state.status_txt = "STOPPED"; st.rerun()
+                if st.button("STOP", type="secondary", use_container_width=True): st.session_state.running = False; st.session_state.status_txt = "STOPPED"; st.rerun()
 
-    # Results Section
     t1, t2, t3 = st.tabs(["⚡ LIVE", "📜 ARCHIVE", "🤖 AI KIT"])
     
     with t1:
         if st.session_state.results_df is not None:
              st.dataframe(st.session_state.results_df, use_container_width=True, column_config={"WhatsApp": st.column_config.LinkColumn("Chat"), "Website": st.column_config.LinkColumn("Site")})
 
-        # 🔥 THE SCRAPING LOOP (OUTSIDE CONDITIONAL DEFINITIONS)
         if st.session_state.running:
-            results = []
-            target_cities = [c.strip() for c in city_input.split(',') if c.strip()]
+            results = []; target_cities = [c.strip() for c in city_input.split(',') if c.strip()]; 
             
-            driver = get_driver() # CALL GLOBAL FUNCTION
-            if not driver:
-                st.error("❌ Failed to initialize Driver. Please try again.")
-                st.session_state.running = False
-            else:
+            # 🔥 DRIVER INITIALIZED HERE TO FIX CRASH
+            driver = get_driver()
+            
+            if driver:
                 try:
                     for city_idx, city in enumerate(target_cities):
                         if not st.session_state.running: break
-                        
-                        run_query("INSERT INTO sessions (query, date) VALUES (?, ?)", (f"{niche} in {city}", time.strftime("%Y-%m-%d %H:%M")))
-                        s_id = run_query("SELECT id FROM sessions ORDER BY id DESC LIMIT 1", is_select=True)[0][0]
-                        
-                        st.session_state.status_txt = f"TARGETING: {city.upper()}"
-                        st.session_state.progress_val = int((city_idx / len(target_cities)) * 100)
-                        st.rerun() # Force update UI text
-                        
+                        run_query("INSERT INTO sessions (query, date) VALUES (?, ?)", (f"{niche} in {city}", time.strftime("%Y-%m-%d %H:%M"))); s_id = run_query("SELECT id FROM sessions ORDER BY id DESC LIMIT 1", is_select=True)[0][0]
+                        st.session_state.status_txt = f"TARGETING: {city.upper()}"; st.rerun()
                         driver.get(f"https://www.google.com/maps/search/{niche}+in+{city}"); time.sleep(4)
-                        
-                        # Scroll
                         try:
                             scroll_div = driver.find_element(By.CSS_SELECTOR, 'div[role="feed"]')
                             for i in range(scrolls):
                                 if not st.session_state.running: break
                                 driver.execute_script('arguments[0].scrollTop = arguments[0].scrollHeight', scroll_div); time.sleep(1)
                         except: pass
-                        
                         items = driver.find_elements(By.CLASS_NAME, "hfpxzc")[:limit*2]; links = [el.get_attribute("href") for el in items]
-                        
                         for idx, link in enumerate(links):
-                            # Check Balance Live
-                            bal = get_user_info(current_user)[0]
-                            if bal <= 0: st.error("Credits Exhausted!"); st.session_state.running = False; break
+                            if get_user_info(current_user)[0] <= 0: st.error("Credits Exhausted!"); st.session_state.running = False; break
                             if not st.session_state.running or len(results) >= limit*(city_idx+1): break
-                            
                             try:
                                 driver.get(link); time.sleep(1.5)
                                 name = driver.find_element(By.CSS_SELECTOR, "h1.DUwDvf").text
                                 if any(d['Name']==name for d in results): continue
-                                
                                 try: addr = driver.find_element(By.CSS_SELECTOR, 'div.Io6YTe.fontBodyMedium').text
                                 except: addr = "N/A"
-                                
                                 if w_strict and city.lower() not in addr.lower(): continue
-                                
                                 website = "N/A"
                                 if w_web:
                                     try: website = driver.find_element(By.CSS_SELECTOR, 'a[data-item-id="authority"]').get_attribute("href")
                                     except: website = "N/A"
                                 if w_no_site and website!="N/A": continue
-                                
                                 row = {"Name": name, "Address": addr, "Website": website, "City": city}
                                 if w_phone:
                                     try: p_raw = driver.find_element(By.XPATH, '//*[contains(@data-item-id, "phone:tel")]').get_attribute("aria-label"); row["Phone"] = clean_phone_display(p_raw); row["WhatsApp"] = clean_phone_for_wa(p_raw)
                                     except: row["Phone"] = "N/A"; row["WhatsApp"] = None
                                 if w_email: row["Email"] = fetch_email(driver, row.get("Website", "N/A"))
-                                
-                                results.append(row)
-                                update_user_balance(current_user, -1) # Deduct Credit
-                                
-                                st.session_state.results_df = pd.DataFrame(results)
-                                
+                                results.append(row); update_user_balance(current_user, -1); st.session_state.results_df = pd.DataFrame(results); 
                                 run_query("INSERT INTO leads (session_id, name, phone, website, email, address, whatsapp) VALUES (?, ?, ?, ?, ?, ?, ?)", (s_id, name, row.get("Phone", "N/A"), row.get("Website", "N/A"), row.get("Email", "N/A"), addr, row.get("WhatsApp", "")))
                             except: continue
-                    
-                    st.session_state.status_txt = "COMPLETED"
-                    st.session_state.progress_val = 100
-                    st.rerun()
-
-                finally: 
-                    driver.quit()
-                    st.session_state.running = False
+                    st.session_state.status_txt = "COMPLETED"; st.session_state.progress_val = 100; st.rerun()
+                finally: driver.quit(); st.session_state.running = False
+            else:
+                st.error("❌ Failed to initialize Driver. Try again.")
+                st.session_state.running = False
 
     with t2:
         sessions = run_query("SELECT * FROM sessions ORDER BY id DESC", is_select=True)
