@@ -50,7 +50,7 @@ elif st.session_state["authentication_status"] is None:
 # --- 3. APP LOGIC (LOGGED IN) ---
 if st.session_state["authentication_status"]:
     
-    # --- DATABASE FUNCTIONS (UPDATED FOR STATUS) ---
+    # --- DATABASE FUNCTIONS (UPDATED FOR MANAGEMENT) ---
     def run_query(query, params=(), is_select=False):
         with sqlite3.connect('scraper_pro_final.db', timeout=30) as conn:
             curr = conn.cursor()
@@ -61,7 +61,6 @@ if st.session_state["authentication_status"]:
     def init_db():
         run_query('''CREATE TABLE IF NOT EXISTS sessions (id INTEGER PRIMARY KEY AUTOINCREMENT, query TEXT, date TEXT)''')
         run_query('''CREATE TABLE IF NOT EXISTS leads (id INTEGER PRIMARY KEY AUTOINCREMENT, session_id INTEGER, name TEXT, phone TEXT, website TEXT, email TEXT, address TEXT, whatsapp TEXT)''')
-        # Added status column
         run_query('''CREATE TABLE IF NOT EXISTS user_credits (username TEXT PRIMARY KEY, balance INTEGER, status TEXT DEFAULT 'active')''')
         try: run_query("SELECT status FROM user_credits LIMIT 1")
         except: run_query("ALTER TABLE user_credits ADD COLUMN status TEXT DEFAULT 'active'")
@@ -86,297 +85,254 @@ if st.session_state["authentication_status"]:
     def update_user_status(username, status):
         run_query("UPDATE user_credits SET status = ? WHERE username=?", (status, username))
 
-    # --- SESSION CHECK (SUSPENSION GUARD) ---
+    # --- STATUS CHECK ---
     current_user = st.session_state["username"]
     user_balance, user_status = get_user_data(current_user)
 
     if user_status == 'suspended' and current_user != "admin":
-        st.error("🚫 حسابك موقوف حالياً. المرجو الاتصال بالأدمن.")
+        st.error("🚫 Your account has been suspended. Please contact the administrator.")
         st.stop()
 
-    # Initialize Scraper State
+    # --- SIDEBAR NAVIGATION ---
+    with st.sidebar:
+        st.title("👤 User Profile")
+        st.write(f"User: **{st.session_state['name']}**")
+        st.success(f"💎 Credits: **{user_balance}**")
+        
+        st.divider()
+        # Navigation Menu
+        menu_options = ["🚀 SCRAPER ENGINE"]
+        if current_user == "admin":
+            menu_options.append("🛠️ USER MANAGEMENT")
+        
+        choice = st.radio("GO TO:", menu_options, index=0)
+        
+        st.divider()
+        authenticator.logout('Logout', 'main')
+
+    # --- INITIALIZE STATE ---
     if 'results_df' not in st.session_state: st.session_state.results_df = None
     if 'progress_val' not in st.session_state: st.session_state.progress_val = 0
     if 'status_txt' not in st.session_state: st.session_state.status_txt = "SYSTEM READY"
     if 'running' not in st.session_state: st.session_state.running = False
-    
-    # --- SIDEBAR (ENHANCED ADMIN CONTROL) ---
-    with st.sidebar:
-        st.title("👤 User Profile")
-        st.write(f"User: **{st.session_state['name']}**")
-        
-        if user_balance > 10:
-            st.success(f"💎 Credits: **{user_balance}**")
-        elif user_balance > 0:
-            st.warning(f"⚠️ Credits: **{user_balance}** (Low)")
-        else:
-            st.error(f"🚫 Credits: **0**")
-        
-        if current_user == "admin":
-            st.divider()
-            st.subheader("🛠️ User Management")
-            
-            # 1. Register New User (FIXED FOR VERSION 0.3.0+)
-            with st.expander("➕ Register New User"):
-                new_u = st.text_input("Username", key="new_u_input")
-                new_n = st.text_input("Display Name")
-                new_p = st.text_input("Password", type="password", key="new_p_input")
-                if st.button("Create Account"):
-                    if new_u and new_p:
-                        # Fix for the TypeError in the screenshot
-                        try:
-                            hashed_pw = stauth.Hasher.hash(new_p)
-                        except:
-                            hashed_pw = stauth.Hasher([new_p]).generate()[0]
-                            
-                        config['credentials']['usernames'][new_u] = {'name': new_n, 'password': hashed_pw, 'email': f"{new_u}@mail.com"}
-                        with open('config.yaml', 'w') as f:
-                            yaml.dump(config, f, default_flow_style=False)
-                        get_user_data(new_u) # Init in SQL
-                        st.success(f"User {new_u} created!")
-                        time.sleep(1); st.rerun()
 
-            # 2. Credits & Suspension
-            st.divider()
-            target_user = st.selectbox("Select Client", list(config['credentials']['usernames'].keys()))
-            col_t1, col_t2 = st.columns(2)
-            with col_t1:
-                amt = st.number_input("Top Up", min_value=1, value=100)
-                if st.button("💰 Recharge"):
-                    add_credits(target_user, amt)
-                    st.success("Added!"); time.sleep(1); st.rerun()
-            with col_t2:
-                _, u_stat = get_user_data(target_user)
-                btn_lbl = "🚫 Suspend" if u_stat == "active" else "✅ Activate"
-                if st.button(btn_lbl):
-                    new_s = "suspended" if u_stat == "active" else "active"
-                    update_user_status(target_user, new_s)
-                    st.warning(f"User is now {new_s}!"); time.sleep(1); st.rerun()
-
-        st.divider()
-        authenticator.logout('Logout', 'main')
-
-    # --- UTILS (RETAINED FROM ORIGINAL) ---
-    def get_image_base64(file_path):
-        if os.path.exists(file_path):
-            with open(file_path, "rb") as f:
-                return base64.b64encode(f.read()).decode()
-        return None
-
-    def fetch_email(driver, url):
-        if not url or url == "N/A": return "N/A"
-        try:
-            driver.execute_script("window.open('');")
-            driver.switch_to.window(driver.window_handles[1])
-            driver.get(url)
-            time.sleep(1.5)
-            emails = re.findall(r"[a-z0-9\.\-+_]+@[a-z0-9\.\-+_]+\.[a-z]+", driver.page_source, re.I)
-            driver.close()
-            driver.switch_to.window(driver.window_handles[0])
-            return emails[0] if emails else "N/A"
-        except:
-            if len(driver.window_handles) > 1: driver.close()
-            driver.switch_to.window(driver.window_handles[0])
-            return "N/A"
-
-    def clean_phone_for_wa(phone):
-        if not phone or phone == "N/A": return None
-        clean = re.sub(r'[^\d+]', '', phone)
-        check_num = clean.replace(" ", "").replace("-", "")
-        if check_num.startswith("05") or check_num.startswith("+2125") or check_num.startswith("002125"):
-            return None
-        return f"https://wa.me/{clean}"
-
-    def clean_phone_display(text):
-        if not text: return "N/A"
-        clean = re.sub(r'[^\d+\s]', '', text).strip()
-        return clean
-
-    # --- DRIVER SETUP (RETAINED) ---
-    @st.cache_resource
-    def get_driver():
-        options = Options()
-        options.add_argument("--headless")
-        options.add_argument("--no-sandbox")
-        options.add_argument("--disable-dev-shm-usage")
-        options.add_argument("--disable-gpu")
-        options.add_argument("--window-size=1920,1080")
-        
-        chromium_path = shutil.which("chromium") or shutil.which("chromium-browser")
-        if chromium_path: options.binary_location = chromium_path
-
-        try:
-            service = Service(ChromeDriverManager().install())
-            return webdriver.Chrome(service=service, options=options)
-        except Exception:
-            try:
-                return webdriver.Chrome(options=options)
-            except Exception as e:
-                st.error(f"❌ Driver Error: {str(e)}")
-                return None
-
-    # --- CSS STYLING (RETAINED ORIGINAL DESIGN) ---
-    bg_color = "#0f111a"
-    card_bg = "#1a1f2e"
-    text_color = "#FFFFFF"
+    # --- STYLING (YOUR ORIGINAL DESIGN) ---
+    bg_color = "#0f111a"; card_bg = "#1a1f2e"; text_color = "#FFFFFF"
     start_grad = "linear-gradient(135deg, #FF8C00 0%, #FF4500 100%)" 
     stop_grad = "linear-gradient(135deg, #e52d27 0%, #b31217 100%)"
     bar_color = "#FF8C00" 
     input_bg = "#1a1f2e"
-    footer_bg = "#0f111a"
-    footer_text = "#888888"
 
     st.markdown(f"""
         <style>
         .block-container {{ padding-top: 2rem !important; padding-bottom: 5rem !important; }}
         .stApp {{ background-color: {bg_color}; }}
-        .stApp p, .stApp label, h1, h2, h3, .progress-text {{ color: {text_color} !important; font-family: 'Segoe UI', sans-serif; }}
+        .stApp p, .stApp label, h1, h2, h3 {{ color: {text_color} !important; font-family: 'Segoe UI', sans-serif; }}
         .logo-container {{ display: flex; flex-direction: column; align-items: center; padding-bottom: 20px; }}
         .logo-img {{ width: 280px; filter: sepia(100%) saturate(500%) hue-rotate(-10deg) brightness(1.2); transition: 0.3s; margin-bottom: 15px; }}
         .progress-wrapper {{ width: 100%; max-width: 650px; margin: 0 auto 30px auto; text-align: center; }}
-        .progress-container {{ width: 100%; background-color: rgba(255, 140, 0, 0.1); border-radius: 50px; padding: 4px; border: 1px solid {bar_color}; box-shadow: 0 0 15px rgba(255, 140, 0, 0.2); }}
-        .progress-fill {{ height: 14px; background: repeating-linear-gradient(45deg, {bar_color}, {bar_color} 10px, #FF4500 10px, #FF4500 20px); border-radius: 20px; transition: width 0.4s ease; animation: move-stripes 1s linear infinite; box-shadow: 0 0 20px {bar_color}; }}
-        @keyframes move-stripes {{ 0% {{ background-position: 0 0; }} 100% {{ background-position: 50px 50px; }} }}
-        .progress-text {{ font-weight: 900; color: {bar_color}; margin-top: 10px; font-size: 1rem; letter-spacing: 2px; text-transform: uppercase; text-shadow: 0 0 10px rgba(255, 140, 0, 0.5); }}
-        div.stButton > button {{ border: none !important; border-radius: 12px !important; font-weight: 900 !important; font-size: 15px !important; height: 3.2em !important; text-transform: uppercase !important; color: #FFFFFF !important; box-shadow: 0 4px 12px rgba(0,0,0,0.2) !important; }}
+        .progress-container {{ width: 100%; background-color: rgba(255, 140, 0, 0.1); border-radius: 50px; padding: 4px; border: 1px solid {bar_color}; }}
+        .progress-fill {{ height: 14px; background: repeating-linear-gradient(45deg, {bar_color}, {bar_color} 10px, #FF4500 10px, #FF4500 20px); border-radius: 20px; transition: width 0.4s ease; }}
+        div.stButton > button {{ border: none !important; border-radius: 12px !important; font-weight: 900 !important; font-size: 15px !important; height: 3.2em !important; color: #FFFFFF !important; }}
         div.stButton > button[kind="primary"] {{ background: {start_grad} !important; width: 100% !important; }}
         div.stButton > button[kind="secondary"] {{ background: {stop_grad} !important; width: 100% !important; }}
         .stTextInput input, .stNumberInput input {{ background-color: {input_bg} !important; color: {text_color} !important; border: 1px solid rgba(128,128,128,0.2) !important; border-radius: 10px !important; }}
-        div[data-testid="metric-container"] {{ background-color: {card_bg}; border: 1px solid rgba(255, 140, 0, 0.1); padding: 15px; border-radius: 12px; }}
-        div[data-testid="metric-container"] label {{ opacity: 0.7; }}
-        div[data-testid="metric-container"] div[data-testid="stMetricValue"] {{ color: {bar_color} !important; }}
-        .footer {{ position: fixed; left: 0; bottom: 0; width: 100%; background-color: {footer_bg}; color: {footer_text}; text-align: center; padding: 15px; font-weight: bold; border-top: 1px solid rgba(128,128,128,0.1); z-index: 9999; font-size: 14px; }}
+        div[data-testid="metric-container"] {{ background-color: {card_bg}; padding: 15px; border-radius: 12px; }}
+        .footer {{ position: fixed; left: 0; bottom: 0; width: 100%; background-color: {bg_color}; color: #888888; text-align: center; padding: 15px; border-top: 1px solid rgba(128,128,128,0.1); font-size: 14px; }}
         </style>
     """, unsafe_allow_html=True)
 
-    # --- HEADER (LOGO & PROGRESS) ---
-    c_spacer, c_main, c_spacer2 = st.columns([1, 6, 1])
-    with c_main:
-        logo_b64 = get_image_base64("chatscrape.png")
-        if logo_b64: st.markdown(f'<div class="logo-container"><img src="data:image/png;base64,{logo_b64}" class="logo-img"></div>', unsafe_allow_html=True)
-        else: st.markdown("<h1 style='text-align: center;'>ChatScrap</h1>", unsafe_allow_html=True)
-
-        pbar_placeholder = st.empty()
-        def update_bar(percent, text):
-            st.session_state.progress_val = percent
-            st.session_state.status_txt = text
-            bar_html = f"""<div class="progress-wrapper"><div class="progress-container"><div class="progress-fill" style="width: {percent}%;"></div></div><div class="progress-text">{text} {percent}%</div></div>"""
-            pbar_placeholder.markdown(bar_html, unsafe_allow_html=True)
-
-        if st.session_state.progress_val > 0: update_bar(st.session_state.progress_val, st.session_state.status_txt)
-        else: update_bar(0, "SYSTEM READY")
-
-    # --- MAIN SEARCH FORM ---
-    with st.container():
-        c1, c2, c3, c4 = st.columns([3, 3, 1.5, 1.5])
-        with c1: niche = st.text_input("🔍 Business Niche", "")
-        with c2: city = st.text_input("🌍 Global City", "")
-        with c3: limit = st.number_input("Target Leads", 1, 2000, 20)
-        with c4: scrolls = st.number_input("Search Depth", 5, 500, 30)
+    # ---------------------------
+    # VIEW 1: USER MANAGEMENT
+    # ---------------------------
+    if choice == "🛠️ USER MANAGEMENT" and current_user == "admin":
+        st.title("🛠️ Admin Control Panel")
         
-        st.markdown("<br>", unsafe_allow_html=True)
-        col_opt, col_btn = st.columns([5, 3])
-        with col_opt:
-            st.write("⚙️ Filters:")
-            opts = st.columns(6)
-            w_phone = opts[0].checkbox("Phone", True)
-            w_web = opts[1].checkbox("Web", True)
-            w_email = opts[2].checkbox("Email", False)
-            w_no_site = opts[3].checkbox("No Site", False)
-            w_strict = opts[4].checkbox("Strict", True)
-            opts[5].checkbox("Sync", True)
+        # LIVE USER MONITORING
+        st.subheader("📊 Live User Credits Monitor")
+        users_list = run_query("SELECT username, balance, status FROM user_credits", is_select=True)
+        live_df = pd.DataFrame(users_list, columns=["Username", "Balance", "Status"])
+        st.dataframe(live_df, use_container_width=True)
 
-        with col_btn:
-            st.write("")
-            b1, b2 = st.columns([2, 1.5])
-            with b1:
-                if st.button("START ENGINE", type="primary", use_container_width=True): 
-                    if not niche or not city:
-                        st.error("Please enter a Niche and City!")
-                    elif user_balance <= 0:
-                        st.error("❌ Insufficient Credits!")
-                    else:
-                        st.session_state.running = True; st.session_state.progress_val = 0; st.session_state.status_txt = "STARTING..."; st.session_state.results_df = None; st.rerun()
-            with b2:
-                if st.button("STOP", type="secondary", use_container_width=True): 
-                    st.session_state.running = False; st.session_state.status_txt = "STOPPED"; st.rerun()
+        col_add, col_manage = st.columns(2)
+        with col_add:
+            st.markdown("### ➕ Register New User")
+            new_u = st.text_input("Username")
+            new_n = st.text_input("Name")
+            new_p = st.text_input("Password", type="password")
+            if st.button("CREATE ACCOUNT"):
+                if new_u and new_p:
+                    try: hashed_pw = stauth.Hasher.hash(new_p)
+                    except: hashed_pw = stauth.Hasher([new_p]).generate()[0]
+                    config['credentials']['usernames'][new_u] = {'name': new_n, 'password': hashed_pw, 'email': f"{new_u}@mail.com"}
+                    with open('config.yaml', 'w') as f: yaml.dump(config, f)
+                    get_user_data(new_u) # Create in DB
+                    st.success("User added successfully!"); time.sleep(1); st.rerun()
 
-    # --- OUTPUT TABS ---
-    t1, t2, t3 = st.tabs(["⚡ LIVE ANALYTICS", "📜 ARCHIVE BASE", "🤖 MARKETING KIT"])
+        with col_manage:
+            st.markdown("### ⚙️ Manage Existing User")
+            target = st.selectbox("Select User", list(config['credentials']['usernames'].keys()))
+            c_a, c_b = st.columns(2)
+            with c_a:
+                if st.button("💰 Add 100 Credits"):
+                    add_credits(target, 100)
+                    st.success("Credits added!"); time.sleep(1); st.rerun()
+            with c_b:
+                _, u_stat = get_user_data(target)
+                b_lbl = "🚫 Suspend" if u_stat == "active" else "✅ Activate"
+                if st.button(b_lbl):
+                    update_user_status(target, "suspended" if u_stat == "active" else "active")
+                    st.warning("Status changed!"); time.sleep(1); st.rerun()
 
-    with t1:
-        metrics_placeholder = st.empty()
-        table_placeholder = st.empty()
+    # ---------------------------
+    # VIEW 2: SCRAPER ENGINE (FULL LOGIC)
+    # ---------------------------
+    elif choice == "🚀 SCRAPER ENGINE":
+        
+        # --- UTILS (FETCH EMAIL & PHONE) ---
+        def get_image_base64(file_path):
+            if os.path.exists(file_path):
+                with open(file_path, "rb") as f: return base64.b64encode(f.read()).decode()
+            return None
 
-        if st.session_state.results_df is not None:
-            table_placeholder.dataframe(st.session_state.results_df, use_container_width=True)
+        def fetch_email(driver, url):
+            if not url or url == "N/A": return "N/A"
+            try:
+                driver.execute_script("window.open('');")
+                driver.switch_to.window(driver.window_handles[1])
+                driver.get(url); time.sleep(1.5)
+                emails = re.findall(r"[a-z0-9\.\-+_]+@[a-z0-9\.\-+_]+\.[a-z]+", driver.page_source, re.I)
+                driver.close(); driver.switch_to.window(driver.window_handles[0])
+                return emails[0] if emails else "N/A"
+            except:
+                if len(driver.window_handles) > 1: driver.close()
+                driver.switch_to.window(driver.window_handles[0]); return "N/A"
 
-        if st.session_state.running:
-            results = [] 
-            run_query("INSERT INTO sessions (query, date) VALUES (?, ?)", (f"{niche} in {city}", time.strftime("%Y-%m-%d %H:%M")))
-            s_id = run_query("SELECT id FROM sessions ORDER BY id DESC LIMIT 1", is_select=True)[0][0]
+        def clean_phone_for_wa(phone):
+            if not phone or phone == "N/A": return None
+            clean = re.sub(r'[^\d+]', '', phone)
+            return f"https://wa.me/{clean}"
+
+        def clean_phone_display(text):
+            if not text: return "N/A"
+            return re.sub(r'[^\d+\s]', '', text).strip()
+
+        @st.cache_resource
+        def get_driver():
+            opts = Options()
+            opts.add_argument("--headless"); opts.add_argument("--no-sandbox")
+            opts.add_argument("--disable-dev-shm-usage"); opts.add_argument("--window-size=1920,1080")
+            chromium_path = shutil.which("chromium") or shutil.which("chromium-browser")
+            if chromium_path: opts.binary_location = chromium_path
+            try: return webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=opts)
+            except: return webdriver.Chrome(options=opts)
+
+        # --- HEADER ---
+        c_spacer, c_main, c_spacer2 = st.columns([1, 6, 1])
+        with c_main:
+            logo_b64 = get_image_base64("chatscrape.png")
+            if logo_b64: st.markdown(f'<div class="logo-container"><img src="data:image/png;base64,{logo_b64}" class="logo-img"></div>', unsafe_allow_html=True)
+            else: st.markdown("<h1 style='text-align: center;'>ChatScrap</h1>", unsafe_allow_html=True)
+
+            pbar_placeholder = st.empty()
+            def update_bar(percent, text):
+                st.session_state.progress_val = percent; st.session_state.status_txt = text
+                bar_html = f"""<div class="progress-wrapper"><div class="progress-container"><div class="progress-fill" style="width: {percent}%;"></div></div><div style='color:{bar_color};text-align:center;font-weight:bold;'>{text} {percent}%</div></div>"""
+                pbar_placeholder.markdown(bar_html, unsafe_allow_html=True)
+
+            if st.session_state.progress_val > 0: update_bar(st.session_state.progress_val, st.session_state.status_txt)
+            else: update_bar(0, "SYSTEM READY")
+
+        # --- MAIN FORM ---
+        with st.container():
+            c1, c2, c3, c4 = st.columns([3, 3, 1.5, 1.5])
+            with c1: niche = st.text_input("🔍 Business Niche", "")
+            with c2: city = st.text_input("🌍 Global City", "")
+            with c3: limit = st.number_input("Target Leads", 1, 2000, 20)
+            with c4: scrolls = st.number_input("Search Depth", 5, 500, 30)
             
-            driver = get_driver()
-            if driver:
-                try:
-                    update_bar(5, "INITIALIZING...")
-                    driver.get(f"https://www.google.com/maps/search/{niche}+in+{city}")
-                    time.sleep(4)
-                    
-                    scroll_div = driver.find_element(By.CSS_SELECTOR, 'div[role="feed"]')
-                    for i in range(scrolls):
-                        if not st.session_state.running: break
-                        driver.execute_script('arguments[0].scrollTop = arguments[0].scrollHeight', scroll_div)
-                        time.sleep(1)
-                        update_bar(10 + int((i / scrolls) * 40), "SCROLLING...")
-                    
-                    links = [el.get_attribute("href") for el in driver.find_elements(By.CLASS_NAME, "hfpxzc")[:limit*2]]
-                    
-                    for idx, link in enumerate(links):
-                        # Credit check during run
-                        curr_b, _ = get_user_data(current_user)
-                        if curr_b <= 0: st.error("🚫 Credits Exhausted!"); st.session_state.running = False; break
-                        if not st.session_state.running or len(results) >= limit: break
+            st.divider()
+            col_opt, col_btn = st.columns([5, 3])
+            with col_opt:
+                st.write("⚙️ Filters:")
+                opts = st.columns(4)
+                w_phone = opts[0].checkbox("Phone", True); w_web = opts[1].checkbox("Web", True)
+                w_email = opts[2].checkbox("Email", False); w_strict = opts[3].checkbox("Strict", True)
+
+            with col_btn:
+                b1, b2 = st.columns([2, 1.5])
+                with b1:
+                    if st.button("START ENGINE", type="primary", use_container_width=True): 
+                        if niche and city and user_balance > 0:
+                            st.session_state.running = True; st.session_state.progress_val = 0; st.session_state.results_df = None; st.rerun()
+                        else: st.error("Check inputs/credits!")
+                with b2:
+                    if st.button("STOP", type="secondary", use_container_width=True): 
+                        st.session_state.running = False; st.session_state.status_txt = "STOPPED"; st.rerun()
+
+        # --- TABS & SCRAPER CORE ---
+        t1, t2, t3 = st.tabs(["⚡ LIVE ANALYTICS", "📜 ARCHIVE BASE", "🤖 MARKETING KIT"])
+
+        with t1:
+            metrics_placeholder = st.empty(); table_placeholder = st.empty()
+            if st.session_state.results_df is not None: table_placeholder.dataframe(st.session_state.results_df, use_container_width=True)
+
+            if st.session_state.running:
+                results = []
+                run_query("INSERT INTO sessions (query, date) VALUES (?, ?)", (f"{niche} in {city}", time.strftime("%Y-%m-%d %H:%M")))
+                s_id = run_query("SELECT id FROM sessions ORDER BY id DESC LIMIT 1", is_select=True)[0][0]
+                
+                driver = get_driver()
+                if driver:
+                    try:
+                        update_bar(5, "INITIALIZING..."); driver.get(f"https://www.google.com/maps/search/{niche}+in+{city}"); time.sleep(4)
                         
-                        update_bar(50 + int((idx / len(links)) * 50), f"EXTRACTING {len(results)+1}")
-                        driver.get(link); time.sleep(1.5)
-                        try:
-                            name = driver.find_element(By.CSS_SELECTOR, "h1.DUwDvf").text
-                            addr = driver.find_element(By.CSS_SELECTOR, 'div.Io6YTe.fontBodyMedium').text
-                            if w_strict and city.lower() not in addr.lower(): continue
-
-                            website = "N/A"
-                            try: website = driver.find_element(By.CSS_SELECTOR, 'a[data-item-id="authority"]').get_attribute("href")
-                            except: pass
+                        feed = driver.find_element(By.CSS_SELECTOR, 'div[role="feed"]')
+                        for i in range(scrolls):
+                            if not st.session_state.running: break
+                            driver.execute_script('arguments[0].scrollTop = arguments[0].scrollHeight', feed)
+                            time.sleep(1.2); update_bar(10 + int((i/scrolls)*40), "SCROLLING...")
+                        
+                        links = [el.get_attribute("href") for el in driver.find_elements(By.CLASS_NAME, "hfpxzc")[:limit*2]]
+                        
+                        for idx, link in enumerate(links):
+                            curr_bal, _ = get_user_data(current_user)
+                            if curr_bal <= 0 or not st.session_state.running or len(results) >= limit: break
                             
-                            if w_no_site and website != "N/A": continue
+                            update_bar(50 + int((idx/len(links))*50), f"SCRAPING {len(results)+1}")
+                            driver.get(link); time.sleep(2)
+                            try:
+                                name = driver.find_element(By.CSS_SELECTOR, "h1.DUwDvf").text
+                                addr = driver.find_element(By.CSS_SELECTOR, 'div.Io6YTe.fontBodyMedium').text
+                                if w_strict and city.lower() not in addr.lower(): continue
 
-                            row = {"Name": name, "Address": addr, "Website": website}
-                            try: 
-                                p_raw = driver.find_element(By.XPATH, '//*[contains(@data-item-id, "phone:tel")]').get_attribute("aria-label")
-                                row["Phone"] = clean_phone_display(p_raw)
-                                row["WhatsApp"] = clean_phone_for_wa(p_raw)
-                            except: row["Phone"] = "N/A"; row["WhatsApp"] = None
+                                website = "N/A"
+                                try: website = driver.find_element(By.CSS_SELECTOR, 'a[data-item-id="authority"]').get_attribute("href")
+                                except: pass
+                                
+                                row = {"Name": name, "Address": addr, "Website": website}
+                                try:
+                                    p_raw = driver.find_element(By.XPATH, '//*[contains(@data-item-id, "phone:tel")]').get_attribute("aria-label")
+                                    row["Phone"] = clean_phone_display(p_raw); row["WhatsApp"] = clean_phone_for_wa(p_raw)
+                                except: row["Phone"] = "N/A"; row["WhatsApp"] = None
 
-                            results.append(row); deduct_credit(current_user)
-                            st.session_state.results_df = pd.DataFrame(results)
-                            table_placeholder.dataframe(st.session_state.results_df, use_container_width=True)
-                            run_query("INSERT INTO leads (session_id, name, phone, website, email, address, whatsapp) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                                      (s_id, name, row.get("Phone", "N/A"), website, "N/A", addr, row.get("WhatsApp", "")))
-                        except: continue
-                    update_bar(100, "COMPLETED")
-                finally:
-                    driver.quit(); st.session_state.running = False
+                                if w_email: row["Email"] = fetch_email(driver, website)
 
-    with t2:
-        sessions = run_query("SELECT * FROM sessions ORDER BY id DESC", is_select=True)
-        for sid, q, d in sessions:
-            with st.expander(f"📦 {d} | {q}"):
-                data = run_query(f"SELECT name, phone, website, address FROM leads WHERE session_id={sid}", is_select=True)
-                st.dataframe(pd.DataFrame(data, columns=["Name", "Phone", "Website", "Address"]), use_container_width=True)
+                                results.append(row); deduct_credit(current_user)
+                                st.session_state.results_df = pd.DataFrame(results)
+                                table_placeholder.dataframe(st.session_state.results_df, use_container_width=True)
+                                
+                                run_query("INSERT INTO leads (session_id, name, phone, website, email, address, whatsapp) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                                          (s_id, name, row.get("Phone","N/A"), website, row.get("Email","N/A"), addr, row.get("WhatsApp","")))
+                            except: continue
+                        update_bar(100, "COMPLETED")
+                    finally: driver.quit(); st.session_state.running = False
 
-    with t3:
-        st.subheader("🤖 Marketing Kit")
-        st.info("AI Outreach generation logic is ready for integration.")
+        with t2:
+            sessions = run_query("SELECT * FROM sessions ORDER BY id DESC", is_select=True)
+            for sid, q, d in sessions:
+                with st.expander(f"📦 {d} | {q}"):
+                    data = run_query(f"SELECT name, phone, website, address FROM leads WHERE session_id={sid}", is_select=True)
+                    st.dataframe(pd.DataFrame(data, columns=["Name", "Phone", "Website", "Address"]), use_container_width=True)
 
     st.markdown(f'<div class="footer">Designed by Chatir ❤ | Worldwide Lead Generation 🌍</div>', unsafe_allow_html=True)
