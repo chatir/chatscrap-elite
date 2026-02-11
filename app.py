@@ -14,13 +14,11 @@ from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
-from webdriver_manager.chrome import ChromeDriverManager
 
-# --- 1. CONFIG & STYLING ---
+# --- 1. CONFIG & STYLING (ELITE DARK) ---
 st.set_page_config(page_title="ChatScrap Elite", layout="wide")
 st.session_state.theme = 'Dark'
 
-# الألوان
 bg_color = "#0f111a"
 card_bg = "#1a1f2e"
 text_color = "#FFFFFF"
@@ -53,7 +51,7 @@ st.markdown(f"""
     </style>
 """, unsafe_allow_html=True)
 
-# --- 2. GLOBAL UTILS ---
+# --- 2. UTILS ---
 def get_image_base64(file_path):
     if os.path.exists(file_path):
         with open(file_path, "rb") as f: return base64.b64encode(f.read()).decode()
@@ -79,7 +77,7 @@ def clean_phone_for_wa(phone):
 def clean_phone_display(text):
     return re.sub(r'[^\d+\s]', '', text).strip() if text else "N/A"
 
-# 🔥 FIX: SYSTEM DRIVER ONLY
+# 🔥 FIX: SMART AUTO-DETECT DRIVER 🔥
 @st.cache_resource(show_spinner=False)
 def get_driver():
     options = Options()
@@ -89,18 +87,28 @@ def get_driver():
     options.add_argument("--disable-gpu")
     options.add_argument("--window-size=1920,1080")
     
-    options.binary_location = "/usr/bin/chromium"
+    # 1. البحث الأوتوماتيكي عن المتصفح
+    chrome_bin = shutil.which("chromium") or shutil.which("google-chrome")
+    if chrome_bin:
+        options.binary_location = chrome_bin
+    else:
+        st.error("❌ Critical: Chromium Browser not found in system!")
+        return None
+
+    # 2. البحث الأوتوماتيكي عن الدرايفر
+    driver_bin = shutil.which("chromedriver") or shutil.which("chromium-driver")
     
+    if not driver_bin:
+        st.error("❌ Critical: Chromedriver not found via 'packages.txt'.")
+        return None
+
     try:
-        service = Service(executable_path="/usr/bin/chromedriver")
+        service = Service(executable_path=driver_bin)
         driver = webdriver.Chrome(service=service, options=options)
         return driver
     except Exception as e:
-        try:
-            return webdriver.Chrome(options=options)
-        except Exception as final_e:
-            st.error(f"❌ Driver Error: {str(final_e)}")
-            return None
+        st.error(f"❌ Driver Crash: {str(e)}")
+        return None
 
 # --- 3. DATABASE ---
 def run_query(query, params=(), is_select=False):
@@ -161,7 +169,7 @@ if st.session_state["authentication_status"] is False:
 elif st.session_state["authentication_status"] is None:
     st.warning('Please enter your username and password'); st.stop()
 
-# --- 5. INITIALIZE STATE ---
+# --- 5. APP STATE ---
 if 'results_df' not in st.session_state: st.session_state.results_df = None
 if 'progress_val' not in st.session_state: st.session_state.progress_val = 0
 if 'status_txt' not in st.session_state: st.session_state.status_txt = "SYSTEM READY"
@@ -175,10 +183,8 @@ account_status = user_data[1]
 if account_status == 'suspended' and current_user != 'admin':
     st.error("🚫 Your account has been suspended."); st.stop()
 
-# --- 6. MAIN SWITCH (THE SAFE WAY) ---
-# هذا هو الجزء الجديد اللي آمن
-app_mode = "Scraper App" # Default
-
+# --- 6. MAIN SWITCH (ADMIN / APP) ---
+app_mode = "Scraper App"
 if current_user == 'admin':
     with st.sidebar:
         st.title("🛡️ Admin Controls")
@@ -186,111 +192,51 @@ if current_user == 'admin':
         st.divider()
 
 if app_mode == "Admin Panel":
-    # ---------------- ADMIN PANEL (ISOLATED) ----------------
     st.title("🛡️ Administration Hub")
-    
     tab1, tab2, tab3 = st.tabs(["📊 Dashboard", "➕ Add Client", "⚙️ Manage Clients"])
     
-    # 1. Dashboard
     with tab1:
         st.subheader("👥 User Database")
         all_users = run_query("SELECT username, balance, status FROM user_credits", is_select=True)
         if all_users:
             df_admin = pd.DataFrame(all_users, columns=['Username', 'Credits', 'Status'])
             st.dataframe(df_admin, use_container_width=True)
-        else:
-            st.info("No users found.")
-
-    # 2. Add Client
+    
     with tab2:
         st.subheader("➕ Create New Account")
         with st.form("create_user"):
             c1, c2 = st.columns(2)
-            new_u = c1.text_input("Username")
-            new_p = c2.text_input("Password", type="password")
-            new_n = c1.text_input("Full Name")
-            new_e = c2.text_input("Email")
-            new_bal = st.number_input("Starting Credits", value=100)
-            
+            new_u = c1.text_input("Username"); new_p = c2.text_input("Password", type="password")
+            new_n = c1.text_input("Full Name"); new_e = c2.text_input("Email"); new_bal = st.number_input("Credits", 100)
             if st.form_submit_button("Create Account"):
                 if new_u and new_p:
                     try:
-                        # Safe Hash Logic
-                        try:
-                            hashed = Hasher([str(new_p)]).generate()[0]
-                        except:
-                            hashed = str(new_p) # Fallback if hasher fails
-                        
-                        # Update Config
-                        config['credentials']['usernames'][new_u] = {
-                            'name': new_n,
-                            'email': new_e,
-                            'password': hashed
-                        }
-                        save_config(config)
-                        
-                        # Update DB
-                        run_query("INSERT INTO user_credits (username, balance, status) VALUES (?, ?, ?)", (new_u, new_bal, 'active'))
-                        st.success(f"✅ User {new_u} created successfully!")
-                        time.sleep(1)
-                        st.rerun()
-                    except Exception as e:
-                        st.error(f"Error: {e}")
-                else:
-                    st.error("Username and Password are required!")
+                        try: hashed = Hasher([str(new_p)]).generate()[0]
+                        except: hashed = str(new_p)
+                        config['credentials']['usernames'][new_u] = {'name': new_n, 'email': new_e, 'password': hashed}
+                        save_config(config); run_query("INSERT INTO user_credits VALUES (?, ?, ?)", (new_u, new_bal, 'active'))
+                        st.success(f"✅ User {new_u} created!"); time.sleep(1); st.rerun()
+                    except Exception as e: st.error(f"Error: {e}")
 
-    # 3. Manage Clients
     with tab3:
         st.subheader("⚙️ Client Operations")
-        # Get users excluding admin
         users_list = [u for u in config['credentials']['usernames'].keys() if u != 'admin']
-        
         selected_user = st.selectbox("Select Client", users_list)
-        
         if selected_user:
-            u_info = get_user_info(selected_user) # (balance, status)
-            
-            col_a, col_b, col_c = st.columns(3)
-            
-            # Top Up
-            with col_a:
-                st.info(f"💰 Balance: **{u_info[0]}**")
-                top_up_amt = st.number_input("Amount", value=100, key="topup")
-                if st.button("Add Credits"):
-                    update_user_balance(selected_user, top_up_amt)
-                    st.success("Credits Added!")
-                    time.sleep(0.5)
-                    st.rerun()
-            
-            # Status
-            with col_b:
-                st.info(f"🚦 Status: **{u_info[1]}**")
-                if u_info[1] == 'active':
-                    if st.button("⏸️ Suspend"):
-                        update_user_status(selected_user, 'suspended')
-                        st.rerun()
-                else:
-                    if st.button("▶️ Activate"):
-                        update_user_status(selected_user, 'active')
-                        st.rerun()
-            
-            # Delete
-            with col_c:
-                st.error("🗑️ Danger Zone")
-                if st.button("Delete User"):
-                    try:
-                        del config['credentials']['usernames'][selected_user]
-                        save_config(config)
-                        delete_user_db(selected_user)
-                        st.success("User Deleted!")
-                        time.sleep(1)
-                        st.rerun()
-                    except:
-                        st.error("Error deleting user.")
+            u_info = get_user_info(selected_user)
+            c1, c2, c3 = st.columns(3)
+            with c1:
+                if st.button("Add 100 Credits"): update_user_balance(selected_user, 100); st.success("Added!"); time.sleep(0.5); st.rerun()
+            with c2:
+                if st.button("Suspend/Activate"): 
+                    new_status = 'suspended' if u_info[1] == 'active' else 'active'
+                    update_user_status(selected_user, new_status); st.rerun()
+            with c3:
+                if st.button("Delete User"): 
+                    del config['credentials']['usernames'][selected_user]; save_config(config); delete_user_db(selected_user); st.rerun()
 
 else:
-    # ---------------- SCRAPER APP (THE WORKING ENGINE) ----------------
-    # هذا الكود هو نفسه النسخة v78.0 تماماً
+    # --- SCRAPER APP ---
     with st.sidebar:
         st.write(f"👤 **{st.session_state['name']}**")
         st.info(f"💎 Credits: {current_balance}")
@@ -331,9 +277,12 @@ else:
             st.write("")
             b1, b2 = st.columns([2, 1.5])
             with b1:
+                # 🔥 START ENGINE LOGIC
                 if st.button("START ENGINE", type="primary", use_container_width=True): 
-                    if not niche or not city_input: st.error("Missing Info!")
-                    elif current_balance <= 0: st.error("❌ No Credits!")
+                    if not niche or not city_input: 
+                        st.error("Missing Info!")
+                    elif current_balance <= 0: 
+                        st.error("❌ No Credits!")
                     else: 
                         st.session_state.running = True
                         st.session_state.progress_val = 0
@@ -356,6 +305,7 @@ else:
             results = []
             target_cities = [c.strip() for c in city_input.split(',') if c.strip()]
             
+            # 🔥 CALLING DRIVER
             driver = get_driver()
             
             if driver:
@@ -368,6 +318,7 @@ else:
                         st.session_state.status_txt = f"TARGETING: {city.upper()}"
                         st.session_state.progress_val = int(((city_idx) / len(target_cities)) * 100)
                         
+                        # Google Search
                         driver.get(f"https://www.google.com/maps/search/{niche}+in+{city}")
                         time.sleep(4)
                         
@@ -429,7 +380,7 @@ else:
                 finally: 
                     st.session_state.running = False
             else:
-                st.error("❌ System Driver Failed. Please check packages.txt")
+                st.error("❌ Driver Setup Failed. Check packages.txt")
                 st.session_state.running = False
 
     with t2:
