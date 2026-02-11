@@ -15,10 +15,11 @@ from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
 
-# --- 1. CONFIG & STYLING (الترتيب مهم باش ماتكونش شاشة كحلة) ---
+# --- 1. CONFIG & ELITE DESIGN RESTORATION ---
 st.set_page_config(page_title="ChatScrap Elite", layout="wide")
 st.session_state.theme = 'Dark'
 
+# ألوان الديزاين اللي كان عاجبك
 bg_color = "#0f111a"
 card_bg = "#1a1f2e"
 text_color = "#FFFFFF"
@@ -33,6 +34,7 @@ st.markdown(f"""
     .stApp {{ background-color: {bg_color}; }}
     .stApp p, .stApp label, h1, h2, h3, .progress-text {{ color: {text_color} !important; font-family: 'Segoe UI', sans-serif; }}
     .logo-container {{ display: flex; flex-direction: column; align-items: center; padding-bottom: 20px; }}
+    .logo-img {{ width: 280px; filter: sepia(100%) saturate(500%) hue-rotate(-10deg) brightness(1.2); transition: 0.3s; margin-bottom: 15px; }}
     .progress-wrapper {{ width: 100%; max-width: 650px; margin: 0 auto 30px auto; text-align: center; }}
     .progress-container {{ width: 100%; background-color: rgba(255, 140, 0, 0.1); border-radius: 50px; padding: 4px; border: 1px solid {bar_color}; box-shadow: 0 0 15px rgba(255, 140, 0, 0.2); }}
     .progress-fill {{ height: 14px; background: repeating-linear-gradient(45deg, {bar_color}, {bar_color} 10px, #FF4500 10px, #FF4500 20px); border-radius: 20px; transition: width 0.4s ease; animation: move-stripes 1s linear infinite; box-shadow: 0 0 20px {bar_color}; }}
@@ -45,10 +47,12 @@ st.markdown(f"""
     div[data-testid="metric-container"] {{ background-color: {card_bg}; border: 1px solid rgba(255, 140, 0, 0.1); padding: 15px; border-radius: 12px; }}
     div[data-testid="metric-container"] label {{ opacity: 0.7; }}
     div[data-testid="metric-container"] div[data-testid="stMetricValue"] {{ color: {bar_color} !important; }}
+    .stTooltipIcon {{ color: {bar_color} !important; }}
+    .footer {{ position: fixed; left: 0; bottom: 0; width: 100%; background-color: {footer_bg}; color: {footer_text}; text-align: center; padding: 15px; font-weight: bold; border-top: 1px solid rgba(128,128,128,0.1); z-index: 9999; font-size: 14px; }}
     </style>
 """, unsafe_allow_html=True)
 
-# --- 2. GLOBAL FUNCTIONS ---
+# --- 2. GLOBAL UTILS ---
 def get_image_base64(file_path):
     if os.path.exists(file_path):
         with open(file_path, "rb") as f: return base64.b64encode(f.read()).decode()
@@ -74,7 +78,8 @@ def clean_phone_for_wa(phone):
 def clean_phone_display(text):
     return re.sub(r'[^\d+\s]', '', text).strip() if text else "N/A"
 
-# 🔥 FIX: SYSTEM DRIVER ONLY (No Webdriver Manager)
+# 🔥 DRIVER FIX (SYSTEM ONLY) 🔥
+# هادي هي الدالة اللي غاتحل المشكل ديال 144 vs 114
 @st.cache_resource(show_spinner=False)
 def get_driver():
     options = Options()
@@ -84,23 +89,19 @@ def get_driver():
     options.add_argument("--disable-gpu")
     options.add_argument("--window-size=1920,1080")
     
-    # تحديد مسار المتصفح
+    # فرض استخدام متصفح السيرفر
     options.binary_location = "/usr/bin/chromium"
     
     try:
-        # تحديد مسار الدرايفر يدوياً (مهم جداً لحل المشكل 144 vs 114)
+        # فرض استخدام درايفر السيرفر (System Driver)
         service = Service(executable_path="/usr/bin/chromedriver")
         driver = webdriver.Chrome(service=service, options=options)
         return driver
     except Exception as e:
-        # هذا السطر مهم: إلا ماخدمش المسار الأول، جرب بدون مسار
-        try:
-            return webdriver.Chrome(options=options)
-        except Exception as final_e:
-            st.error(f"❌ Driver Error: {str(final_e)}")
-            return None
+        st.error(f"❌ System Driver Error: {str(e)}")
+        return None
 
-# --- 3. DATABASE ---
+# --- 3. DATABASE & CONFIG ---
 def run_query(query, params=(), is_select=False):
     with sqlite3.connect('scraper_pro_final.db', timeout=30) as conn:
         curr = conn.cursor()
@@ -133,7 +134,7 @@ def update_user_status(username, status):
 def delete_user_db(username):
     run_query("DELETE FROM user_credits WHERE username=?", (username,))
 
-# --- 4. AUTHENTICATION ---
+# --- 4. AUTH ---
 CONFIG_FILE = 'config.yaml'
 def load_config():
     try:
@@ -159,7 +160,7 @@ if st.session_state["authentication_status"] is False:
 elif st.session_state["authentication_status"] is None:
     st.warning('Please enter your username and password'); st.stop()
 
-# --- 5. INITIALIZE STATE ---
+# --- 5. INITIALIZE STATE (مهم باش الزر يخدم) ---
 if 'results_df' not in st.session_state: st.session_state.results_df = None
 if 'progress_val' not in st.session_state: st.session_state.progress_val = 0
 if 'status_txt' not in st.session_state: st.session_state.status_txt = "SYSTEM READY"
@@ -173,7 +174,7 @@ account_status = user_data[1]
 if account_status == 'suspended' and current_user != 'admin':
     st.error("🚫 Your account has been suspended."); st.stop()
 
-# --- 6. SWITCH MODE (Admin / App) ---
+# --- 6. MAIN APP SWITCH ---
 app_mode = "Scraper App"
 if current_user == 'admin':
     with st.sidebar:
@@ -253,12 +254,21 @@ else:
             st.write("")
             b1, b2 = st.columns([2, 1.5])
             with b1:
+                # 🔥 START BUTTON - Force State Update
                 if st.button("START ENGINE", type="primary", use_container_width=True): 
                     if not niche or not city_input: st.error("Missing Info!")
                     elif current_balance <= 0: st.error("❌ No Credits!")
-                    else: st.session_state.running = True; st.session_state.progress_val = 0; st.session_state.status_txt = "STARTING..."; st.session_state.results_df = None; st.rerun()
+                    else: 
+                        st.session_state.running = True
+                        st.session_state.progress_val = 0
+                        st.session_state.status_txt = "STARTING..."
+                        st.session_state.results_df = None
+                        st.rerun() # Force re-run to catch state change
             with b2:
-                if st.button("STOP", type="secondary", use_container_width=True): st.session_state.running = False; st.session_state.status_txt = "STOPPED"; st.rerun()
+                if st.button("STOP", type="secondary", use_container_width=True): 
+                    st.session_state.running = False
+                    st.session_state.status_txt = "STOPPED"
+                    st.rerun()
 
     t1, t2, t3 = st.tabs(["⚡ LIVE", "📜 ARCHIVE", "🤖 AI KIT"])
     
@@ -267,53 +277,87 @@ else:
              st.dataframe(st.session_state.results_df, use_container_width=True, column_config={"WhatsApp": st.column_config.LinkColumn("Chat"), "Website": st.column_config.LinkColumn("Site")})
 
         if st.session_state.running:
-            results = []; target_cities = [c.strip() for c in city_input.split(',') if c.strip()]; 
+            results = []
+            target_cities = [c.strip() for c in city_input.split(',') if c.strip()]
             
-            driver = get_driver() # Now using SYSTEM driver
+            # 🔥 CALL SYSTEM DRIVER
+            driver = get_driver()
             
             if driver:
                 try:
                     for city_idx, city in enumerate(target_cities):
                         if not st.session_state.running: break
-                        run_query("INSERT INTO sessions (query, date) VALUES (?, ?)", (f"{niche} in {city}", time.strftime("%Y-%m-%d %H:%M"))); s_id = run_query("SELECT id FROM sessions ORDER BY id DESC LIMIT 1", is_select=True)[0][0]
-                        st.session_state.status_txt = f"TARGETING: {city.upper()}"; st.rerun()
-                        driver.get(f"https://www.google.com/maps/search/{niche}+in+{city}"); time.sleep(4)
+                        
+                        run_query("INSERT INTO sessions (query, date) VALUES (?, ?)", (f"{niche} in {city}", time.strftime("%Y-%m-%d %H:%M")))
+                        s_id = run_query("SELECT id FROM sessions ORDER BY id DESC LIMIT 1", is_select=True)[0][0]
+                        
+                        st.session_state.status_txt = f"TARGETING: {city.upper()}"
+                        # تحديث البار بلا Rerun باش ما يقطعش
+                        st.session_state.progress_val = int(((city_idx) / len(target_cities)) * 100)
+                        
+                        driver.get(f"https://www.google.com/maps/search/{niche}+in+{city}")
+                        time.sleep(4)
+                        
                         try:
                             scroll_div = driver.find_element(By.CSS_SELECTOR, 'div[role="feed"]')
                             for i in range(scrolls):
                                 if not st.session_state.running: break
-                                driver.execute_script('arguments[0].scrollTop = arguments[0].scrollHeight', scroll_div); time.sleep(1)
+                                driver.execute_script('arguments[0].scrollTop = arguments[0].scrollHeight', scroll_div)
+                                time.sleep(1)
                         except: pass
-                        items = driver.find_elements(By.CLASS_NAME, "hfpxzc")[:limit*2]; links = [el.get_attribute("href") for el in items]
+                        
+                        items = driver.find_elements(By.CLASS_NAME, "hfpxzc")[:limit*2]
+                        links = [el.get_attribute("href") for el in items]
+                        
                         for idx, link in enumerate(links):
-                            if get_user_info(current_user)[0] <= 0: st.error("Credits Exhausted!"); st.session_state.running = False; break
+                            if get_user_info(current_user)[0] <= 0: 
+                                st.error("Credits Exhausted!")
+                                st.session_state.running = False
+                                break
+                            
                             if not st.session_state.running or len(results) >= limit*(city_idx+1): break
+                            
                             try:
-                                driver.get(link); time.sleep(1.5)
+                                driver.get(link)
+                                time.sleep(1.5)
                                 name = driver.find_element(By.CSS_SELECTOR, "h1.DUwDvf").text
                                 if any(d['Name']==name for d in results): continue
+                                
                                 try: addr = driver.find_element(By.CSS_SELECTOR, 'div.Io6YTe.fontBodyMedium').text
                                 except: addr = "N/A"
+                                
                                 if w_strict and city.lower() not in addr.lower(): continue
+                                
                                 website = "N/A"
                                 if w_web:
                                     try: website = driver.find_element(By.CSS_SELECTOR, 'a[data-item-id="authority"]').get_attribute("href")
                                     except: website = "N/A"
+                                
                                 if w_no_site and website!="N/A": continue
+                                
                                 row = {"Name": name, "Address": addr, "Website": website, "City": city}
                                 if w_phone:
                                     try: p_raw = driver.find_element(By.XPATH, '//*[contains(@data-item-id, "phone:tel")]').get_attribute("aria-label"); row["Phone"] = clean_phone_display(p_raw); row["WhatsApp"] = clean_phone_for_wa(p_raw)
                                     except: row["Phone"] = "N/A"; row["WhatsApp"] = None
+                                
                                 if w_email: row["Email"] = fetch_email(driver, row.get("Website", "N/A"))
-                                results.append(row); update_user_balance(current_user, -1); st.session_state.results_df = pd.DataFrame(results); 
+                                
+                                results.append(row)
+                                update_user_balance(current_user, -1)
+                                st.session_state.results_df = pd.DataFrame(results)
+                                
                                 run_query("INSERT INTO leads (session_id, name, phone, website, email, address, whatsapp) VALUES (?, ?, ?, ?, ?, ?, ?)", (s_id, name, row.get("Phone", "N/A"), row.get("Website", "N/A"), row.get("Email", "N/A"), addr, row.get("WhatsApp", "")))
                             except: continue
-                    st.session_state.status_txt = "COMPLETED"; st.session_state.progress_val = 100; st.rerun()
+                    
+                    st.session_state.status_txt = "COMPLETED"
+                    st.session_state.progress_val = 100
+                    st.rerun()
+
                 finally: 
-                    # keep driver alive if needed or quit
+                    # Keep driver active
                     st.session_state.running = False
             else:
-                st.error("❌ Driver Error: Check logs.")
+                st.error("❌ System Driver Failed. Check packages.txt")
                 st.session_state.running = False
 
     with t2:
