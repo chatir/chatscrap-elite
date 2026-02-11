@@ -26,7 +26,7 @@ try:
     with open('config.yaml') as file:
         config = yaml.load(file, Loader=SafeLoader)
 except FileNotFoundError:
-    st.error("❌ config.yaml not found!")
+    st.error("❌ config.yaml missing!")
     st.stop()
 
 authenticator = stauth.Authenticate(
@@ -57,7 +57,6 @@ if st.session_state["authentication_status"]:
     def sync_to_gsheet(df, url):
         try:
             scope = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
-            # Make sure to add your service_account info in Streamlit Secrets
             creds = Credentials.from_service_account_info(st.secrets["gcp_service_account"], scopes=scope)
             client = gspread.authorize(creds)
             sh = client.open_by_url(url)
@@ -109,15 +108,15 @@ if st.session_state["authentication_status"]:
     if 'running' not in st.session_state: st.session_state.running = False
     if 'progress_val' not in st.session_state: st.session_state.progress_val = 0
 
-    # --- SIDEBAR (LOGIC FOR ADMIN vs USER) ---
+    # --- SIDEBAR (DYNAMIC) ---
     with st.sidebar:
         st.title("👤 User Profile")
         st.write(f"Logged as: **{st.session_state['name']}**")
         
         if current_user == "admin":
-            st.success("💎 Credits: **Unlimited ♾️**")
+            st.success("💎 Credits: **Unlimited ♾️**") # Admin Unlimited Display
             st.divider()
-            choice = st.radio("MAIN MENU", ["🚀 SCRAPER ENGINE", "🛠️ USER MANAGEMENT"], index=0)
+            choice = st.radio("GO TO:", ["🚀 SCRAPER ENGINE", "🛠️ USER MANAGEMENT"], index=0)
         else:
             st.warning(f"💎 Credits: **{user_balance}**")
             choice = "🚀 SCRAPER ENGINE" # Direct access for users
@@ -126,24 +125,24 @@ if st.session_state["authentication_status"]:
         if st.button("Logout", type="secondary", use_container_width=True):
             authenticator.logout('Logout', 'main'); st.rerun()
 
-    # --- CSS (ORANGE ELITE DESIGN) ---
+    # --- CSS (ORANGE ELITE EFFECT) ---
     orange_c = "#FF8C00"
     st.markdown(f"""
         <style>
         .stApp {{ background-color: #0f111a; }}
         .stApp p, .stApp label, h1, h2, h3 {{ color: #FFFFFF !important; font-family: 'Segoe UI', sans-serif; }}
-        /* Orange Glow Effect */
-        .logo-img {{ width: 280px; filter: drop-shadow(0 0 10px rgba(255,140,0,0.6)) saturate(180%) hue-rotate(-5deg); margin-bottom: 25px; }}
+        /* Orange Glow Filter Effect */
+        .logo-img {{ width: 280px; filter: drop-shadow(0 0 10px rgba(255,140,0,0.6)) saturate(200%) hue-rotate(-15deg); margin-bottom: 25px; }}
         .progress-wrapper {{ width: 100%; max-width: 650px; margin: 0 auto 30px auto; text-align: center; }}
         .progress-container {{ width: 100%; background-color: rgba(255, 140, 0, 0.1); border-radius: 50px; padding: 4px; border: 1px solid {orange_c}; }}
         .progress-fill {{ height: 14px; background: repeating-linear-gradient(45deg, {orange_c}, {orange_c} 10px, #FF4500 10px, #FF4500 20px); border-radius: 20px; transition: width 0.4s ease; }}
         div.stButton > button[kind="primary"] {{ background: linear-gradient(135deg, {orange_c} 0%, #FF4500 100%) !important; color: white !important; font-weight: 900 !important; border: none !important; }}
-        .footer {{ position: fixed; left: 0; bottom: 0; width: 100%; background-color: #0f111a; color: #888888; text-align: center; padding: 10px; border-top: 1px solid rgba(128,128,128,0.1); font-size: 13px; }}
+        .footer {{ position: fixed; left: 0; bottom: 0; width: 100%; background-color: #0f111a; color: #888888; text-align: center; padding: 10px; border-top: 1px solid rgba(128,128,128,0.1); }}
         </style>
     """, unsafe_allow_html=True)
 
     # ---------------------------
-    # VIEW: ADMIN PANEL
+    # VIEW: ADMIN CONTROL
     # ---------------------------
     if choice == "🛠️ USER MANAGEMENT":
         st.markdown("<h1>🛠️ Admin Control Panel</h1>", unsafe_allow_html=True)
@@ -152,18 +151,19 @@ if st.session_state["authentication_status"]:
 
         c1, c2 = st.columns(2)
         with c1:
-            st.markdown("### ➕ Register User")
+            st.markdown("### ➕ Register New User")
             new_u, new_n, new_p = st.text_input("Username"), st.text_input("Name"), st.text_input("Password", type="password")
             if st.button("CREATE ACCOUNT", type="primary"):
                 if new_u and new_p:
                     try: hashed_pw = stauth.Hasher.hash(new_p)
-                    except: hashed_pw = stauth.Hasher([new_p]).generate()[0]
+                    except: hashed_pw = stauth.Hasher([new_p]).generate()[0] #
                     config['credentials']['usernames'][new_u] = {'name': new_n, 'password': hashed_pw, 'email': f"{new_u}@mail.com"}
                     with open('config.yaml', 'w') as f: yaml.dump(config, f, default_flow_style=False)
-                    get_user_data(new_u); st.success(f"Added {new_u}!"); time.sleep(1); st.rerun()
+                    run_query("INSERT INTO user_credits (username, balance, status) VALUES (?, ?, ?)", (new_u, 5, 'active'))
+                    st.success("Created!"); time.sleep(1); st.rerun()
 
         with c2:
-            st.markdown("### ⚙️ Management")
+            st.markdown("### ⚙️ User Actions")
             db_list = [r[0] for r in users_sql if r[0] != 'admin']
             if db_list:
                 target = st.selectbox("Select User", db_list)
@@ -181,15 +181,16 @@ if st.session_state["authentication_status"]:
     # ---------------------------
     elif choice == "🚀 SCRAPER ENGINE":
         
-        @st.cache_resource
-        def get_driver():
+        # Fresh driver function (NO CACHE to prevent MaxRetryError)
+        def get_driver_fresh():
             opts = Options()
             opts.add_argument("--headless"); opts.add_argument("--no-sandbox")
-            opts.add_argument("--disable-dev-shm-usage"); opts.add_argument("--window-size=1920,1080")
+            opts.add_argument("--disable-dev-shm-usage"); opts.add_argument("--disable-gpu")
+            opts.add_argument("--window-size=1920,1080")
             try: return webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=opts)
             except: return webdriver.Chrome(options=opts)
 
-        # Header
+        # Header Area
         cm = st.columns([1, 6, 1])[1]
         with cm:
             logo_path = "chatscrape.png"
@@ -232,24 +233,24 @@ if st.session_state["authentication_status"]:
             table_spot = st.empty()
             if st.session_state.results_df is not None:
                 st.divider()
-                # 🔥 GOOGLE SHEETS EXPORT
-                if w_sync:
-                    gs_url = st.text_input("Google Sheet URL for Sync")
+                if w_sync: # Google Sheet Sync Section
+                    gs_url = st.text_input("Google Sheet URL")
                     if st.button("🚀 Sync to Sheet"):
                         if sync_to_gsheet(st.session_state.results_df, gs_url): st.success("Synced!")
-                
-                table_spot.dataframe(st.session_state.results_df, use_container_width=True)
+                st.dataframe(st.session_state.results_df, use_container_width=True)
 
             if st.session_state.running:
                 results = []
                 run_query("INSERT INTO sessions (query, date) VALUES (?, ?)", (f"{niche} in {city}", time.strftime("%Y-%m-%d %H:%M")))
                 s_id = run_query("SELECT id FROM sessions ORDER BY id DESC LIMIT 1", is_select=True)[0][0]
                 
-                # Use local driver to prevent MaxRetryError
-                driver = get_driver()
+                # Fresh driver instance
+                driver = get_driver_fresh()
                 if driver:
                     try:
-                        update_bar(5, "INITIALIZING..."); target_url = f"https://www.google.com/maps/search/{quote(niche)}+in+{quote(city)}"
+                        update_bar(5, "INITIALIZING..."); 
+                        # Safe URL quoting
+                        target_url = f"https://www.google.com/maps/search/{quote(niche)}+in+{quote(city)}"
                         driver.get(target_url); time.sleep(4)
                         
                         feed = driver.find_element(By.CSS_SELECTOR, 'div[role="feed"]')
@@ -263,10 +264,9 @@ if st.session_state["authentication_status"]:
                         for idx, link in enumerate(links):
                             bal, _ = get_user_data(current_user)
                             if (bal <= 0 and current_user != "admin") or not st.session_state.running or len(results) >= limit: break
-                            
-                            update_bar(50 + int((idx/len(links))*50), f"SCRAPING {len(results)+1}/{limit}")
-                            driver.get(link); time.sleep(2)
+                            update_bar(50 + int((idx/len(links))*50), f"SCRAPING {len(results)+1}")
                             try:
+                                driver.get(link); time.sleep(2)
                                 name = driver.find_element(By.CSS_SELECTOR, "h1.DUwDvf").text
                                 adr = driver.find_element(By.CSS_SELECTOR, 'div.Io6YTe.fontBodyMedium').text
                                 if w_strict and city.lower() not in adr.lower(): continue
@@ -276,16 +276,17 @@ if st.session_state["authentication_status"]:
                                 except: pass
                                 if w_no_site and website != "N/A": continue
                                 
-                                # 🔥 DIRECT WHATSAPP LINK
+                                # WhatsApp Direct Link Logic
                                 phone = "N/A"; wa_link = None
                                 try:
                                     p_raw = driver.find_element(By.XPATH, '//*[contains(@data-item-id, "phone:tel")]').get_attribute("aria-label")
                                     phone = re.sub(r'[^\d+\s]', '', p_raw).strip()
-                                    wa_link = f"https://wa.me/{re.sub(r'[^\d]', '', p_raw)}"
+                                    num_only = re.sub(r'[^\d]', '', p_raw)
+                                    wa_link = f"https://wa.me/{num_only}"
                                 except: pass
 
-                                results.append({"Name": name, "Phone": phone, "WhatsApp": wa_link, "Website": website, "Address": adr})
-                                deduct_credit(current_user)
+                                row = {"Name": name, "Phone": phone, "WhatsApp": wa_link, "Website": website, "Address": adr}
+                                results.append(row); deduct_credit(current_user)
                                 st.session_state.results_df = pd.DataFrame(results)
                                 table_spot.dataframe(st.session_state.results_df, use_container_width=True)
                                 run_query("INSERT INTO leads (session_id, name, phone, website, address, whatsapp) VALUES (?, ?, ?, ?, ?, ?)", (s_id, name, phone, website, adr, wa_link))
@@ -294,7 +295,7 @@ if st.session_state["authentication_status"]:
                     finally: driver.quit(); st.session_state.running = False
 
         with t2:
-            st.subheader("📜 Search History")
+            st.subheader("📜 History")
             hists = run_query("SELECT * FROM sessions ORDER BY id DESC", is_select=True)
             for h in hists:
                 with st.expander(f"📦 {h[2]} | {h[1]}"):
