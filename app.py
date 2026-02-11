@@ -15,11 +15,11 @@ from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
 
-# --- 1. CONFIG & ELITE DESIGN RESTORATION ---
+# --- 1. CONFIG & STYLING ---
 st.set_page_config(page_title="ChatScrap Elite", layout="wide")
 st.session_state.theme = 'Dark'
 
-# ألوان الديزاين اللي كان عاجبك
+# 🔥 تعريف الألوان (التصحيح هنا)
 bg_color = "#0f111a"
 card_bg = "#1a1f2e"
 text_color = "#FFFFFF"
@@ -27,6 +27,8 @@ start_grad = "linear-gradient(135deg, #FF8C00 0%, #FF4500 100%)"
 stop_grad = "linear-gradient(135deg, #e52d27 0%, #b31217 100%)"
 bar_color = "#FF8C00" 
 input_bg = "#1a1f2e"
+footer_bg = "#0f111a"      # كان ناقص
+footer_text = "#888888"    # كان ناقص
 
 st.markdown(f"""
     <style>
@@ -34,7 +36,6 @@ st.markdown(f"""
     .stApp {{ background-color: {bg_color}; }}
     .stApp p, .stApp label, h1, h2, h3, .progress-text {{ color: {text_color} !important; font-family: 'Segoe UI', sans-serif; }}
     .logo-container {{ display: flex; flex-direction: column; align-items: center; padding-bottom: 20px; }}
-    .logo-img {{ width: 280px; filter: sepia(100%) saturate(500%) hue-rotate(-10deg) brightness(1.2); transition: 0.3s; margin-bottom: 15px; }}
     .progress-wrapper {{ width: 100%; max-width: 650px; margin: 0 auto 30px auto; text-align: center; }}
     .progress-container {{ width: 100%; background-color: rgba(255, 140, 0, 0.1); border-radius: 50px; padding: 4px; border: 1px solid {bar_color}; box-shadow: 0 0 15px rgba(255, 140, 0, 0.2); }}
     .progress-fill {{ height: 14px; background: repeating-linear-gradient(45deg, {bar_color}, {bar_color} 10px, #FF4500 10px, #FF4500 20px); border-radius: 20px; transition: width 0.4s ease; animation: move-stripes 1s linear infinite; box-shadow: 0 0 20px {bar_color}; }}
@@ -47,7 +48,6 @@ st.markdown(f"""
     div[data-testid="metric-container"] {{ background-color: {card_bg}; border: 1px solid rgba(255, 140, 0, 0.1); padding: 15px; border-radius: 12px; }}
     div[data-testid="metric-container"] label {{ opacity: 0.7; }}
     div[data-testid="metric-container"] div[data-testid="stMetricValue"] {{ color: {bar_color} !important; }}
-    .stTooltipIcon {{ color: {bar_color} !important; }}
     .footer {{ position: fixed; left: 0; bottom: 0; width: 100%; background-color: {footer_bg}; color: {footer_text}; text-align: center; padding: 15px; font-weight: bold; border-top: 1px solid rgba(128,128,128,0.1); z-index: 9999; font-size: 14px; }}
     </style>
 """, unsafe_allow_html=True)
@@ -78,8 +78,7 @@ def clean_phone_for_wa(phone):
 def clean_phone_display(text):
     return re.sub(r'[^\d+\s]', '', text).strip() if text else "N/A"
 
-# 🔥 DRIVER FIX (SYSTEM ONLY) 🔥
-# هادي هي الدالة اللي غاتحل المشكل ديال 144 vs 114
+# 🔥 FIX: SYSTEM DRIVER ONLY
 @st.cache_resource(show_spinner=False)
 def get_driver():
     options = Options()
@@ -89,19 +88,21 @@ def get_driver():
     options.add_argument("--disable-gpu")
     options.add_argument("--window-size=1920,1080")
     
-    # فرض استخدام متصفح السيرفر
     options.binary_location = "/usr/bin/chromium"
     
     try:
-        # فرض استخدام درايفر السيرفر (System Driver)
+        # تحديد مسار الدرايفر يدوياً
         service = Service(executable_path="/usr/bin/chromedriver")
         driver = webdriver.Chrome(service=service, options=options)
         return driver
     except Exception as e:
-        st.error(f"❌ System Driver Error: {str(e)}")
-        return None
+        try:
+            return webdriver.Chrome(options=options)
+        except Exception as final_e:
+            st.error(f"❌ Driver Error: {str(final_e)}")
+            return None
 
-# --- 3. DATABASE & CONFIG ---
+# --- 3. DATABASE ---
 def run_query(query, params=(), is_select=False):
     with sqlite3.connect('scraper_pro_final.db', timeout=30) as conn:
         curr = conn.cursor()
@@ -160,7 +161,7 @@ if st.session_state["authentication_status"] is False:
 elif st.session_state["authentication_status"] is None:
     st.warning('Please enter your username and password'); st.stop()
 
-# --- 5. INITIALIZE STATE (مهم باش الزر يخدم) ---
+# --- 5. INITIALIZE STATE ---
 if 'results_df' not in st.session_state: st.session_state.results_df = None
 if 'progress_val' not in st.session_state: st.session_state.progress_val = 0
 if 'status_txt' not in st.session_state: st.session_state.status_txt = "SYSTEM READY"
@@ -174,7 +175,7 @@ account_status = user_data[1]
 if account_status == 'suspended' and current_user != 'admin':
     st.error("🚫 Your account has been suspended."); st.stop()
 
-# --- 6. MAIN APP SWITCH ---
+# --- 6. SWITCH MODE (Admin / App) ---
 app_mode = "Scraper App"
 if current_user == 'admin':
     with st.sidebar:
@@ -183,7 +184,6 @@ if current_user == 'admin':
         st.divider()
 
 if app_mode == "Admin Panel":
-    # ---------------- ADMIN PANEL ----------------
     st.title("🛡️ Client Management")
     tab1, tab2, tab3 = st.tabs(["📊 Dashboard", "➕ Add Client", "⚙️ Manage"])
     with tab1:
@@ -214,7 +214,6 @@ if app_mode == "Admin Panel":
                 if st.button("🗑️ Delete User"): del config['credentials']['usernames'][sel]; save_config(config); delete_user_db(sel); st.rerun()
 
 else:
-    # ---------------- SCRAPER APP ----------------
     with st.sidebar:
         st.write(f"👤 **{st.session_state['name']}**")
         st.info(f"💎 Credits: {current_balance}")
@@ -254,7 +253,6 @@ else:
             st.write("")
             b1, b2 = st.columns([2, 1.5])
             with b1:
-                # 🔥 START BUTTON - Force State Update
                 if st.button("START ENGINE", type="primary", use_container_width=True): 
                     if not niche or not city_input: st.error("Missing Info!")
                     elif current_balance <= 0: st.error("❌ No Credits!")
@@ -263,7 +261,7 @@ else:
                         st.session_state.progress_val = 0
                         st.session_state.status_txt = "STARTING..."
                         st.session_state.results_df = None
-                        st.rerun() # Force re-run to catch state change
+                        st.rerun()
             with b2:
                 if st.button("STOP", type="secondary", use_container_width=True): 
                     st.session_state.running = False
@@ -277,10 +275,8 @@ else:
              st.dataframe(st.session_state.results_df, use_container_width=True, column_config={"WhatsApp": st.column_config.LinkColumn("Chat"), "Website": st.column_config.LinkColumn("Site")})
 
         if st.session_state.running:
-            results = []
-            target_cities = [c.strip() for c in city_input.split(',') if c.strip()]
+            results = []; target_cities = [c.strip() for c in city_input.split(',') if c.strip()]; 
             
-            # 🔥 CALL SYSTEM DRIVER
             driver = get_driver()
             
             if driver:
@@ -288,11 +284,9 @@ else:
                     for city_idx, city in enumerate(target_cities):
                         if not st.session_state.running: break
                         
-                        run_query("INSERT INTO sessions (query, date) VALUES (?, ?)", (f"{niche} in {city}", time.strftime("%Y-%m-%d %H:%M")))
-                        s_id = run_query("SELECT id FROM sessions ORDER BY id DESC LIMIT 1", is_select=True)[0][0]
+                        run_query("INSERT INTO sessions (query, date) VALUES (?, ?)", (f"{niche} in {city}", time.strftime("%Y-%m-%d %H:%M"))); s_id = run_query("SELECT id FROM sessions ORDER BY id DESC LIMIT 1", is_select=True)[0][0]
                         
                         st.session_state.status_txt = f"TARGETING: {city.upper()}"
-                        # تحديث البار بلا Rerun باش ما يقطعش
                         st.session_state.progress_val = int(((city_idx) / len(target_cities)) * 100)
                         
                         driver.get(f"https://www.google.com/maps/search/{niche}+in+{city}")
