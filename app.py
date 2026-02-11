@@ -15,11 +15,11 @@ from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
 
-# --- 1. إعدادات الصفحة والديزاين (Design Retrieval) ---
+# --- 1. CONFIG & DESIGN (Elite Theme) ---
 st.set_page_config(page_title="ChatScrap Elite", layout="wide")
 st.session_state.theme = 'Dark'
 
-# الألوان اللي كانوا عاجبينك
+# تعريف الألوان
 bg_color = "#0f111a"
 card_bg = "#1a1f2e"
 text_color = "#FFFFFF"
@@ -52,7 +52,8 @@ st.markdown(f"""
     </style>
 """, unsafe_allow_html=True)
 
-# --- 2. CONNECT TO SERVER DRIVER (The Fix) ---
+# --- 2. DRIVER SYSTEM (System Only) ---
+# هذا هو الكود اللي غايحل المشكل: كنخدمو بدرايفر السيرفر نيشان
 @st.cache_resource(show_spinner=False)
 def get_driver():
     options = Options()
@@ -62,17 +63,16 @@ def get_driver():
     options.add_argument("--disable-gpu")
     options.add_argument("--window-size=1920,1080")
     
-    # 1. نحددوا مكان Chromium
+    # 1. تحديد مكان Chrome
     options.binary_location = "/usr/bin/chromium"
     
-    # 2. نعيطوا على Driver اللي فـ Packages.txt
     try:
+        # 2. تحديد مكان Driver المتوافق معه
         service = Service(executable_path="/usr/bin/chromedriver")
         driver = webdriver.Chrome(service=service, options=options)
         return driver
     except Exception as e:
-        # إلا وقع مشكل، نعلموك بلا ما يتبلانطا السيت
-        st.error(f"❌ Driver Error: {e}")
+        st.error(f"❌ Driver Critical Error: {str(e)}")
         return None
 
 # --- 3. UTILS ---
@@ -160,7 +160,7 @@ if st.session_state["authentication_status"] is False:
 elif st.session_state["authentication_status"] is None:
     st.warning('Please enter your username and password'); st.stop()
 
-# --- 6. APP LOGIC ---
+# --- 6. APP STATE ---
 if 'results_df' not in st.session_state: st.session_state.results_df = None
 if 'progress_val' not in st.session_state: st.session_state.progress_val = 0
 if 'status_txt' not in st.session_state: st.session_state.status_txt = "SYSTEM READY"
@@ -174,43 +174,35 @@ account_status = user_data[1]
 if account_status == 'suspended' and current_user != 'admin':
     st.error("🚫 Your account has been suspended."); st.stop()
 
-# --- 7. MODE SWITCH (فصل الادمين عن التطبيق) ---
+# --- 7. MAIN LOGIC (Mode Switch) ---
 app_mode = "Scraper App"
 if current_user == 'admin':
     with st.sidebar:
         st.title("🛡️ Admin Controls")
-        app_mode = st.radio("Choose Mode", ["Scraper App", "Admin Panel"])
+        app_mode = st.radio("Mode", ["Scraper App", "Admin Panel"])
         st.divider()
 
-# --- ADMIN PANEL ---
 if app_mode == "Admin Panel":
     st.title("🛡️ Admin Dashboard")
-    tab1, tab2, tab3 = st.tabs(["📊 Overview", "➕ Add Client", "⚙️ Manage"])
-    
-    with tab1:
-        st.subheader("All Clients")
+    t1, t2, t3 = st.tabs(["📊 Overview", "➕ Add Client", "⚙️ Manage"])
+    with t1:
         all_users = run_query("SELECT username, balance, status FROM user_credits", is_select=True)
         if all_users: st.dataframe(pd.DataFrame(all_users, columns=['Username', 'Credits', 'Status']), use_container_width=True)
-    
-    with tab2:
-        st.subheader("Add New Client")
-        with st.form("add_c"):
+    with t2:
+        with st.form("new_c"):
             u = st.text_input("Username"); p = st.text_input("Password", type="password")
-            n = st.text_input("Full Name"); e = st.text_input("Email"); c = st.number_input("Credits", 100)
-            if st.form_submit_button("Create Account"):
-                if u and p:
-                    try:
-                        try: hashed = Hasher([str(p)]).generate()[0]
-                        except: hashed = str(p)
-                        config['credentials']['usernames'][u] = {'name': n, 'email': e, 'password': hashed}
-                        save_config(config); run_query("INSERT INTO user_credits VALUES (?, ?, ?)", (u, c, 'active'))
-                        st.success(f"User {u} created!"); time.sleep(1); st.rerun()
-                    except Exception as err: st.error(f"Error: {err}")
-
-    with tab3:
-        st.subheader("Manage Clients")
+            n = st.text_input("Name"); e = st.text_input("Email"); c = st.number_input("Credits", 100)
+            if st.form_submit_button("Create"):
+                try: 
+                    try: h = Hasher([str(p)]).generate()[0]
+                    except: h = str(p)
+                    config['credentials']['usernames'][u] = {'name': n, 'email': e, 'password': h}
+                    save_config(config); run_query("INSERT INTO user_credits VALUES (?, ?, ?)", (u, c, 'active'))
+                    st.success(f"User {u} created!"); time.sleep(1); st.rerun()
+                except Exception as err: st.error(f"Error: {err}")
+    with t3:
         users = [x for x in config['credentials']['usernames'] if x != 'admin']
-        sel = st.selectbox("Select Client", users)
+        sel = st.selectbox("Select", users)
         if sel:
             c1, c2, c3 = st.columns(3)
             with c1:
@@ -220,11 +212,10 @@ if app_mode == "Admin Panel":
                     stt = 'suspended' if get_user_info(sel)[1] == 'active' else 'active'
                     update_user_status(sel, stt); st.rerun()
             with c3:
-                if st.button("Delete User"): 
-                    del config['credentials']['usernames'][sel]; save_config(config); delete_user_db(sel); st.rerun()
+                if st.button("Delete User"): del config['credentials']['usernames'][sel]; save_config(config); delete_user_db(sel); st.rerun()
 
-# --- SCRAPER APP ---
 else:
+    # --- SCRAPER APP ---
     with st.sidebar:
         st.write(f"👤 **{st.session_state['name']}**")
         st.info(f"💎 Credits: {current_balance}")
@@ -265,7 +256,7 @@ else:
             st.write("")
             b1, b2 = st.columns([2, 1.5])
             with b1:
-                # زر Start
+                # 🔥 START ENGINE (FIXED)
                 if st.button("START ENGINE", type="primary", use_container_width=True): 
                     if not niche or not city_input: st.error("Missing Info!")
                     elif current_balance <= 0: st.error("❌ No Credits!")
@@ -282,9 +273,8 @@ else:
              st.dataframe(st.session_state.results_df, use_container_width=True, column_config={"WhatsApp": st.column_config.LinkColumn("Chat"), "Website": st.column_config.LinkColumn("Site")})
 
         if st.session_state.running:
-            results = []; target_cities = [c.strip() for c in city_input.split(',') if c.strip()]
+            results = []; target_cities = [c.strip() for c in city_input.split(',') if c.strip()]; 
             
-            # 🔥 استدعاء الدرايفر
             driver = get_driver()
             
             if driver:
@@ -335,7 +325,7 @@ else:
                 finally: 
                     st.session_state.running = False
             else:
-                st.error("❌ System Driver Failed. Check packages.txt")
+                st.error("❌ Driver Initialization Failed. Please check packages.txt")
                 st.session_state.running = False
 
     with t2:
