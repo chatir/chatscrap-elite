@@ -53,10 +53,11 @@ elif st.session_state["authentication_status"] is None:
 # --- 3. APP LOGIC (LOGGED IN) ---
 if st.session_state["authentication_status"]:
     
-    # --- GOOGLE SHEETS SYNC ---
+    # --- GOOGLE SHEETS SYNC LOGIC ---
     def sync_to_gsheet(df, url):
         try:
             scope = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
+            # Requires gcp_service_account in Streamlit Secrets
             creds = Credentials.from_service_account_info(st.secrets["gcp_service_account"], scopes=scope)
             client = gspread.authorize(creds)
             sh = client.open_by_url(url)
@@ -65,7 +66,7 @@ if st.session_state["authentication_status"]:
             ws.update([df.columns.values.tolist()] + df.values.tolist())
             return True
         except Exception as e:
-            st.error(f"Sync Error: {e}")
+            st.error(f"Google Sheets Sync Error: {e}")
             return False
 
     # --- DATABASE FUNCTIONS ---
@@ -78,10 +79,12 @@ if st.session_state["authentication_status"]:
 
     def init_db():
         run_query('''CREATE TABLE IF NOT EXISTS sessions (id INTEGER PRIMARY KEY AUTOINCREMENT, query TEXT, date TEXT)''')
-        run_query('''CREATE TABLE IF NOT EXISTS leads (id INTEGER PRIMARY KEY AUTOINCREMENT, session_id INTEGER, name TEXT, phone TEXT, website TEXT, email TEXT, address TEXT, whatsapp TEXT)''')
+        run_query('''CREATE TABLE IF NOT EXISTS leads (id INTEGER PRIMARY KEY AUTOINCREMENT, session_id INTEGER, name TEXT, phone TEXT, website TEXT, address TEXT, whatsapp TEXT)''')
         run_query('''CREATE TABLE IF NOT EXISTS user_credits (username TEXT PRIMARY KEY, balance INTEGER, status TEXT DEFAULT 'active')''')
         try: run_query("SELECT status FROM user_credits LIMIT 1")
         except: run_query("ALTER TABLE user_credits ADD COLUMN status TEXT DEFAULT 'active'")
+        try: run_query("SELECT whatsapp FROM leads LIMIT 1")
+        except: run_query("ALTER TABLE leads ADD COLUMN whatsapp TEXT")
 
     init_db()
 
@@ -108,43 +111,43 @@ if st.session_state["authentication_status"]:
     if 'running' not in st.session_state: st.session_state.running = False
     if 'progress_val' not in st.session_state: st.session_state.progress_val = 0
 
-    # --- SIDEBAR (DYNAMIC) ---
+    # --- SIDEBAR (ENHANCED) ---
     with st.sidebar:
         st.title("👤 User Profile")
         st.write(f"Logged as: **{st.session_state['name']}**")
         
         if current_user == "admin":
-            st.success("💎 Credits: **Unlimited ♾️**") # Admin Unlimited Display
+            st.success("💎 Credits: **Unlimited ♾️**")
             st.divider()
-            choice = st.radio("GO TO:", ["🚀 SCRAPER ENGINE", "🛠️ USER MANAGEMENT"], index=0)
+            choice = st.radio("MAIN MENU", ["🚀 SCRAPER ENGINE", "🛠️ USER MANAGEMENT"], index=0)
         else:
             st.warning(f"💎 Credits: **{user_balance}**")
-            choice = "🚀 SCRAPER ENGINE" # Direct access for users
+            choice = "🚀 SCRAPER ENGINE"
         
         st.divider()
         if st.button("Logout", type="secondary", use_container_width=True):
             authenticator.logout('Logout', 'main'); st.rerun()
 
-    # --- CSS (ORANGE ELITE EFFECT) ---
+    # --- CSS (ORANGE ELITE DESIGN + LOGO EFFECT) ---
     orange_c = "#FF8C00"
     st.markdown(f"""
         <style>
         .stApp {{ background-color: #0f111a; }}
         .stApp p, .stApp label, h1, h2, h3 {{ color: #FFFFFF !important; font-family: 'Segoe UI', sans-serif; }}
-        /* Orange Glow Filter Effect */
-        .logo-img {{ width: 280px; filter: drop-shadow(0 0 10px rgba(255,140,0,0.6)) saturate(200%) hue-rotate(-15deg); margin-bottom: 25px; }}
+        /* Orange Glow Filter */
+        .logo-img {{ width: 280px; filter: drop-shadow(0 0 10px rgba(255,140,0,0.6)) saturate(180%) hue-rotate(-5deg); margin-bottom: 25px; }}
         .progress-wrapper {{ width: 100%; max-width: 650px; margin: 0 auto 30px auto; text-align: center; }}
         .progress-container {{ width: 100%; background-color: rgba(255, 140, 0, 0.1); border-radius: 50px; padding: 4px; border: 1px solid {orange_c}; }}
         .progress-fill {{ height: 14px; background: repeating-linear-gradient(45deg, {orange_c}, {orange_c} 10px, #FF4500 10px, #FF4500 20px); border-radius: 20px; transition: width 0.4s ease; }}
         div.stButton > button[kind="primary"] {{ background: linear-gradient(135deg, {orange_c} 0%, #FF4500 100%) !important; color: white !important; font-weight: 900 !important; border: none !important; }}
-        .footer {{ position: fixed; left: 0; bottom: 0; width: 100%; background-color: #0f111a; color: #888888; text-align: center; padding: 10px; border-top: 1px solid rgba(128,128,128,0.1); }}
+        .footer {{ position: fixed; left: 0; bottom: 0; width: 100%; background-color: #0f111a; color: #888888; text-align: center; padding: 10px; border-top: 1px solid rgba(128,128,128,0.1); font-size: 13px; }}
         </style>
     """, unsafe_allow_html=True)
 
     # ---------------------------
     # VIEW: ADMIN CONTROL
     # ---------------------------
-    if choice == "🛠️ USER MANAGEMENT":
+    if choice == "🛠️ USER MANAGEMENT" and current_user == "admin":
         st.markdown("<h1>🛠️ Admin Control Panel</h1>", unsafe_allow_html=True)
         users_sql = run_query("SELECT username, balance, status FROM user_credits", is_select=True)
         st.dataframe(pd.DataFrame(users_sql, columns=["Username", "Balance", "Status"]), use_container_width=True)
@@ -156,11 +159,10 @@ if st.session_state["authentication_status"]:
             if st.button("CREATE ACCOUNT", type="primary"):
                 if new_u and new_p:
                     try: hashed_pw = stauth.Hasher.hash(new_p)
-                    except: hashed_pw = stauth.Hasher([new_p]).generate()[0] #
+                    except: hashed_pw = stauth.Hasher([new_p]).generate()[0]
                     config['credentials']['usernames'][new_u] = {'name': new_n, 'password': hashed_pw, 'email': f"{new_u}@mail.com"}
                     with open('config.yaml', 'w') as f: yaml.dump(config, f, default_flow_style=False)
-                    run_query("INSERT INTO user_credits (username, balance, status) VALUES (?, ?, ?)", (new_u, 5, 'active'))
-                    st.success("Created!"); time.sleep(1); st.rerun()
+                    get_user_data(new_u); st.success(f"Added {new_u}!"); time.sleep(1); st.rerun()
 
         with c2:
             st.markdown("### ⚙️ User Actions")
@@ -181,8 +183,7 @@ if st.session_state["authentication_status"]:
     # ---------------------------
     elif choice == "🚀 SCRAPER ENGINE":
         
-        # Fresh driver function (NO CACHE to prevent MaxRetryError)
-        def get_driver_fresh():
+        def get_driver_live():
             opts = Options()
             opts.add_argument("--headless"); opts.add_argument("--no-sandbox")
             opts.add_argument("--disable-dev-shm-usage"); opts.add_argument("--disable-gpu")
@@ -222,7 +223,7 @@ if st.session_state["authentication_status"]:
             with cb:
                 if st.button("START ENGINE", type="primary", use_container_width=True):
                     if niche and city and (user_balance > 0 or current_user == "admin"):
-                        st.session_state.running = True; st.session_state.results_df = None; st.rerun()
+                        st.session_state.running = True; st.session_state.progress_val = 0; st.session_state.results_df = None; st.rerun()
                     else: st.error("Check inputs or credits!")
                 if st.button("STOP", type="secondary", use_container_width=True): st.session_state.running = False; st.rerun()
 
@@ -233,24 +234,24 @@ if st.session_state["authentication_status"]:
             table_spot = st.empty()
             if st.session_state.results_df is not None:
                 st.divider()
-                if w_sync: # Google Sheet Sync Section
-                    gs_url = st.text_input("Google Sheet URL")
-                    if st.button("🚀 Sync to Sheet"):
-                        if sync_to_gsheet(st.session_state.results_df, gs_url): st.success("Synced!")
-                st.dataframe(st.session_state.results_df, use_container_width=True)
+                # 🔥 EXPORT TO GOOGLE SHEETS
+                if w_sync:
+                    gs_url = st.text_input("Google Sheet URL for Export")
+                    if st.button("🚀 Export to Sheet"):
+                        if sync_to_gsheet(st.session_state.results_df, gs_url): st.success("Exported Successfully!")
+                
+                table_spot.dataframe(st.session_state.results_df, use_container_width=True)
 
             if st.session_state.running:
                 results = []
                 run_query("INSERT INTO sessions (query, date) VALUES (?, ?)", (f"{niche} in {city}", time.strftime("%Y-%m-%d %H:%M")))
                 s_id = run_query("SELECT id FROM sessions ORDER BY id DESC LIMIT 1", is_select=True)[0][0]
                 
-                # Fresh driver instance
-                driver = get_driver_fresh()
+                # Fix MaxRetryError: Fresh driver
+                driver = get_driver_live()
                 if driver:
                     try:
-                        update_bar(5, "INITIALIZING..."); 
-                        # Safe URL quoting
-                        target_url = f"https://www.google.com/maps/search/{quote(niche)}+in+{quote(city)}"
+                        update_bar(5, "INITIALIZING..."); target_url = f"https://www.google.com/maps/search/{quote(niche)}+in+{quote(city)}"
                         driver.get(target_url); time.sleep(4)
                         
                         feed = driver.find_element(By.CSS_SELECTOR, 'div[role="feed"]')
@@ -264,6 +265,7 @@ if st.session_state["authentication_status"]:
                         for idx, link in enumerate(links):
                             bal, _ = get_user_data(current_user)
                             if (bal <= 0 and current_user != "admin") or not st.session_state.running or len(results) >= limit: break
+                            
                             update_bar(50 + int((idx/len(links))*50), f"SCRAPING {len(results)+1}")
                             try:
                                 driver.get(link); time.sleep(2)
@@ -276,13 +278,12 @@ if st.session_state["authentication_status"]:
                                 except: pass
                                 if w_no_site and website != "N/A": continue
                                 
-                                # WhatsApp Direct Link Logic
+                                # 🔥 DIRECT WHATSAPP LINK
                                 phone = "N/A"; wa_link = None
                                 try:
                                     p_raw = driver.find_element(By.XPATH, '//*[contains(@data-item-id, "phone:tel")]').get_attribute("aria-label")
                                     phone = re.sub(r'[^\d+\s]', '', p_raw).strip()
-                                    num_only = re.sub(r'[^\d]', '', p_raw)
-                                    wa_link = f"https://wa.me/{num_only}"
+                                    wa_link = f"https://wa.me/{re.sub(r'[^\d]', '', p_raw)}"
                                 except: pass
 
                                 row = {"Name": name, "Phone": phone, "WhatsApp": wa_link, "Website": website, "Address": adr}
@@ -295,7 +296,7 @@ if st.session_state["authentication_status"]:
                     finally: driver.quit(); st.session_state.running = False
 
         with t2:
-            st.subheader("📜 History")
+            st.subheader("📜 Search History")
             hists = run_query("SELECT * FROM sessions ORDER BY id DESC", is_select=True)
             for h in hists:
                 with st.expander(f"📦 {h[2]} | {h[1]}"):
