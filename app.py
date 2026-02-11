@@ -19,7 +19,6 @@ from webdriver_manager.chrome import ChromeDriverManager
 st.set_page_config(page_title="ChatScrap Elite", layout="wide")
 st.session_state.theme = 'Dark'
 
-# تحميل الكونفيج
 try:
     with open('config.yaml') as file:
         config = yaml.load(file, Loader=SafeLoader)
@@ -27,7 +26,6 @@ except FileNotFoundError:
     st.error("❌ config.yaml not found!")
     st.stop()
 
-# إعداد Authentication
 authenticator = stauth.Authenticate(
     config['credentials'],
     config['cookie']['name'],
@@ -35,14 +33,12 @@ authenticator = stauth.Authenticate(
     config['cookie']['expiry_days']
 )
 
-# --- 2. LOGIN LOGIC (STABILITY FIX) ---
-# محاولة الدخول عبر الكوكيز تلقائياً
+# --- 2. LOGIN LOGIC ---
 try:
     authenticator.login()
 except Exception:
     pass
 
-# إذا لم يتم التعرف على المستخدم، أوقف السكربت هنا
 if st.session_state["authentication_status"] is False:
     st.error('Username/password is incorrect')
     st.stop()
@@ -50,10 +46,7 @@ elif st.session_state["authentication_status"] is None:
     st.warning('Please enter your username and password')
     st.stop()
 
-# --- 3. APP LOGIC (Runs ONLY if Logged In) ---
-# بما أننا وصلنا هنا، فالمستخدم مسجل دخول 100%
-
-# تعريف المتغيرات (State) مرة واحدة فقط
+# --- 3. APP LOGIC ---
 if 'results_df' not in st.session_state: st.session_state.results_df = None
 if 'progress_val' not in st.session_state: st.session_state.progress_val = 0
 if 'status_txt' not in st.session_state: st.session_state.status_txt = "SYSTEM READY"
@@ -155,14 +148,13 @@ def clean_phone_display(text):
     clean = re.sub(r'[^\d+\s]', '', text).strip()
     return clean
 
-# --- DRIVER (ULTRA-LIGHTWEIGHT) ---
+# --- DRIVER ---
 @st.cache_resource
 def get_driver():
     options = Options()
-    # أهم خيارات لمنع الانهيار (Crash)
     options.add_argument("--headless")
     options.add_argument("--no-sandbox")
-    options.add_argument("--disable-dev-shm-usage") # CRUCIAL
+    options.add_argument("--disable-dev-shm-usage")
     options.add_argument("--disable-gpu")
     options.add_argument("--disable-features=NetworkService")
     options.add_argument("--window-size=1920,1080")
@@ -176,13 +168,12 @@ def get_driver():
     try:
         service = Service(ChromeDriverManager().install())
         driver = webdriver.Chrome(service=service, options=options)
-        driver.set_page_load_timeout(30) # Prevent stuck pages
+        driver.set_page_load_timeout(30)
         return driver
     except Exception:
         try:
             return webdriver.Chrome(options=options)
-        except Exception as e:
-            st.error(f"❌ Critical Driver Failure: {str(e)}")
+        except Exception:
             return None
 
 # --- STYLING ---
@@ -241,7 +232,8 @@ with c_main:
 with st.container():
     c1, c2, c3, c4 = st.columns([3, 3, 1.5, 1.5])
     with c1: niche = st.text_input("🔍 Business Niche", "")
-    with c2: city = st.text_input("🌍 Global City", "")
+    # 🔥 MULTI-CITY INPUT 🔥
+    with c2: city_input = st.text_input("🌍 Global Cities (Separate with comma)", "", help="Ex: Agadir, Casablanca, Marrakech")
     with c3: limit = st.number_input("Target Leads", 1, 2000, 20)
     with c4: scrolls = st.number_input("Search Depth", 5, 500, 30)
     
@@ -253,8 +245,8 @@ with st.container():
         w_phone = opts[0].checkbox("Phone", True)
         w_web = opts[1].checkbox("Web", True)
         w_email = opts[2].checkbox("Email", False)
-        w_no_site = opts[3].checkbox("No Site", False, help="Show ONLY businesses without a website")
-        w_strict = opts[4].checkbox("Strict", True, help="Address MUST contain city name")
+        w_no_site = opts[3].checkbox("No Site", False)
+        w_strict = opts[4].checkbox("Strict", True)
         opts[5].checkbox("Sync", True)
 
     with col_btn:
@@ -262,8 +254,8 @@ with st.container():
         b1, b2 = st.columns([2, 1.5])
         with b1:
             if st.button("START ENGINE", type="primary", use_container_width=True): 
-                if not niche or not city:
-                    st.error("Please enter a Niche and City!")
+                if not niche or not city_input:
+                    st.error("Please enter a Niche and at least one City!")
                 elif user_balance <= 0:
                     st.error("❌ Insufficient Credits!")
                 else:
@@ -279,16 +271,19 @@ with t1:
     metrics_placeholder = st.empty()
     table_placeholder = st.empty()
 
-    with metrics_placeholder.container():
-        m1, m2, m3, m4 = st.columns(4)
-        if st.session_state.results_df is not None:
-            df = st.session_state.results_df
-            m1.metric("Total Leads", len(df), "🎯 Scraped")
-            m2.metric("Valid Phones", len(df[df['WhatsApp'].notnull()]), "📱 WhatsApp")
-            m3.metric("Websites", len(df[df['Website'] != "N/A"]), "🌐 Digital")
-            m4.metric("Emails", len(df[df['Email'] != "N/A"]) if 'Email' in df.columns else 0, "📧 B2B")
-        else:
-            m1.metric("Total Leads", 0); m2.metric("Valid Phones", 0); m3.metric("Websites", 0); m4.metric("Emails", 0)
+    # --- METRICS UI ---
+    def update_metrics(df):
+        with metrics_placeholder.container():
+            m1, m2, m3, m4 = st.columns(4)
+            if df is not None:
+                m1.metric("Total Leads", len(df), "🎯 Scraped")
+                m2.metric("Valid Phones", len(df[df['WhatsApp'].notnull()]), "📱 WhatsApp")
+                m3.metric("Websites", len(df[df['Website'] != "N/A"]), "🌐 Digital")
+                m4.metric("Emails", len(df[df['Email'] != "N/A"]) if 'Email' in df.columns else 0, "📧 B2B")
+            else:
+                m1.metric("Total Leads", 0); m2.metric("Valid Phones", 0); m3.metric("Websites", 0); m4.metric("Emails", 0)
+    
+    update_metrics(st.session_state.results_df)
 
     if st.session_state.results_df is not None:
         table_placeholder.dataframe(
@@ -299,104 +294,100 @@ with t1:
             }
         )
 
+    # --- 🔥 MAIN LOOP (MULTI-CITY SUPPORT) 🔥 ---
     if st.session_state.running:
-        results = [] 
-        run_query("INSERT INTO sessions (query, date) VALUES (?, ?)", (f"{niche} in {city}", time.strftime("%Y-%m-%d %H:%M")))
-        s_id = run_query("SELECT id FROM sessions ORDER BY id DESC LIMIT 1", is_select=True)[0][0]
+        results = []
+        # تفريق المدن بـ الفاصلة
+        target_cities = [c.strip() for c in city_input.split(',') if c.strip()]
         
         driver = get_driver()
         
         if driver:
             try:
-                update_bar(5, "INITIALIZING...")
-                # 🔥 LINK FIX: Use Lightweight Proxy (Anti-Crash)
-                search_url = f"https://www.google.com/maps/search/{niche}+in+{city}"
-                driver.get(search_url)
-                time.sleep(4)
-                
-                scroll_div = driver.find_element(By.CSS_SELECTOR, 'div[role="feed"]')
-                for i in range(scrolls):
+                for city_idx, city in enumerate(target_cities):
                     if not st.session_state.running: break
-                    driver.execute_script('arguments[0].scrollTop = arguments[0].scrollHeight', scroll_div)
-                    time.sleep(1)
-                    prog = 10 + int((i / scrolls) * 40)
-                    update_bar(prog, "SCROLLING...")
-                
-                items = driver.find_elements(By.CLASS_NAME, "hfpxzc")[:limit*2]
-                links = [el.get_attribute("href") for el in items]
-                
-                total = len(links) if links else 1
-                for idx, link in enumerate(links):
-                    current_bal = get_balance(current_user)
-                    if current_bal <= 0:
-                        st.error("🚫 Credits Exhausted!")
-                        st.session_state.running = False
-                        break
+                    
+                    # Log Session
+                    run_query("INSERT INTO sessions (query, date) VALUES (?, ?)", (f"{niche} in {city}", time.strftime("%Y-%m-%d %H:%M")))
+                    s_id = run_query("SELECT id FROM sessions ORDER BY id DESC LIMIT 1", is_select=True)[0][0]
 
-                    if not st.session_state.running or len(results) >= limit: break
+                    update_bar(0, f"🚀 TARGETING: {city.upper()} ({city_idx+1}/{len(target_cities)})")
                     
-                    prog = 50 + int((idx / total) * 50)
-                    update_bar(prog, f"EXTRACTING {len(results)+1}/{limit}")
+                    search_url = f"https://www.google.com/maps/search/{niche}+in+{city}"
+                    driver.get(search_url)
+                    time.sleep(4)
                     
+                    # SCROLLING
                     try:
-                        driver.get(link)
-                        time.sleep(1.5)
+                        scroll_div = driver.find_element(By.CSS_SELECTOR, 'div[role="feed"]')
+                        for i in range(scrolls):
+                            if not st.session_state.running: break
+                            driver.execute_script('arguments[0].scrollTop = arguments[0].scrollHeight', scroll_div)
+                            time.sleep(1)
+                            prog = int((i / scrolls) * 30)
+                            update_bar(prog, f"SCROLLING {city.upper()}...")
+                    except: pass # If list not found, try scraping what's visible
+                    
+                    items = driver.find_elements(By.CLASS_NAME, "hfpxzc")[:limit*2]
+                    links = [el.get_attribute("href") for el in items]
+                    
+                    # SCRAPING LOOP
+                    for idx, link in enumerate(links):
+                        if get_balance(current_user) <= 0:
+                            st.error(f"🚫 Credits Exhausted at {city}!"); st.session_state.running = False; break
+                        if not st.session_state.running or len(results) >= limit * (city_idx + 1): break # Check global limit if needed
                         
-                        name = driver.find_element(By.CSS_SELECTOR, "h1.DUwDvf").text
-                        if any(d['Name'] == name for d in results): continue
+                        prog = 30 + int((idx / (len(links) if links else 1)) * 70)
+                        update_bar(prog, f"EXTRACTING FROM {city.upper()}")
                         
-                        try: addr = driver.find_element(By.CSS_SELECTOR, 'div.Io6YTe.fontBodyMedium').text
-                        except: addr = "N/A"
-                        
-                        if w_strict:
-                            if city.lower() not in addr.lower(): continue
+                        try:
+                            driver.get(link)
+                            time.sleep(1.5)
+                            
+                            name = driver.find_element(By.CSS_SELECTOR, "h1.DUwDvf").text
+                            if any(d['Name'] == name for d in results): continue
+                            
+                            try: addr = driver.find_element(By.CSS_SELECTOR, 'div.Io6YTe.fontBodyMedium').text
+                            except: addr = "N/A"
+                            
+                            if w_strict and city.lower() not in addr.lower(): continue
 
-                        website = "N/A"
-                        if w_web:
-                            try: website = driver.find_element(By.CSS_SELECTOR, 'a[data-item-id="authority"]').get_attribute("href")
-                            except: website = "N/A"
+                            website = "N/A"
+                            if w_web:
+                                try: website = driver.find_element(By.CSS_SELECTOR, 'a[data-item-id="authority"]').get_attribute("href")
+                                except: website = "N/A"
 
-                        if w_no_site and website != "N/A": continue
+                            if w_no_site and website != "N/A": continue
 
-                        row = {"Name": name, "Address": addr, "Website": website}
-                        
-                        if w_phone:
-                            try: 
-                                p_raw = driver.find_element(By.XPATH, '//*[contains(@data-item-id, "phone:tel")]').get_attribute("aria-label")
-                                row["Phone"] = clean_phone_display(p_raw)
-                                row["WhatsApp"] = clean_phone_for_wa(p_raw)
-                            except: row["Phone"] = "N/A"; row["WhatsApp"] = None
-                        
-                        if w_email: row["Email"] = fetch_email(driver, row.get("Website", "N/A"))
+                            row = {"Name": name, "Address": addr, "Website": website, "City": city} # Added City Column
+                            
+                            if w_phone:
+                                try: 
+                                    p_raw = driver.find_element(By.XPATH, '//*[contains(@data-item-id, "phone:tel")]').get_attribute("aria-label")
+                                    row["Phone"] = clean_phone_display(p_raw)
+                                    row["WhatsApp"] = clean_phone_for_wa(p_raw)
+                                except: row["Phone"] = "N/A"; row["WhatsApp"] = None
+                            
+                            if w_email: row["Email"] = fetch_email(driver, row.get("Website", "N/A"))
 
-                        results.append(row)
-                        deduct_credit(current_user)
+                            results.append(row)
+                            deduct_credit(current_user)
 
-                        st.session_state.results_df = pd.DataFrame(results)
-                        
-                        with metrics_placeholder.container():
-                            m1, m2, m3, m4 = st.columns(4)
-                            df = st.session_state.results_df
-                            m1.metric("Total Leads", len(df), "🎯 Scraped")
-                            m2.metric("Valid Phones", len(df[df['WhatsApp'].notnull()]), "📱 WhatsApp")
-                            m3.metric("Websites", len(df[df['Website'] != "N/A"]), "🌐 Digital")
-                            m4.metric("Emails", len(df[df['Email'] != "N/A"]) if 'Email' in df.columns else 0, "📧 B2B")
+                            st.session_state.results_df = pd.DataFrame(results)
+                            update_metrics(st.session_state.results_df)
+                            table_placeholder.dataframe(
+                                st.session_state.results_df, use_container_width=True,
+                                column_config={
+                                    "WhatsApp": st.column_config.LinkColumn("Chat"),
+                                    "Website": st.column_config.LinkColumn("Site"),
+                                }
+                            )
+                            
+                            run_query("INSERT INTO leads (session_id, name, phone, website, email, address, whatsapp) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                                      (s_id, name, row.get("Phone", "N/A"), row.get("Website", "N/A"), row.get("Email", "N/A"), addr, row.get("WhatsApp", "")))
+                        except: continue
 
-                        table_placeholder.dataframe(
-                            st.session_state.results_df, use_container_width=True,
-                            column_config={
-                                "WhatsApp": st.column_config.LinkColumn("Fast Action", display_text="Chat 💬"),
-                                "Website": st.column_config.LinkColumn("Site"),
-                            }
-                        )
-                        
-                        run_query("INSERT INTO leads (session_id, name, phone, website, email, address, whatsapp) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                                  (s_id, name, row.get("Phone", "N/A"), row.get("Website", "N/A"), row.get("Email", "N/A"), addr, row.get("WhatsApp", "")))
-                    except Exception as e:
-                        # Continue if one lead fails
-                        continue
-                
-                update_bar(100, "COMPLETED")
+                update_bar(100, "✅ ALL CITIES COMPLETED")
             finally:
                 driver.quit()
                 st.session_state.running = False
@@ -407,22 +398,15 @@ with t2:
         with st.expander(f"📦 {d} | Search: {q}"):
             data = run_query(f"SELECT name, phone, website, email, address, whatsapp FROM leads WHERE session_id={sid}", is_select=True)
             df = pd.DataFrame(data, columns=["Name", "Phone", "Website", "Email", "Address", "WhatsApp"])
-            st.dataframe(df, use_container_width=True, column_config={"WhatsApp": st.column_config.LinkColumn("Fast Action", display_text="Chat 💬")})
+            st.dataframe(df, use_container_width=True, column_config={"WhatsApp": st.column_config.LinkColumn("Chat")})
             st.download_button("Export CSV", df.to_csv(index=False).encode('utf-8-sig'), f"leads_{sid}.csv", key=f"dl_{sid}")
 
 with t3:
     st.subheader("🤖 AI Cold Outreach Generator")
-    st.write("Generate professional messages for your scraped leads instantly.")
     c_gen1, c_gen2 = st.columns(2)
-    with c_gen1:
-        offer_type = st.selectbox("Offer Type", ["Web Design Service", "SEO Optimization", "Social Media Management"])
-    with c_gen2:
-        target_audience = st.text_input("Target Audience", value=niche if niche else "Businesses")
+    with c_gen1: offer_type = st.selectbox("Offer Type", ["Web Design", "SEO", "SMM"])
+    with c_gen2: target_audience = st.text_input("Target Audience", value=niche if niche else "Businesses")
     if st.button("✨ Generate Magic Script"):
-        if offer_type == "Web Design Service":
-            msg = f"Subject: Upgrade {target_audience} Online Presence..."
-        else:
-            msg = "Hello..."
-        st.code(msg, language="text")
+        st.code(f"Subject: Help {target_audience} Grow...\n\nHello,\nI noticed you don't have a website...", language="text")
 
 st.markdown(f'<div class="footer">Designed by Chatir ❤ | Worldwide Lead Generation 🌍</div>', unsafe_allow_html=True)
