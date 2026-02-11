@@ -5,3 +5,5 @@ pyyaml
 streamlit-authenticator
 webdriver-manager
 PyYAML
+gspread
+google-auth
