@@ -3,3 +3,4 @@ pandas
 selenium
 pyyaml
 streamlit-authenticator
+webdriver-manager
