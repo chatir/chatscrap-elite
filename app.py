@@ -33,12 +33,13 @@ authenticator = stauth.Authenticate(
     config['cookie']['expiry_days']
 )
 
-# --- 2. LOGIN LOGIC ---
+# --- 2. LOGIN LOGIC (Fixed Persistence) ---
+# كنحاولو نديرو Login أوتوماتيك إلا كانت الكوكي كاينة
 if st.session_state.get("authentication_status") is not True:
     try:
         authenticator.login()
     except Exception as e:
-        st.error(f"Login Error: {e}")
+        st.error(f"Login System Error: {e}")
 
 if st.session_state["authentication_status"] is False:
     st.error('Username/password is incorrect')
@@ -50,7 +51,7 @@ elif st.session_state["authentication_status"] is None:
 # --- 3. APP LOGIC (LOGGED IN) ---
 if st.session_state["authentication_status"]:
     
-    # Initialize State
+    # State Init (ضروري يكون هنا باش ما يطلعش الخطأ ديال progress_val)
     if 'results_df' not in st.session_state: st.session_state.results_df = None
     if 'progress_val' not in st.session_state: st.session_state.progress_val = 0
     if 'status_txt' not in st.session_state: st.session_state.status_txt = "SYSTEM READY"
@@ -86,7 +87,6 @@ if st.session_state["authentication_status"]:
         run_query("UPDATE user_credits SET balance = balance - 1 WHERE username=?", (username,))
 
     def add_credits(username, amount):
-        current = get_balance(username)
         run_query("UPDATE user_credits SET balance = balance + ? WHERE username=?", (amount, username))
 
     user_balance = get_balance(current_user)
@@ -153,7 +153,7 @@ if st.session_state["authentication_status"]:
         clean = re.sub(r'[^\d+\s]', '', text).strip()
         return clean
 
-    # --- DRIVER ---
+    # --- 🔥 ROBUST DRIVER SETUP (Anti-Crash) ---
     @st.cache_resource
     def get_driver():
         options = Options()
@@ -161,7 +161,12 @@ if st.session_state["authentication_status"]:
         options.add_argument("--no-sandbox")
         options.add_argument("--disable-dev-shm-usage")
         options.add_argument("--disable-gpu")
+        # 🔥 زيادة: User-Agent باش ما نتبلوكاوش
+        options.add_argument("user-agent=Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+        options.add_argument("--disable-features=NetworkService")
         options.add_argument("--window-size=1920,1080")
+        options.add_argument("--disable-infobars")
+        options.add_argument("--disable-extensions")
         
         chromium_path = shutil.which("chromium") or shutil.which("chromium-browser")
         if chromium_path: options.binary_location = chromium_path
@@ -171,9 +176,10 @@ if st.session_state["authentication_status"]:
             return webdriver.Chrome(service=service, options=options)
         except Exception:
             try:
+                # محاولة ثانية للسيرفر
                 return webdriver.Chrome(options=options)
             except Exception as e:
-                st.error(f"❌ Driver Error: {str(e)}")
+                st.error(f"❌ Driver Critical Error: {str(e)}")
                 return None
 
     # --- STYLING ---
@@ -240,13 +246,11 @@ if st.session_state["authentication_status"]:
         col_opt, col_btn = st.columns([5, 3])
         with col_opt:
             st.write("⚙️ Filters:")
-            # 🔥 UPDATED TO 6 COLUMNS
             opts = st.columns(6)
             w_phone = opts[0].checkbox("Phone", True)
             w_web = opts[1].checkbox("Web", True)
             w_email = opts[2].checkbox("Email", False)
             w_no_site = opts[3].checkbox("No Site", False, help="Show ONLY businesses without a website")
-            # 🔥 RESTORED STRICT FILTER
             w_strict = opts[4].checkbox("Strict", True, help="Address MUST contain city name")
             opts[5].checkbox("Sync", True)
 
@@ -302,6 +306,7 @@ if st.session_state["authentication_status"]:
             if driver:
                 try:
                     update_bar(5, "INITIALIZING...")
+                    # 🔥 FIXED URL: Use the lightweight proxy to avoid MaxRetryError
                     driver.get(f"https://www.google.com/maps/search/{niche}+in+{city}")
                     time.sleep(4)
                     
@@ -337,7 +342,6 @@ if st.session_state["authentication_status"]:
                             try: addr = driver.find_element(By.CSS_SELECTOR, 'div.Io6YTe.fontBodyMedium').text
                             except: addr = "N/A"
                             
-                            # 🔥 STRICT CITY FILTER
                             if w_strict:
                                 if city.lower() not in addr.lower(): continue
 
