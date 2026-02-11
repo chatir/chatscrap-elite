@@ -63,11 +63,13 @@ if st.session_state["authentication_status"]:
         run_query('''CREATE TABLE IF NOT EXISTS sessions (id INTEGER PRIMARY KEY AUTOINCREMENT, query TEXT, date TEXT)''')
         run_query('''CREATE TABLE IF NOT EXISTS leads (id INTEGER PRIMARY KEY AUTOINCREMENT, session_id INTEGER, name TEXT, phone TEXT, website TEXT, email TEXT, address TEXT, whatsapp TEXT)''')
         run_query('''CREATE TABLE IF NOT EXISTS user_credits (username TEXT PRIMARY KEY, balance INTEGER, status TEXT DEFAULT 'active')''')
-        # Updates
+        # DB Fixes
         try: run_query("SELECT status FROM user_credits LIMIT 1")
         except: run_query("ALTER TABLE user_credits ADD COLUMN status TEXT DEFAULT 'active'")
         try: run_query("SELECT whatsapp FROM leads LIMIT 1")
         except: run_query("ALTER TABLE leads ADD COLUMN whatsapp TEXT")
+        try: run_query("SELECT email FROM leads LIMIT 1")
+        except: run_query("ALTER TABLE leads ADD COLUMN email TEXT")
 
     init_db()
 
@@ -79,7 +81,7 @@ if st.session_state["authentication_status"]:
             return (5, 'active')
 
     def deduct_credit(username):
-        if username != "admin": # Admin Unlimited 
+        if username != "admin": # Admin Unlimited Logic
             run_query("UPDATE user_credits SET balance = balance - 1 WHERE username=?", (username,))
 
     def add_credits(username, amount):
@@ -101,37 +103,35 @@ if st.session_state["authentication_status"]:
     if 'progress_val' not in st.session_state: st.session_state.progress_val = 0
     if 'status_txt' not in st.session_state: st.session_state.status_txt = "SYSTEM READY"
 
-    # --- SIDEBAR NAVIGATION (ENHANCED) ---
+    # --- SIDEBAR NAVIGATION (HIDE FOR USERS) ---
     with st.sidebar:
         st.title("👤 User Profile")
         st.write(f"User: **{st.session_state['name']}**")
         
         if current_user == "admin":
-            st.success("💎 Credits: **Unlimited ♾️**") # Admin Unlimited Display 
+            st.success("💎 Credits: **Unlimited ♾️**")
             st.divider()
             choice = st.radio("GO TO:", ["🚀 SCRAPER ENGINE", "🛠️ USER MANAGEMENT"], index=0)
         else:
             st.warning(f"💎 Credits: **{user_balance}**")
-            choice = "🚀 SCRAPER ENGINE" # Direct access for users 
+            choice = "🚀 SCRAPER ENGINE" # Direct access for users
         
         st.divider()
         if st.button("Logout", type="secondary", use_container_width=True):
-            authenticator.logout('Logout', 'main')
-            st.rerun()
+            authenticator.logout('Logout', 'main'); st.rerun()
 
-    # --- CSS STYLING (ORANGE ELITE) ---
+    # --- STYLING (ORANGE THEME) ---
     st.markdown(f"""
         <style>
         .stApp {{ background-color: #0f111a; }}
         .stApp p, .stApp label, h1, h2, h3 {{ color: #FFFFFF !important; font-family: 'Segoe UI', sans-serif; }}
-        /* Orange Logo Logic  */
         .logo-img {{ width: 280px; filter: drop-shadow(0 0 10px rgba(255,140,0,0.5)) saturate(180%) hue-rotate(-5deg); margin-bottom: 25px; }}
         .progress-wrapper {{ width: 100%; max-width: 650px; margin: 0 auto 30px auto; text-align: center; }}
         .progress-container {{ width: 100%; background-color: rgba(255, 140, 0, 0.1); border-radius: 50px; padding: 4px; border: 1px solid #FF8C00; }}
         .progress-fill {{ height: 14px; background: repeating-linear-gradient(45deg, #FF8C00, #FF8C00 10px, #FF4500 10px, #FF4500 20px); border-radius: 20px; transition: width 0.4s ease; }}
         div.stButton > button[kind="primary"] {{ background: linear-gradient(135deg, #FF8C00 0%, #FF4500 100%) !important; width: 100% !important; border: none !important; color: white !important; font-weight: 900 !important; }}
         div.stButton > button[kind="secondary"] {{ background: linear-gradient(135deg, #e52d27 0%, #b31217 100%) !important; width: 100% !important; border: none !important; color: white !important; font-weight: 900 !important; }}
-        .footer {{ position: fixed; left: 0; bottom: 0; width: 100%; background-color: #0f111a; color: #888888; text-align: center; padding: 10px; border-top: 1px solid rgba(128,128,128,0.1); font-size: 13px; }}
+        .footer {{ position: fixed; left: 0; bottom: 0; width: 100%; background-color: #0f111a; color: #888888; text-align: center; padding: 10px; border-top: 1px solid rgba(128,128,128,0.1); }}
         </style>
     """, unsafe_allow_html=True)
 
@@ -144,38 +144,34 @@ if st.session_state["authentication_status"]:
         live_df = pd.DataFrame(users_list, columns=["Username", "Balance", "Status"])
         st.dataframe(live_df, use_container_width=True)
 
-        col1, col2 = st.columns(2)
-        with col1:
-            st.markdown("### ➕ Register New User")
-            new_u = st.text_input("Username")
-            new_n = st.text_input("Name")
-            new_p = st.text_input("Password", type="password")
+        col_add, col_manage = st.columns(2)
+        with col_add:
+            st.markdown("### ➕ Register User")
+            new_u, new_n, new_p = st.text_input("Username"), st.text_input("Name"), st.text_input("Password", type="password")
             if st.button("CREATE ACCOUNT", type="primary"):
                 if new_u and new_p:
                     try: hashed_pw = stauth.Hasher.hash(new_p)
                     except: hashed_pw = stauth.Hasher([new_p]).generate()[0]
                     config['credentials']['usernames'][new_u] = {'name': new_n, 'password': hashed_pw, 'email': f"{new_u}@mail.com"}
                     with open('config.yaml', 'w') as f: yaml.dump(config, f, default_flow_style=False)
-                    get_user_data(new_u)
-                    st.success(f"User {new_u} Created!"); time.sleep(1); st.rerun()
+                    get_user_data(new_u); st.success(f"User {new_u} Created!"); time.sleep(1); st.rerun()
 
-        with col2:
-            st.markdown("### ⚙️ User Actions")
+        with col_manage:
+            st.markdown("### ⚙️ Management")
             db_users = [row[0] for row in users_list if row[0] != 'admin']
             if db_users:
                 target = st.selectbox("Select User", db_users)
-                c_a, c_b = st.columns(2)
-                with c_a:
+                c_top, c_stat = st.columns(2)
+                with c_top:
                     amt = st.number_input("Credits", min_value=1, value=100)
                     if st.button("💰 Recharge", type="primary"):
                         add_credits(target, amt); st.success("Done!"); time.sleep(1); st.rerun()
-                with c_b:
+                with c_stat:
                     _, u_stat = get_user_data(target)
                     b_lbl = "🚫 Suspend" if u_stat == "active" else "✅ Activate"
                     if st.button(b_lbl):
                         update_user_status(target, "suspended" if u_stat == "active" else "active"); st.rerun()
                 
-                # Delete User Permanent 
                 st.divider()
                 if st.button("🗑️ DELETE USER PERMANENTLY", use_container_width=True):
                     run_query("DELETE FROM user_credits WHERE username=?", (target,))
@@ -199,15 +195,12 @@ if st.session_state["authentication_status"]:
             opts.add_argument("--headless"); opts.add_argument("--no-sandbox")
             opts.add_argument("--disable-dev-shm-usage"); opts.add_argument("--disable-gpu")
             opts.add_argument("--window-size=1920,1080")
-            # Repair for MaxRetryError 
             try:
                 service = Service(ChromeDriverManager().install())
                 return webdriver.Chrome(service=service, options=opts)
             except:
                 try: return webdriver.Chrome(options=opts)
-                except Exception as e:
-                    st.error(f"Driver Error: {e}")
-                    return None
+                except Exception as e: st.error(f"Driver Error: {e}"); return None
 
         c_main = st.columns([1, 6, 1])[1]
         with c_main:
@@ -229,7 +222,7 @@ if st.session_state["authentication_status"]:
             col_opt, col_btn = st.columns([5, 3])
             with col_opt:
                 st.write("⚙️ Filters:")
-                # All Filters Restored (No Site, Sync, Strict, etc) 
+                # ALL FILTERS RESTORED (No Site, Sync, etc)
                 f_opts = st.columns(6)
                 w_phone = f_opts[0].checkbox("Phone", True); w_web = f_opts[1].checkbox("Web", True)
                 w_email = f_opts[2].checkbox("Email", False); w_no_site = f_opts[3].checkbox("No Site", False)
@@ -239,9 +232,13 @@ if st.session_state["authentication_status"]:
                 if st.button("START ENGINE", type="primary", use_container_width=True):
                     if niche and city and (user_balance > 0 or current_user == "admin"):
                         st.session_state.running = True; st.session_state.progress_val = 0; st.session_state.results_df = None; st.rerun()
-                    else: st.error("Check inputs or credits!")
+                    else: st.error("Check niche/city or credits!")
                 if st.button("STOP", type="secondary", use_container_width=True): 
                     st.session_state.running = False; st.rerun()
+
+        if st.session_state.results_df is not None:
+            st.divider()
+            st.download_button("📥 DOWNLOAD CSV RESULTS", st.session_state.results_df.to_csv(index=False).encode('utf-8-sig'), f"{niche}_{city}.csv", "text/csv", use_container_width=True)
 
         if st.session_state.running:
             results = []
@@ -251,16 +248,14 @@ if st.session_state["authentication_status"]:
             driver = get_driver()
             if driver:
                 try:
-                    update_bar(5, "INITIALIZING...")
-                    # Fix for the crash in Screenshot 2: URL quoting 
-                    search_url = f"https://www.google.com/maps/search/{quote(niche)}+in+{quote(city)}"
+                    update_bar(5, "INITIALIZING..."); search_url = f"https://www.google.com/maps/search/{quote(niche)}+in+{quote(city)}"
                     driver.get(search_url); time.sleep(4)
                     
                     feed = driver.find_element(By.CSS_SELECTOR, 'div[role="feed"]')
                     for i in range(scrolls):
                         if not st.session_state.running: break
                         driver.execute_script('arguments[0].scrollTop = arguments[0].scrollHeight', feed)
-                        time.sleep(1.2); update_bar(10 + int((i/scrolls)*40), "SCROLLING...")
+                        time.sleep(1.5); update_bar(10 + int((i/scrolls)*40), "SCROLLING...")
                     
                     links = [el.get_attribute("href") for el in driver.find_elements(By.CLASS_NAME, "hfpxzc")[:limit*2]]
                     for idx, link in enumerate(links):
@@ -279,16 +274,17 @@ if st.session_state["authentication_status"]:
                             except: pass
                             if w_no_site and website != "N/A": continue
                             
-                            row = {"Name": name, "Phone": "N/A", "Website": website, "Address": addr}
+                            row = {"Name": name, "Phone": "N/A", "Website": website, "Address": addr, "Email": "N/A"}
                             try:
                                 p_raw = driver.find_element(By.XPATH, '//*[contains(@data-item-id, "phone:tel")]').get_attribute("aria-label")
                                 row["Phone"] = re.sub(r'[^\d+\s]', '', p_raw).strip()
+                                row["WhatsApp"] = f"https://wa.me/{re.sub(r'[^\d]', '', p_raw)}"
                             except: pass
 
                             results.append(row); deduct_credit(current_user)
                             st.session_state.results_df = pd.DataFrame(results)
                             st.dataframe(st.session_state.results_df, use_container_width=True)
-                            run_query("INSERT INTO leads (session_id, name, phone, website, address) VALUES (?, ?, ?, ?, ?)", (s_id, name, row["Phone"], website, addr))
+                            run_query("INSERT INTO leads (session_id, name, phone, website, address, whatsapp, email) VALUES (?, ?, ?, ?, ?, ?, ?)", (s_id, name, row["Phone"], website, addr, row.get("WhatsApp",""), "N/A"))
                         except: continue
                     update_bar(100, "COMPLETED")
                 finally: driver.quit(); st.session_state.running = False
