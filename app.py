@@ -92,7 +92,7 @@ if st.session_state["authentication_status"]:
     user_balance, user_status = get_user_data(current_user)
 
     if user_status == 'suspended' and current_user != "admin":
-        st.error("🚫 Account Suspended. Contact Admin.")
+        st.error("🚫 Your account is suspended. Contact Admin.")
         st.stop()
 
     if 'results_df' not in st.session_state: st.session_state.results_df = None
@@ -100,7 +100,7 @@ if st.session_state["authentication_status"]:
     if 'progress_val' not in st.session_state: st.session_state.progress_val = 0
     if 'status_txt' not in st.session_state: st.session_state.status_txt = "SYSTEM READY"
 
-    # --- SIDEBAR NAVIGATION ---
+    # --- SIDEBAR (ENHANCED) ---
     with st.sidebar:
         st.title("👤 User Profile")
         st.write(f"User: **{st.session_state['name']}**")
@@ -111,18 +111,19 @@ if st.session_state["authentication_status"]:
             choice = st.radio("GO TO:", ["🚀 SCRAPER ENGINE", "🛠️ USER MANAGEMENT"], index=0)
         else:
             st.warning(f"💎 Credits: **{user_balance}**")
-            choice = "🚀 SCRAPER ENGINE" # Direct for users
+            choice = "🚀 SCRAPER ENGINE" # Users go straight to scraper
         
         st.divider()
         if st.button("Logout", type="secondary", use_container_width=True):
             authenticator.logout('Logout', 'main'); st.rerun()
 
-    # --- CSS STYLING (ORANGE THEME) ---
+    # --- CSS STYLING (ORANGE LOGO EFFECT RESTORED) ---
     st.markdown(f"""
         <style>
         .stApp {{ background-color: #0f111a; }}
         .stApp p, .stApp label, h1, h2, h3 {{ color: #FFFFFF !important; font-family: 'Segoe UI', sans-serif; }}
-        .logo-img {{ width: 280px; filter: drop-shadow(0 0 10px rgba(255,140,0,0.5)) saturate(180%) hue-rotate(-5deg); margin-bottom: 25px; }}
+        /* Orange Effect Filter */
+        .logo-img {{ width: 320px; filter: drop-shadow(0 0 10px rgba(255,140,0,0.5)) saturate(180%) hue-rotate(-5deg); margin-bottom: 25px; }}
         .progress-wrapper {{ width: 100%; max-width: 650px; margin: 0 auto 30px auto; text-align: center; }}
         .progress-container {{ width: 100%; background-color: rgba(255, 140, 0, 0.1); border-radius: 50px; padding: 4px; border: 1px solid #FF8C00; }}
         .progress-fill {{ height: 14px; background: repeating-linear-gradient(45deg, #FF8C00, #FF8C00 10px, #FF4500 10px, #FF4500 20px); border-radius: 20px; transition: width 0.4s ease; }}
@@ -132,27 +133,27 @@ if st.session_state["authentication_status"]:
     """, unsafe_allow_html=True)
 
     # ---------------------------
-    # VIEW 1: USER MANAGEMENT
+    # VIEW: ADMIN PANEL
     # ---------------------------
-    if choice == "🛠️ USER MANAGEMENT" and current_user == "admin":
+    if choice == "🛠️ USER MANAGEMENT":
         st.markdown("<h1>🛠️ Admin Control Panel</h1>", unsafe_allow_html=True)
         users_list = run_query("SELECT username, balance, status FROM user_credits", is_select=True)
         live_df = pd.DataFrame(users_list, columns=["Username", "Balance", "Status"])
         st.dataframe(live_df, use_container_width=True)
 
-        col1, col2 = st.columns(2)
-        with col1:
+        col_add, col_manage = st.columns(2)
+        with col_add:
             st.markdown("### ➕ Register User")
             new_u, new_n, new_p = st.text_input("Username"), st.text_input("Name"), st.text_input("Password", type="password")
             if st.button("CREATE ACCOUNT", type="primary"):
                 if new_u and new_p:
                     try: hashed_pw = stauth.Hasher.hash(new_p)
-                    except: hashed_pw = stauth.Hasher([new_p]).generate()[0] # Fix
+                    except: hashed_pw = stauth.Hasher([new_p]).generate()[0]
                     config['credentials']['usernames'][new_u] = {'name': new_n, 'password': hashed_pw, 'email': f"{new_u}@mail.com"}
                     with open('config.yaml', 'w') as f: yaml.dump(config, f, default_flow_style=False)
                     get_user_data(new_u); st.success(f"User {new_u} Created!"); time.sleep(1); st.rerun()
 
-        with col2:
+        with col_manage:
             st.markdown("### ⚙️ Management")
             db_users = [row[0] for row in users_list if row[0] != 'admin']
             if db_users:
@@ -167,17 +168,16 @@ if st.session_state["authentication_status"]:
                     b_lbl = "🚫 Suspend" if u_stat == "active" else "✅ Activate"
                     if st.button(b_lbl):
                         update_user_status(target, "suspended" if u_stat == "active" else "active"); st.rerun()
-                
                 st.divider()
                 if st.button("🗑️ DELETE USER PERMANENTLY", use_container_width=True):
                     run_query("DELETE FROM user_credits WHERE username=?", (target,))
                     if target in config['credentials']['usernames']:
                         del config['credentials']['usernames'][target]
-                        with open('config.yaml', 'w') as f: yaml.dump(config, f)
+                        with open('config.yaml', 'w') as f: yaml.dump(config, f, default_flow_style=False)
                     st.error("Deleted!"); time.sleep(1); st.rerun()
 
     # ---------------------------
-    # VIEW 2: SCRAPER ENGINE
+    # VIEW: ENGINE (MAIN)
     # ---------------------------
     elif choice == "🚀 SCRAPER ENGINE":
         def get_image_base64(path):
@@ -191,15 +191,13 @@ if st.session_state["authentication_status"]:
             opts.add_argument("--headless"); opts.add_argument("--no-sandbox")
             opts.add_argument("--disable-dev-shm-usage"); opts.add_argument("--disable-gpu")
             opts.add_argument("--window-size=1920,1080")
-            # Repair for MaxRetryError
-            try:
-                service = Service(ChromeDriverManager().install())
-                return webdriver.Chrome(service=service, options=opts)
-            except:
+            # Improved driver initialization to prevent MaxRetryError
+            try: return webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=opts)
+            except: 
                 try: return webdriver.Chrome(options=opts)
                 except Exception as e: st.error(f"Driver Error: {e}"); return None
 
-        # Logo & Progress
+        # Header Area
         c_main = st.columns([1, 6, 1])[1]
         with c_main:
             logo_b64 = get_image_base64("chatscrape.png")
@@ -211,7 +209,6 @@ if st.session_state["authentication_status"]:
                 pbar.markdown(f"""<div class="progress-wrapper"><div class="progress-container"><div class="progress-fill" style="width:{p}%;"></div></div><div style='color:#FF8C00;font-weight:bold;margin-top:10px;'>{t} {p}%</div></div>""", unsafe_allow_html=True)
             update_bar(st.session_state.progress_val, st.session_state.status_txt)
 
-        # Main Input Form
         with st.container():
             col1, col2, col3, col4 = st.columns([3, 3, 1.5, 1.5])
             niche, city = col1.text_input("🔍 Business Niche", ""), col2.text_input("🌍 Global City", "")
@@ -233,7 +230,7 @@ if st.session_state["authentication_status"]:
                     else: st.error("Check niche/city or credits!")
                 if st.button("STOP", type="secondary", use_container_width=True): st.session_state.running = False; st.rerun()
 
-        # 🔥 Bottom Tabs Restored
+        # 🔥 LIVE & ARCHIVE TABS
         t1, t2 = st.tabs(["⚡ LIVE ANALYTICS", "📜 ARCHIVE BASE"])
         
         with t1:
@@ -248,7 +245,9 @@ if st.session_state["authentication_status"]:
                 driver = get_driver()
                 if driver:
                     try:
-                        update_bar(5, "INITIALIZING..."); search_url = f"https://www.google.com/maps/search/{quote(niche)}+in+{quote(city)}"
+                        update_bar(5, "INITIALIZING..."); 
+                        # Using quote() to handle spaces/chars safely to avoid MaxRetryError
+                        search_url = f"https://www.google.com/maps/search/{quote(niche)}+in+{quote(city)}"
                         driver.get(search_url); time.sleep(4)
                         
                         feed = driver.find_element(By.CSS_SELECTOR, 'div[role="feed"]')
@@ -261,7 +260,7 @@ if st.session_state["authentication_status"]:
                         for idx, link in enumerate(links):
                             cb, _ = get_user_data(current_user)
                             if (cb <= 0 and current_user != "admin") or not st.session_state.running or len(results) >= limit: break
-                            update_bar(50 + int((idx/len(links))*50), f"SCRAPING {len(results)+1}/{limit}")
+                            update_bar(50 + int((idx/len(links))*50), f"SCRAPING {len(results)+1}")
                             driver.get(link); time.sleep(2)
                             try:
                                 name = driver.find_element(By.CSS_SELECTOR, "h1.DUwDvf").text
@@ -270,6 +269,8 @@ if st.session_state["authentication_status"]:
                                 website = "N/A"
                                 try: website = driver.find_element(By.CSS_SELECTOR, 'a[data-item-id="authority"]').get_attribute("href")
                                 except: pass
+                                
+                                # No Site Filter Logic
                                 if w_no_site and website != "N/A": continue
                                 
                                 row = {"Name": name, "Phone": "N/A", "Website": website, "Address": addr}
