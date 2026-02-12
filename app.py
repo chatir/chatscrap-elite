@@ -20,13 +20,12 @@ from urllib.parse import quote
 # ==============================================================================
 # 1. SYSTEM SETUP
 # ==============================================================================
-st.set_page_config(page_title="ChatScrap Elite Ultimate", layout="wide", page_icon="💎")
+st.set_page_config(page_title="ChatScrap Elite Beast", layout="wide", page_icon="💎")
 
 if 'results_df' not in st.session_state: st.session_state.results_df = None
 if 'running' not in st.session_state: st.session_state.running = False
 if 'progress_val' not in st.session_state: st.session_state.progress_val = 0
-if 'status_txt' not in st.session_state: st.session_state.status_txt = "READY"
-if 'current_session_id' not in st.session_state: st.session_state.current_session_id = None
+if 'status_txt' not in st.session_state: st.session_state.status_txt = "SYSTEM READY"
 
 # ==============================================================================
 # 2. SECURITY
@@ -34,8 +33,8 @@ if 'current_session_id' not in st.session_state: st.session_state.current_sessio
 try:
     with open('config.yaml') as file:
         config = yaml.load(file, Loader=SafeLoader)
-except:
-    st.error("❌ config.yaml missing"); st.stop()
+except Exception as e:
+    st.error("❌ config.yaml missing!"); st.stop()
 
 authenticator = stauth.Authenticate(
     config['credentials'], config['cookie']['name'], config['cookie']['key'], config['cookie']['expiry_days']
@@ -49,7 +48,7 @@ if st.session_state["authentication_status"] is not True:
     st.warning("🔒 Login Required"); st.stop()
 
 # ==============================================================================
-# 3. DATABASE (ATOMIC SAVE SYSTEM)
+# 3. DATABASE (SMART MIGRATION SYSTEM)
 # ==============================================================================
 DB_NAME = "scraper_pro_final.db"
 
@@ -64,50 +63,41 @@ def run_query(query, params=(), is_select=False):
     except: return [] if is_select else False
 
 def init_db():
+    """Initializes tables and performs AUTO-UPDATE on schema if needed"""
+    # Create Basic Tables
     run_query('''CREATE TABLE IF NOT EXISTS leads (id INTEGER PRIMARY KEY AUTOINCREMENT, session_id INTEGER, keyword TEXT, city TEXT, country TEXT, name TEXT, phone TEXT, website TEXT, email TEXT, address TEXT, whatsapp TEXT)''')
     run_query('''CREATE TABLE IF NOT EXISTS user_credits (username TEXT PRIMARY KEY, balance INTEGER, status TEXT DEFAULT 'active')''')
     run_query('''CREATE TABLE IF NOT EXISTS sessions (id INTEGER PRIMARY KEY AUTOINCREMENT, query TEXT, date TEXT)''')
     
-    # Auto-Repair Columns
+    # 🔥 THE DB FIX: Check and Add Missing Columns
     try:
         with sqlite3.connect(DB_NAME) as conn:
             cursor = conn.cursor()
             cursor.execute("PRAGMA table_info(leads)")
-            cols = [c[1] for c in cursor.fetchall()]
-            if 'country' not in cols: cursor.execute("ALTER TABLE leads ADD COLUMN country TEXT")
-            if 'whatsapp' not in cols: cursor.execute("ALTER TABLE leads ADD COLUMN whatsapp TEXT")
-            conn.commit()
-    except: pass
+            existing_columns = [col[1] for col in cursor.fetchall()]
+            
+            if 'country' not in existing_columns:
+                cursor.execute("ALTER TABLE leads ADD COLUMN country TEXT")
+                conn.commit()
+            
+            if 'whatsapp' not in existing_columns:
+                cursor.execute("ALTER TABLE leads ADD COLUMN whatsapp TEXT")
+                conn.commit()
+    except Exception as e:
+        print(f"Migration Error: {e}")
 
 init_db()
 
-# 🔥 CRITICAL FIX: Get ID reliably
-def start_new_session(query_text):
+# Reliability Fix: Force Get Max ID
+def create_session(query_text):
     try:
         with sqlite3.connect(DB_NAME) as conn:
             cur = conn.cursor()
             cur.execute("INSERT INTO sessions (query, date) VALUES (?, ?)", (query_text, time.strftime("%Y-%m-%d %H:%M")))
             conn.commit()
-            # Force fetch the max ID to ensure synchronization
             cur.execute("SELECT MAX(id) FROM sessions")
-            sess_id = cur.fetchone()[0]
-            return sess_id
-    except Exception as e:
-        st.error(f"Session Create Error: {e}")
-        return None
-
-def save_lead_atomic(session_id, d):
-    """Saves a single lead immediately to the DB"""
-    try:
-        with sqlite3.connect(DB_NAME) as conn:
-            cur = conn.cursor()
-            cur.execute("""
-                INSERT INTO leads (session_id, keyword, city, country, name, phone, website, email, address, whatsapp) 
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (session_id, d['Keyword'], d['City'], d['Country'], d['Name'], d['Phone'], d['Website'], d['Email'], d['Address'], d['WhatsApp']))
-            conn.commit()
-            return True
-    except: return False
+            return cur.fetchone()[0]
+    except: return None
 
 def get_user_data(username):
     res = run_query("SELECT balance, status FROM user_credits WHERE username=?", (username,), is_select=True)
@@ -117,27 +107,6 @@ def get_user_data(username):
 
 def deduct_credit(username):
     if username != "admin": run_query("UPDATE user_credits SET balance = balance - 1 WHERE username=?", (username,))
-
-def manage_user(action, username, amount=0):
-    if action == "add": run_query("UPDATE user_credits SET balance = balance + ? WHERE username=?", (amount, username))
-    elif action == "delete": run_query("DELETE FROM user_credits WHERE username=?", (username,))
-    elif action == "toggle":
-        curr = run_query("SELECT status FROM user_credits WHERE username=?", (username,), True)[0][0]
-        new_s = 'suspended' if curr == 'active' else 'active'
-        run_query("UPDATE user_credits SET status=? WHERE username=?", (new_s, username))
-
-def sync_to_gsheet(df, url):
-    if "gcp_service_account" not in st.secrets: return False
-    try:
-        scope = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
-        creds = Credentials.from_service_account_info(st.secrets["gcp_service_account"], scopes=scope)
-        client = gspread.authorize(creds)
-        sh = client.open_by_url(url)
-        ws = sh.get_worksheet(0)
-        ws.clear()
-        ws.update([df.columns.values.tolist()] + df.fillna("").values.tolist())
-        return True
-    except: return False
 
 # ==============================================================================
 # 4. ENGINE
@@ -151,6 +120,7 @@ def get_driver():
     opts.add_argument("--window-size=1920,1080")
     opts.add_argument("--lang=en-US")
     
+    # Chromium Detection for Server
     chromium_path = shutil.which("chromium") or shutil.which("chromium-browser")
     if chromium_path: opts.binary_location = chromium_path
     
@@ -179,25 +149,15 @@ st.markdown(f"""
     @import url('https://fonts.googleapis.com/css2?family=Segoe+UI&display=swap');
     html, body, .stApp {{ font-family: 'Segoe UI', sans-serif !important; background-color: #0e1117; }}
     .stApp p, .stApp label, h1, h2, h3, div, span {{ color: #FFFFFF !important; }}
-    .mobile-popup {{
-        display: none; position: fixed; top: 10px; left: 5%; width: 90%;
-        background: rgba(20, 20, 30, 0.95); border: 2px solid {orange_c};
-        border-radius: 12px; padding: 12px; text-align: center;
-        z-index: 999999; box-shadow: 0 10px 40px rgba(0,0,0,0.4);
-    }}
-    @media (max-width: 768px) {{ .mobile-popup {{ display: block; }} }}
     .logo-img {{ width: 280px; filter: drop-shadow(0 0 15px rgba(255,140,0,0.5)) saturate(180%); margin-bottom: 25px; }}
     .prog-box {{ width: 100%; background: rgba(255, 140, 0, 0.1); border-radius: 50px; padding: 4px; border: 1px solid {orange_c}; }}
-    .prog-fill {{ 
-        height: 14px; background: repeating-linear-gradient(45deg, {orange_c}, {orange_c} 10px, #FF4500 10px, #FF4500 20px); 
-        border-radius: 20px; transition: width 0.4s ease; animation: stripes 1s linear infinite; 
-    }}
+    .prog-fill {{ height: 14px; background: repeating-linear-gradient(45deg, {orange_c}, {orange_c} 10px, #FF4500 10px, #FF4500 20px); border-radius: 20px; transition: width 0.4s ease; animation: stripes 1s linear infinite; }}
     @keyframes stripes {{ 0% {{background-position: 0 0;}} 100% {{background-position: 50px 50px;}} }}
     div.stButton > button[kind="primary"] {{ background: linear-gradient(135deg, {orange_c} 0%, #FF4500 100%) !important; border: none; font-weight: 700; border-radius: 8px; }}
     </style>
 """, unsafe_allow_html=True)
 
-# --- APP ---
+# --- APP LOGIC ---
 current_user = st.session_state["username"]
 user_bal, user_st = get_user_data(current_user)
 is_admin = current_user == "admin"
@@ -206,34 +166,22 @@ if user_st == 'suspended' and not is_admin: st.error("🚫 SUSPENDED"); st.stop(
 
 with st.sidebar:
     st.title("👤 User Profile")
-    st.write(f"Account: **{st.session_state['name']}**")
-    if is_admin: st.success("💎 Plan: **Unlimited**")
-    else: st.warning(f"💎 Credits: **{user_bal}**")
+    st.write(f"Logged: **{st.session_state['name']}**")
+    if is_admin: st.success("💎 Credits: Unlimited")
+    else: st.warning(f"💎 Credits: {user_bal}")
     
     if is_admin:
         with st.expander("⚙️ ADMIN PANEL"):
             with sqlite3.connect(DB_NAME) as conn:
-                users = pd.read_sql("SELECT username, balance, status FROM user_credits", conn)
-            st.dataframe(users, hide_index=True)
-            
-            tgt = st.selectbox("Select User", [u for u in users['username'] if u!='admin'])
-            c1, c2, c3 = st.columns(3)
-            if c1.button("💰 +100"): manage_user("add", tgt, 100); st.success("Done"); st.rerun()
-            if c2.button("🔒 Toggle"): manage_user("toggle", tgt); st.info("Updated"); st.rerun()
-            if c3.button("🗑️ Delete"): manage_user("delete", tgt); st.warning("Deleted"); st.rerun()
-            
-            st.markdown("---")
-            nu = st.text_input("Username")
-            np = st.text_input("Password", type="password")
-            if st.button("Create Account"):
-                try: hp = stauth.Hasher.hash(np)
-                except: hp = stauth.Hasher([np]).generate()[0]
-                config['credentials']['usernames'][nu] = {'name': nu, 'password': hp, 'email': 'x'}
-                with open('config.yaml', 'w') as f: yaml.dump(config, f)
-                with sqlite3.connect(DB_NAME) as conn: conn.execute("INSERT INTO user_credits VALUES (?, 100, 'active')", (nu,))
-                st.success("Created"); st.rerun()
+                users_df = pd.read_sql("SELECT username, balance, status FROM user_credits", conn)
+            st.dataframe(users_df, hide_index=True)
+            st.divider()
+            tgt = st.selectbox("Select User", [u for u in users_df['username'] if u != 'admin'])
+            if st.button("💰 +100 Credits"):
+                run_query("UPDATE user_credits SET balance = balance + 100 WHERE username=?", (tgt,))
+                st.rerun()
 
-    st.markdown("---")
+    st.divider()
     if st.button("Sign Out"): authenticator.logout('Logout', 'main'); st.session_state.clear(); st.rerun()
 
 # --- MAIN ---
@@ -245,57 +193,47 @@ with cm:
             st.markdown(f'<div style="text-align:center;"><img src="data:image/png;base64,{b64}" class="logo-img"></div>', unsafe_allow_html=True)
         except: pass
     p_holder = st.empty()
-    m_holder = st.empty()
 
 def update_ui(prog, txt):
-    st.session_state.progress_val = prog
-    st.session_state.status_txt = txt
     p_holder.markdown(f"""<div class="prog-box"><div class="prog-fill" style="width:{prog}%;"></div></div><div style='color:{orange_c};text-align:center;font-weight:bold;margin-top:5px;'>{txt} {prog}%</div>""", unsafe_allow_html=True)
-    if st.session_state.running:
-        m_holder.markdown(f"""<div class="mobile-popup"><span style="color:{orange_c};font-weight:bold;">🚀 {txt}</span><br><div style="background:#333;height:6px;border-radius:3px;margin-top:5px;"><div style="background:{orange_c};width:{prog}%;height:100%;border-radius:3px;"></div></div><small>{prog}%</small></div>""", unsafe_allow_html=True)
 
 if not st.session_state.running: update_ui(0, "SYSTEM READY")
 
 # --- INPUTS ---
 with st.container():
     c1, c2, c3, c4 = st.columns([3, 3, 1.5, 1.5])
-    kw_in = c1.text_input("🔍 Keywords (Multi)", placeholder="cafe, restaurant")
-    city_in = c2.text_input("🌍 Cities (Multi)", placeholder="Agadir, Casablanca")
+    kw_in = c1.text_input("🔍 Keywords", placeholder="cafe, lawyer")
+    city_in = c2.text_input("🌍 Cities", placeholder="Agadir, Casa")
     country_in = c3.selectbox("🏳️ Country", ["Morocco", "France", "USA", "Spain", "Germany", "UAE", "UK"])
-    limit_in = c4.number_input("Target/City", 1, 5000, 20)
+    limit_in = c4.number_input("Limit/City", 1, 5000, 20)
 
     st.divider()
-    co, cb = st.columns([5, 3])
-    with co:
-        st.caption("⚙️ **ADVANCED FILTERS:**")
-        f = st.columns(4)
-        w_phone = f[0].checkbox("Must Have Phone", True)
-        w_web = f[1].checkbox("Must Have Website", False)
-        w_email = f[2].checkbox("Deep Email Scan", False)
-        w_nosite = f[3].checkbox("No Website Only", False)
-        depth_in = st.number_input("Scroll Depth (Pages)", 1, 200, 10)
+    f1, f2, f3, f4, f5 = st.columns([1, 1, 1, 1, 1.5])
+    w_phone = f1.checkbox("Must Have Phone", True)
+    w_web = f2.checkbox("Must Have Website", False)
+    w_email = f3.checkbox("Deep Email Scan", False)
+    w_nosite = f4.checkbox("No Website Only", False)
+    depth_in = f5.number_input("Scroll Depth", 1, 200, 10)
 
-    with cb:
-        st.write("")
-        b1, b2 = st.columns(2)
-        if b1.button("START ENGINE", type="primary", use_container_width=True):
-            if kw_in and city_in: st.session_state.running = True; st.session_state.results_df = None; st.rerun()
-        if b2.button("STOP", type="secondary", use_container_width=True):
-            st.session_state.running = False; st.rerun()
+    st.write("")
+    b1, b2 = st.columns(2)
+    if b1.button("START ENGINE", type="primary", use_container_width=True):
+        if kw_in and city_in: st.session_state.running = True; st.session_state.results_df = None; st.rerun()
+    if b2.button("STOP", type="secondary", use_container_width=True):
+        st.session_state.running = False; st.rerun()
 
-# --- RESULTS ---
-t1, t2, t3 = st.tabs(["⚡ LIVE DATA", "📜 ARCHIVES", "🤖 MARKETING"])
+# --- TABS ---
+t1, t2, t3 = st.tabs(["⚡ LIVE RESULTS", "📜 ARCHIVES", "🤖 MARKETING"])
 
 with t1:
     spot = st.empty()
-    cols = ["Status", "Keyword", "City", "Country", "Name", "Phone", "WhatsApp", "Address"] # Added Status
-    if w_web: cols.append("Website")
-    if w_email: cols.append("Email")
+    cols_display = ["Keyword", "City", "Country", "Name", "Phone", "WhatsApp", "Address"]
+    if w_web: cols_display.append("Website")
+    if w_email: cols_display.append("Email")
 
     if st.session_state.results_df is not None:
-        final_df = st.session_state.results_df[cols] if not st.session_state.results_df.empty else pd.DataFrame(columns=cols)
-        st.download_button("📥 Download CSV", final_df.to_csv(index=False).encode('utf-8-sig'), "leads_ultimate.csv", use_container_width=True)
-        spot.dataframe(final_df, use_container_width=True, column_config={"WhatsApp": st.column_config.LinkColumn("WhatsApp", display_text="🟢 Chat Now")})
+        st.download_button("📥 CSV", st.session_state.results_df.to_csv(index=False).encode('utf-8-sig'), "leads.csv")
+        spot.dataframe(st.session_state.results_df, use_container_width=True, column_config={"WhatsApp": st.column_config.LinkColumn("WhatsApp", display_text="🟢 Chat Now")})
 
     if st.session_state.running:
         all_res = []
@@ -304,11 +242,9 @@ with t1:
         total_ops = len(kws) * len(cts)
         curr_op = 0
         
-        # 🔥 START SESSION & GET ID
-        s_id = start_new_session(f"{kw_in} | {city_in} | {country_in}")
-        st.toast(f"Session Started! ID: {s_id}", icon="🚀")
-
+        s_id = create_session(f"{kw_in} | {city_in} | {country_in}")
         driver = get_driver()
+        
         if driver and s_id:
             try:
                 for city in cts:
@@ -317,9 +253,7 @@ with t1:
                         curr_op += 1
                         update_ui(int(((curr_op-1)/total_ops)*100), f"SCANNING: {kw} in {city}")
 
-                        gl_map = {"Morocco": "ma", "France": "fr", "USA": "us", "Spain": "es", "Germany": "de", "UAE": "ae", "UK": "gb"}
-                        gl_code = gl_map.get(country_in, "ma")
-                        
+                        gl_code = {"Morocco": "ma", "France": "fr", "USA": "us", "Spain": "es", "Germany": "de", "UAE": "ae", "UK": "gb"}.get(country_in, "ma")
                         url = f"https://www.google.com/maps/search/{quote(kw)}+in+{quote(city)}+{quote(country_in)}?hl=en&gl={gl_code}"
                         
                         driver.get(url); time.sleep(5)
@@ -357,12 +291,12 @@ with t1:
                                 try: web = driver.find_element(By.CSS_SELECTOR, 'a[data-item-id="authority"]').get_attribute("href")
                                 except: pass
 
+                                # WhatsApp Logic
                                 wa_link = None
                                 wa_num = re.sub(r'[^\d]', '', phone)
                                 is_mobile = any(wa_num.startswith(p) for p in ['2126', '2127', '06', '07'])
                                 is_fixe = wa_num.startswith('2125') or (wa_num.startswith('05') and len(wa_num) <= 10)
-                                if is_mobile and not is_fixe:
-                                    wa_link = f"https://wa.me/{wa_num}"
+                                if is_mobile and not is_fixe: wa_link = f"https://wa.me/{wa_num}"
 
                                 if w_phone and (phone == "N/A" or phone == ""): continue
                                 if w_web and (web == "N/A" or web == ""): continue
@@ -371,51 +305,40 @@ with t1:
                                 email = "N/A"
                                 if w_email and web != "N/A": email = fetch_email_deep(driver, web)
 
-                                row = {"Status": "💾 Saved", "Keyword": kw, "City": city, "Country": country_in, "Name": name, "Phone": phone, "WhatsApp": wa_link, "Website": web, "Email": email, "Address": addr}
+                                row = {"Keyword": kw, "City": city, "Country": country_in, "Name": name, "Phone": phone, "WhatsApp": wa_link, "Website": web, "Email": email, "Address": addr}
                                 all_res.append(row); valid_cnt += 1
                                 
                                 if not is_admin: deduct_credit(current_user)
                                 st.session_state.results_df = pd.DataFrame(all_res)
-                                spot.dataframe(st.session_state.results_df[cols], use_container_width=True, column_config={"WhatsApp": st.column_config.LinkColumn("WhatsApp", display_text="🟢 Chat Now")})
+                                spot.dataframe(st.session_state.results_df[cols_display], use_container_width=True, column_config={"WhatsApp": st.column_config.LinkColumn("WhatsApp", display_text="🟢 Chat Now")})
                                 
-                                # 🔥 ATOMIC SAVE FOR EVERY ROW
-                                saved = save_lead_atomic(s_id, row)
-                                
+                                # 🔥 Atomic Save
+                                with sqlite3.connect(DB_NAME) as conn:
+                                    conn.execute("""INSERT INTO leads (session_id, keyword, city, country, name, phone, website, email, address, whatsapp) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""", (s_id, kw, city, country_in, name, phone, web, email, addr, wa_link))
                             except: continue
                 update_ui(100, "COMPLETED ✅")
             finally: driver.quit(); st.session_state.running = False; st.rerun()
 
 with t2:
-    st.subheader("📜 Search History")
-    search_query = st.text_input("🔍 Filter Archives", placeholder="Type keyword...")
+    st.subheader("📜 Search Archives")
+    search_q = st.text_input("🔍 Filter by Keyword/City")
+    with sqlite3.connect(DB_NAME) as conn:
+        q = "SELECT * FROM sessions WHERE query LIKE ? ORDER BY id DESC LIMIT 30"
+        sessions = pd.read_sql(q, conn, params=(f"%{search_q}%",))
     
-    q_sql = "SELECT * FROM sessions ORDER BY id DESC LIMIT 20"
-    p_sql = ()
-    if search_query:
-        q_sql = "SELECT * FROM sessions WHERE query LIKE ? ORDER BY id DESC"
-        p_sql = (f"%{search_query}%",)
-        
-    hist = run_query(q_sql, p_sql, is_select=True)
-    
-    if hist:
-        for s in hist:
-            with st.expander(f"📦 {s[2]} | {s[1]}"):
-                try:
-                    with sqlite3.connect(DB_NAME) as conn:
-                        df_raw = pd.read_sql_query(f"SELECT * FROM leads WHERE session_id={s[0]}", conn)
-                        if not df_raw.empty:
-                            cols_drop = [c for c in ['id', 'session_id'] if c in df_raw.columns]
-                            df_final = df_raw.drop(columns=cols_drop)
-                            st.dataframe(df_final, use_container_width=True)
-                        else:
-                            st.info("No data found (Session interrupted before saving).")
-                except Exception as e: st.error(f"Read Error: {e}")
-    else:
-        st.info("No history found.")
+    if not sessions.empty:
+        for _, s in sessions.iterrows():
+            with st.expander(f"📦 {s['date']} | {s['query']}"):
+                with sqlite3.connect(DB_NAME) as conn:
+                    # Smart Read everything found
+                    leads = pd.read_sql(f"SELECT * FROM leads WHERE session_id={s['id']}", conn)
+                    if not leads.empty:
+                        st.dataframe(leads.drop(columns=[c for c in ['id', 'session_id'] if c in leads.columns]), use_container_width=True)
+                    else: st.warning("Empty results.")
+    else: st.info("No archives.")
 
 with t3:
-    st.subheader("🤖 Marketing Kit")
-    if st.button("Generate Script"):
-        st.code(f"Hello! I found your business in {city_in} and I can help you with...")
+    st.subheader("🤖 AI Scripts")
+    if st.button("Generate Script"): st.code(f"Hi! Found your business in {city_in}...")
 
-st.markdown('<div style="text-align:center;color:#666;padding:20px;">Designed by Chatir ❤ | Elite Ultimate</div>', unsafe_allow_html=True)
+st.markdown('<div style="text-align:center;color:#666;padding:20px;">Designed by Chatir ❤ | Elite Beast v8</div>', unsafe_allow_html=True)
