@@ -17,7 +17,7 @@ from webdriver_manager.chrome import ChromeDriverManager
 from urllib.parse import quote
 
 # ==============================================================================
-# 1. CONFIGURATION
+# 1. GLOBAL CONFIGURATION
 # ==============================================================================
 st.set_page_config(page_title="ChatScrap Elite Pro", layout="wide", page_icon="💎")
 
@@ -30,123 +30,120 @@ if 'status_msg' not in st.session_state: st.session_state.status_msg = "READY"
 if 'current_sid' not in st.session_state: st.session_state.current_sid = None
 
 # ==============================================================================
-# 2. CLEAN CSS SYSTEM (NO COMMENTS TO PREVENT ERRORS)
+# 2. DESIGN SYSTEM (SAFE INJECTION METHOD)
 # ==============================================================================
+# Define gradients simply
 orange_grad = "linear-gradient(135deg, #FF8C00 0%, #FF4500 100%)"
 red_grad = "linear-gradient(135deg, #DC3545 0%, #C82333 100%)"
 
-st.markdown(f"""
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap');
-    
-    html, body, [data-testid="stAppViewContainer"] {{
-        font-family: 'Inter', sans-serif !important;
-        background-color: #0e1117;
-    }}
+# Pure CSS without comments to prevent rendering errors
+custom_css = f"""
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap');
 
-    .centered-logo {{
-        text-align: center;
-        padding: 20px 0 40px 0;
-    }}
-    
-    .logo-img {{
-        width: 280px;
-        filter: drop-shadow(0 0 15px rgba(255,140,0,0.3));
-    }}
+html, body, [data-testid="stAppViewContainer"] {{
+    font-family: 'Inter', sans-serif !important;
+    background-color: #0e1117;
+}}
 
-    /* Targeted spacing for button row only */
-    div[data-testid="stHorizontalBlock"]:has(button) {{
-        gap: 5px !important;
-    }}
-    
-    /* Reset default column padding only for buttons */
-    div[data-testid="stHorizontalBlock"]:has(button) div[data-testid="column"] {{
-        padding: 0 !important;
-        margin: 0 !important;
-    }}
+.centered-logo {{
+    text-align: center;
+    padding: 20px 0 40px 0;
+}}
 
-    .stButton > button {{
-        width: 100% !important;
-        height: 55px !important;
-        font-weight: 800 !important;
-        font-size: 14px !important;
-        border: none !important;
-        text-transform: uppercase;
-        letter-spacing: 1px;
-        transition: 0.3s all ease-in-out;
-        border-radius: 6px !important;
-        color: white !important;
-    }}
-    
-    /* Start Button - Orange */
-    div[data-testid="column"]:nth-child(1) div.stButton > button {{
-        background: {orange_grad} !important;
-        box-shadow: 0 4px 15px rgba(255,69,0,0.3) !important;
-    }}
-    
-    /* Pause & Continue - Dark */
-    div[data-testid="column"]:nth-child(2) div.stButton > button,
-    div[data-testid="column"]:nth-child(3) div.stButton > button {{
-        background-color: #1c212d !important;
-        color: #e0e0e0 !important;
-        border: 1px solid #31333f !important;
-    }}
+.logo-img {{
+    width: 280px;
+    filter: drop-shadow(0 0 15px rgba(255,140,0,0.3));
+}}
 
-    /* Stop Button - Red */
-    div[data-testid="column"]:nth-child(4) div.stButton > button {{
-        background: {red_grad} !important;
-        box-shadow: 0 4px 15px rgba(220,53,69,0.3) !important;
-    }}
+div[data-testid="stHorizontalBlock"]:has(button) {{
+    gap: 5px !important;
+}}
 
-    .stButton > button:disabled {{
-        opacity: 0.4 !important;
-        cursor: not-allowed;
-        filter: grayscale(0.8);
-    }}
+div[data-testid="stHorizontalBlock"]:has(button) div[data-testid="column"] {{
+    padding: 0 !important;
+    margin: 0 !important;
+}}
 
-    .prog-container {{
-        width: 100%;
-        background: #1c212d;
-        border-radius: 50px;
-        padding: 4px;
-        border: 1px solid #31333f;
-        margin: 30px 0;
-    }}
-    
-    .prog-bar-fill {{
-        height: 16px;
-        background: repeating-linear-gradient(45deg, #FF8C00, #FF8C00 12px, #FF4500 12px, #FF4500 24px);
-        border-radius: 20px;
-        transition: width 0.5s ease-in-out;
-        animation: stripes 1.5s linear infinite;
-    }}
-    
-    @keyframes stripes {{
-        0% {{background-position: 0 0;}}
-        100% {{background-position: 48px 48px;}}
-    }}
+.stButton > button {{
+    width: 100% !important;
+    height: 55px !important;
+    font-weight: 800 !important;
+    font-size: 14px !important;
+    border: none !important;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    transition: 0.3s all ease-in-out;
+    border-radius: 8px !important;
+    color: white !important;
+}}
 
-    [data-testid="stMetricValue"] {{
-        color: #FF8C00 !important;
-        font-weight: 800;
-    }}
-    
-    section[data-testid="stSidebar"] {{
-        background-color: #161922 !important;
-        border-right: 1px solid #31333F;
-    }}
-    
-    .wa-link {{
-        color: #25D366 !important;
-        text-decoration: none !important;
-        font-weight: bold;
-    }}
-    </style>
-""", unsafe_allow_html=True)
+div[data-testid="column"]:nth-child(1) div.stButton > button {{
+    background: {orange_grad} !important;
+    box-shadow: 0 4px 15px rgba(255,69,0,0.3) !important;
+}}
+
+div[data-testid="column"]:nth-child(2) div.stButton > button,
+div[data-testid="column"]:nth-child(3) div.stButton > button {{
+    background-color: #1c212d !important;
+    color: #e0e0e0 !important;
+    border: 1px solid #31333f !important;
+}}
+
+div[data-testid="column"]:nth-child(4) div.stButton > button {{
+    background: {red_grad} !important;
+    box-shadow: 0 4px 15px rgba(220,53,69,0.3) !important;
+}}
+
+.stButton > button:disabled {{
+    opacity: 0.4 !important;
+    cursor: not-allowed;
+    filter: grayscale(0.8);
+}}
+
+.prog-container {{
+    width: 100%;
+    background: #1c212d;
+    border-radius: 50px;
+    padding: 4px;
+    border: 1px solid #31333f;
+    margin: 30px 0;
+}}
+
+.prog-bar-fill {{
+    height: 16px;
+    background: repeating-linear-gradient(45deg, #FF8C00, #FF8C00 12px, #FF4500 12px, #FF4500 24px);
+    border-radius: 20px;
+    transition: width 0.5s ease-in-out;
+    animation: stripes 1.5s linear infinite;
+}}
+
+@keyframes stripes {{
+    0% {{background-position: 0 0;}}
+    100% {{background-position: 48px 48px;}}
+}}
+
+[data-testid="stMetricValue"] {{
+    color: #FF8C00 !important;
+    font-weight: 800;
+}}
+
+section[data-testid="stSidebar"] {{
+    background-color: #161922 !important;
+    border-right: 1px solid #31333F;
+}}
+
+.wa-link {{
+    color: #25D366 !important;
+    text-decoration: none !important;
+    font-weight: bold;
+}}
+</style>
+"""
+st.markdown(custom_css, unsafe_allow_html=True)
 
 # ==============================================================================
-# 3. DATABASE
+# 3. DATABASE ENGINE
 # ==============================================================================
 DB_NAME = "chatscrap_elite_pro_v9.db"
 
@@ -187,7 +184,7 @@ if st.session_state.get("authentication_status") is not True:
         st.warning("🔒 Restricted Access"); st.stop()
 
 # ==============================================================================
-# 5. SIDEBAR
+# 5. SIDEBAR & ADMIN PANEL
 # ==============================================================================
 with st.sidebar:
     st.title("Profile Settings")
@@ -203,19 +200,19 @@ with st.sidebar:
             st.dataframe(u_df, hide_index=True)
             
             target = st.selectbox("Manage User", u_df['username'])
-            c1, c2, c3 = st.columns(3)
+            col_admin_a, col_admin_b, col_admin_c = st.columns(3)
             
-            if c1.button("💰 +100"): 
+            if col_admin_a.button("💰 +100"): 
                 conn.execute("UPDATE user_credits SET balance = balance + 100 WHERE username=?", (target,))
                 conn.commit(); st.rerun()
             
-            if c2.button("🚫 Status"):
-                curr = conn.execute("SELECT status FROM user_credits WHERE username=?", (target,)).fetchone()[0]
-                new_s = 'suspended' if curr == 'active' else 'active'
+            if col_admin_b.button("🚫 Status"):
+                curr_s = conn.execute("SELECT status FROM user_credits WHERE username=?", (target,)).fetchone()[0]
+                new_s = 'suspended' if curr_s == 'active' else 'active'
                 conn.execute("UPDATE user_credits SET status=? WHERE username=?", (new_s, target))
                 conn.commit(); st.rerun()
 
-            if c3.button("🗑️ Del"):
+            if col_admin_c.button("🗑️ Del"):
                 conn.execute("DELETE FROM user_credits WHERE username=?", (target,))
                 conn.commit(); st.rerun()
             
@@ -225,9 +222,9 @@ with st.sidebar:
             np = st.text_input("New Password", type="password", key="new_p")
             if st.button("Create Account"):
                 if nu and np:
-                    try: hp = stauth.Hasher.hash(np)
-                    except: hp = stauth.Hasher([np]).generate()[0]
-                    config['credentials']['usernames'][nu] = {'name': nu, 'password': hp, 'email': 'x'}
+                    try: hashed_pw = stauth.Hasher.hash(np)
+                    except: hashed_pw = stauth.Hasher([np]).generate()[0]
+                    config['credentials']['usernames'][nu] = {'name': nu, 'password': hashed_pw, 'email': 'x'}
                     with open('config.yaml', 'w') as f: yaml.dump(config, f)
                     get_user_data(nu); st.success(f"User {nu} Created!"); st.rerun()
 
@@ -242,7 +239,7 @@ if os.path.exists("chatscrape.png"):
     st.markdown(f'<div class="centered-logo"><img src="data:image/png;base64,{b64}" class="logo-img"></div>', unsafe_allow_html=True)
 
 # ==============================================================================
-# 7. INPUTS & CONTROLS
+# 7. INPUTS & 4-BUTTON ROW
 # ==============================================================================
 with st.container():
     c1, c2, c3, c4 = st.columns([3, 3, 2, 1.5])
@@ -253,7 +250,7 @@ with st.container():
 
     st.divider()
     f1, f2, f3, f4, f5 = st.columns([1, 1, 1, 1, 1.5])
-    w_phone = f1.checkbox("Phone Only", True)
+    w_phone = f1.checkbox("Phone", True)
     w_web = f2.checkbox("Website", False)
     w_email = f3.checkbox("Deep Email", False)
     w_nosite = f4.checkbox("No Site Only", False)
@@ -261,7 +258,7 @@ with st.container():
 
     st.write("")
     
-    # 4 Buttons Row
+    # 4 BUTTONS ROW
     b_start, b_pause, b_cont, b_stop = st.columns([1.2, 1, 1, 1.2]) 
     
     with b_start:
@@ -296,7 +293,7 @@ with st.container():
             st.rerun()
 
 # ==============================================================================
-# 8. ENGINE LOGIC
+# 8. ENGINE & LOGIC
 # ==============================================================================
 def get_driver():
     opts = Options()
@@ -345,7 +342,7 @@ with tab_live:
 
     if st.session_state.running:
         if st.session_state.paused:
-            status_ui.warning("⏸️ PAUSED")
+            status_ui.warning("⏸️ SEARCH PAUSED. Click 'Continue' to resume.")
         else:
             driver = get_driver()
             try:
@@ -356,8 +353,11 @@ with tab_live:
                 
                 for i, (city, kw) in enumerate(all_tasks):
                     if i < st.session_state.task_index: continue
+                    
                     if not st.session_state.running: break
-                    if st.session_state.paused: status_ui.warning("⏸️ Paused..."); break 
+                    if st.session_state.paused: 
+                        status_ui.warning("⏸️ Paused...")
+                        break 
                     
                     st.session_state.progress = int(((i + 1) / total_ops) * 100)
                     prog_spot.markdown(f'<div class="prog-container"><div class="prog-bar-fill" style="width: {st.session_state.progress}%;"></div></div>', unsafe_allow_html=True)
@@ -444,4 +444,4 @@ with tab_archive:
                     st.write(df_l.drop(columns=['id', 'session_id']).to_html(escape=False, index=False), unsafe_allow_html=True)
                 else: st.warning("Empty results.")
 
-st.markdown('<div style="text-align:center;color:#666;padding:30px;">Designed by Chatir Elite Pro - Clean V40</div>', unsafe_allow_html=True)
+st.markdown('<div style="text-align:center;color:#666;padding:30px;">Designed by Chatir Elite Pro - Architect Edition V41</div>', unsafe_allow_html=True)
