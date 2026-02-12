@@ -3,7 +3,8 @@ import pandas as pd
 import sqlite3
 import time
 import re
-import os  # 🔥 هادا هو اللي كان ناقص ودار ليك المشكل
+import os       # 🔥 ضفت هادي باش تحيد Error ديال os
+import base64   # 🔥 ضفت هادي باش تحيد Error ديال base64 (اللي فالصورة)
 import yaml
 import gspread
 from google.oauth2.service_account import Credentials
@@ -18,9 +19,9 @@ from webdriver_manager.chrome import ChromeDriverManager
 from urllib.parse import quote
 
 # ==============================================================================
-# 1. SYSTEM SETUP
+# 1. إعدادات النظام (SYSTEM SETUP)
 # ==============================================================================
-st.set_page_config(page_title="ChatScrap Elite Fixed", layout="wide", page_icon="🕷️")
+st.set_page_config(page_title="ChatScrap Elite Beast", layout="wide", page_icon="🕷️")
 
 if 'results_df' not in st.session_state: st.session_state.results_df = None
 if 'running' not in st.session_state: st.session_state.running = False
@@ -28,13 +29,13 @@ if 'progress_val' not in st.session_state: st.session_state.progress_val = 0
 if 'status_txt' not in st.session_state: st.session_state.status_txt = "SYSTEM READY"
 
 # ==============================================================================
-# 2. SECURITY
+# 2. الأمان والمصادقة (SECURITY)
 # ==============================================================================
 try:
     with open('config.yaml') as file:
         config = yaml.load(file, Loader=SafeLoader)
 except:
-    st.error("❌ config.yaml is missing!"); st.stop()
+    st.error("❌ Critical: 'config.yaml' missing!"); st.stop()
 
 authenticator = stauth.Authenticate(
     config['credentials'], config['cookie']['name'], config['cookie']['key'], config['cookie']['expiry_days']
@@ -48,16 +49,18 @@ if st.session_state["authentication_status"] is not True:
     st.warning("🔒 Please Login"); st.stop()
 
 # ==============================================================================
-# 3. DATABASE (Restored to original name to find users)
+# 3. قاعدة البيانات (DATABASE RESTORED)
 # ==============================================================================
-DB_NAME = "scraper_pro_final.db" 
+# 🔥 رجعنا الاسم القديم باش يرجعو ياسين ومريم
+DB_NAME = "scraper_pro_final.db"
 
 def run_query(query, params=(), is_select=False):
     try:
         with sqlite3.connect(DB_NAME, check_same_thread=False) as conn:
             curr = conn.cursor()
             curr.execute(query, params)
-            if is_select: return curr.fetchall()
+            if is_select:
+                return curr.fetchall()
             conn.commit()
             return True
     except: return [] if is_select else False
@@ -102,7 +105,7 @@ def sync_to_gsheet(df, url):
     except: return False
 
 # ==============================================================================
-# 4. ENGINE
+# 4. محرك الوحش (BEAST ENGINE)
 # ==============================================================================
 def get_driver():
     opts = Options()
@@ -136,6 +139,13 @@ st.markdown(f"""
     @import url('https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;600;800&display=swap');
     html, body, .stApp {{ font-family: 'Open Sans', sans-serif !important; background-color: #0f111a; }}
     .stApp p, .stApp label, h1, h2, h3, div, span {{ color: #FFFFFF !important; }}
+    .mobile-popup {{
+        display: none; position: fixed; top: 10px; left: 5%; width: 90%;
+        background: rgba(20, 20, 30, 0.95); border: 2px solid {orange_c};
+        border-radius: 12px; padding: 12px; text-align: center;
+        z-index: 999999; box-shadow: 0 10px 40px rgba(0,0,0,0.4);
+    }}
+    @media (max-width: 768px) {{ .mobile-popup {{ display: block; }} }}
     .logo-img {{ width: 280px; filter: drop-shadow(0 0 15px rgba(255,140,0,0.5)) saturate(180%); margin-bottom: 25px; }}
     .prog-box {{ width: 100%; background: rgba(255, 140, 0, 0.1); border-radius: 50px; padding: 4px; border: 1px solid {orange_c}; }}
     .prog-fill {{ 
@@ -144,15 +154,6 @@ st.markdown(f"""
     }}
     @keyframes stripes {{ 0% {{background-position: 0 0;}} 100% {{background-position: 50px 50px;}} }}
     div.stButton > button[kind="primary"] {{ background: linear-gradient(135deg, {orange_c} 0%, #FF4500 100%) !important; border: none; font-weight: 800; }}
-    
-    /* Mobile Popup */
-    .mobile-popup {{
-        display: none; position: fixed; top: 10px; left: 5%; width: 90%;
-        background: rgba(20, 20, 30, 0.95); border: 2px solid {orange_c};
-        border-radius: 12px; padding: 12px; text-align: center;
-        z-index: 999999; box-shadow: 0 10px 40px rgba(0,0,0,0.4);
-    }}
-    @media (max-width: 768px) {{ .mobile-popup {{ display: block; }} }}
     </style>
 """, unsafe_allow_html=True)
 
@@ -163,7 +164,6 @@ is_admin = current_user == "admin"
 
 if user_st == 'suspended' and not is_admin: st.error("🚫 SUSPENDED"); st.stop()
 
-# --- SIDEBAR ---
 with st.sidebar:
     st.title("👤 Profile")
     st.write(f"Logged: **{st.session_state['name']}**")
@@ -178,7 +178,7 @@ with st.sidebar:
             
             tgt = st.selectbox("Target", [u[0] for u in users if u[0]!='admin'])
             c1, c2, c3 = st.columns(3)
-            if c1.button("💰 +100"): manage_user("add", tgt, 100); st.success("Added!"); time.sleep(0.5); st.rerun()
+            if c1.button("💰 +100"): manage_user("add", tgt, 100); st.success("Added!"); st.rerun()
             if c2.button("🚫 Status"): manage_user("toggle", tgt); st.success("Changed!"); st.rerun()
             if c3.button("🗑️ Del"): manage_user("delete", tgt); st.warning("Deleted!"); st.rerun()
             
@@ -191,18 +191,20 @@ with st.sidebar:
                 config['credentials']['usernames'][nu] = {'name': nu, 'password': hp, 'email': 'x'}
                 with open('config.yaml', 'w') as f: yaml.dump(config, f)
                 run_query("INSERT INTO user_credits VALUES (?, 100, 'active')", (nu,))
-                st.success("Created!"); st.rerun()
+                st.success("User Created!"); st.rerun()
 
     st.divider()
     if st.button("Logout", type="secondary"):
         authenticator.logout('Logout', 'main'); st.session_state.clear(); st.rerun()
 
-# --- HEADER ---
+# --- HEADER (FIXED IMAGE LOADING) ---
 cm = st.columns([1, 6, 1])[1]
 with cm:
     if os.path.exists("chatscrape.png"):
-        with open("chatscrape.png", "rb") as f: b64 = base64.b64encode(f.read()).decode()
-        st.markdown(f'<div style="text-align:center;"><img src="data:image/png;base64,{b64}" class="logo-img"></div>', unsafe_allow_html=True)
+        try:
+            with open("chatscrape.png", "rb") as f: b64 = base64.b64encode(f.read()).decode()
+            st.markdown(f'<div style="text-align:center;"><img src="data:image/png;base64,{b64}" class="logo-img"></div>', unsafe_allow_html=True)
+        except: pass # Ignore image error if fails
     p_holder = st.empty()
     m_holder = st.empty()
 
@@ -220,7 +222,7 @@ with st.container():
     c1, c2, c3, c4 = st.columns([3, 3, 1.5, 1.5])
     kw_in = c1.text_input("🔍 Keywords", placeholder="cafe, snack")
     city_in = c2.text_input("🌍 Cities", placeholder="Agadir, Casa")
-    country_in = c3.selectbox("🏳️ Country", ["Morocco", "France", "USA", "Spain", "Germany"])
+    country_in = c3.selectbox("🏳️ Country", ["Morocco", "France", "USA", "Spain", "Germany", "UAE"])
     limit_in = c4.number_input("Limit", 1, 5000, 20)
 
     st.divider()
@@ -240,12 +242,11 @@ with st.container():
             if kw_in and city_in: st.session_state.running = True; st.session_state.results_df = None; st.rerun()
         if b2.button("STOP", type="secondary"): st.session_state.running = False; st.rerun()
 
-# --- TABS ---
-t1, t2 = st.tabs(["⚡ LIVE RESULTS", "📜 ARCHIVES"])
+# --- RESULTS ---
+t1, t2, t3 = st.tabs(["⚡ LIVE RESULTS", "📜 ARCHIVES", "🤖 MARKETING"])
 
 with t1:
     spot = st.empty()
-    # Dynamic Cols
     cols = ["Keyword", "City", "Country", "Name", "Phone", "WhatsApp", "Address"]
     if w_web: cols.append("Website")
     if w_email: cols.append("Email")
@@ -275,7 +276,7 @@ with t1:
                     update_ui(int(((curr_op-1)/total_ops)*100), f"SCANNING: {kw} in {city}, {country_in}")
 
                     # Geo-Fix
-                    gl_map = {"Morocco": "ma", "France": "fr", "USA": "us", "Spain": "es", "Germany": "de"}
+                    gl_map = {"Morocco": "ma", "France": "fr", "USA": "us", "Spain": "es", "Germany": "de", "UAE": "ae"}
                     gl_code = gl_map.get(country_in, "ma")
                     
                     url = f"https://www.google.com/maps/search/{quote(kw)}+in+{quote(city)}+{quote(country_in)}?hl=en&gl={gl_code}"
@@ -286,7 +287,7 @@ with t1:
 
                     try:
                         feed = driver.find_element(By.CSS_SELECTOR, 'div[role="feed"]')
-                        for _ in range(10):
+                        for _ in range(12):
                             if not st.session_state.running: break
                             driver.execute_script("arguments[0].scrollTop = arguments[0].scrollHeight", feed)
                             time.sleep(1.5)
@@ -335,6 +336,8 @@ with t1:
                             if not is_admin: deduct_credit(current_user)
                             st.session_state.results_df = pd.DataFrame(all_res)
                             spot.dataframe(st.session_state.results_df[cols], use_container_width=True, column_config={"WhatsApp": st.column_config.LinkColumn("WhatsApp", display_text="🟢 Chat Now")})
+                            
+                            # Save to OLD DB (Restored)
                             run_query("INSERT INTO leads (session_id, keyword, city, country, name, phone, website, email, address, whatsapp) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", (s_id, kw, city, country_in, name, phone, web, email, addr, wa_link))
                         except: continue
             update_ui(100, "COMPLETED ✅")
@@ -353,4 +356,9 @@ with t2:
                         st.dataframe(df_h, use_container_width=True)
     except: st.info("No archives found.")
 
-st.markdown('<div style="text-align:center;color:#666;padding:20px;">Designed by Chatir ❤ | Elite Fixed V5</div>', unsafe_allow_html=True)
+with t3:
+    st.subheader("🤖 Marketing Kit")
+    if st.button("Generate Script"):
+        st.code(f"Hi! Found your business in {city_in}...")
+
+st.markdown('<div style="text-align:center;color:#666;padding:20px;">Designed by Chatir ❤ | Elite Fixed V6</div>', unsafe_allow_html=True)
