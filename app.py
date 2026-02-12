@@ -28,7 +28,7 @@ if 'status_msg' not in st.session_state: st.session_state.status_msg = "READY"
 if 'current_sid' not in st.session_state: st.session_state.current_sid = None
 
 # ==============================================================================
-# 2. DESIGNER SUPREME CSS (TARGETED FIXES)
+# 2. DESIGN SYSTEM (TARGETED 70/30 FIX)
 # ==============================================================================
 orange_grad = "linear-gradient(135deg, #FF8C00 0%, #FF4500 100%)"
 
@@ -43,7 +43,7 @@ st.markdown(f"""
     .centered-logo {{ text-align: center; padding: 20px 0 40px 0; }}
     .logo-img {{ width: 280px; filter: drop-shadow(0 0 15px rgba(255,140,0,0.3)); }}
 
-    /* 🔥 TARGETED 50/50 BUTTONS (No spacing only for buttons) */
+    /* 🔥 THE 70/30 BUTTON BAR (Zero Gap Fix) */
     div[data-testid="stHorizontalBlock"]:has(button) div[data-testid="column"] {{
         padding: 0 !important;
         margin: 0 !important;
@@ -61,14 +61,14 @@ st.markdown(f"""
         transition: 0.3s all ease-in-out;
     }}
     
-    /* START BUTTON */
+    /* START BUTTON (70%) */
     div.stButton > button[kind="primary"] {{
         background: {orange_grad} !important;
         color: white !important;
         border-radius: 12px 0 0 12px !important;
     }}
     
-    /* STOP BUTTON */
+    /* STOP BUTTON (30%) */
     div.stButton > button[kind="secondary"] {{
         background-color: #1c212d !important;
         color: #ff4b4b !important;
@@ -134,7 +134,7 @@ if st.session_state.get("authentication_status") is not True:
         st.warning("🔒 Restricted Access"); st.stop()
 
 # ==============================================================================
-# 5. SIDEBAR & ADMIN PANEL (ADD / STATUS / DEL)
+# 5. SIDEBAR & ADMIN PANEL
 # ==============================================================================
 with st.sidebar:
     st.title("Profile Settings")
@@ -150,16 +150,14 @@ with st.sidebar:
             st.dataframe(u_df, hide_index=True)
             
             target = st.selectbox("Manage User", u_df['username'])
-            
-            # 🔥 ACTION BUTTONS
             col_admin_a, col_admin_b, col_admin_c = st.columns(3)
             if col_admin_a.button("💰 +100"): 
                 sqlite3.connect(DB_NAME).execute("UPDATE user_credits SET balance = balance + 100 WHERE username=?", (target,))
                 st.rerun()
             
             if col_admin_b.button("🚫 Status"):
-                current_s = sqlite3.connect(DB_NAME).execute("SELECT status FROM user_credits WHERE username=?", (target,)).fetchone()[0]
-                new_s = 'suspended' if current_s == 'active' else 'active'
+                curr_s = sqlite3.connect(DB_NAME).execute("SELECT status FROM user_credits WHERE username=?", (target,)).fetchone()[0]
+                new_s = 'suspended' if curr_s == 'active' else 'active'
                 sqlite3.connect(DB_NAME).execute("UPDATE user_credits SET status=? WHERE username=?", (new_s, target))
                 st.rerun()
 
@@ -168,7 +166,6 @@ with st.sidebar:
                 st.rerun()
             
             st.divider()
-            # 🔥 ADD NEW USER SECTION
             st.write("Add New User:")
             nu = st.text_input("New Username", key="new_u")
             np = st.text_input("New Password", type="password", key="new_p")
@@ -193,10 +190,9 @@ if os.path.exists("chatscrape.png"):
     st.markdown(f'<div class="centered-logo"><img src="data:image/png;base64,{b64}" class="logo-img"></div>', unsafe_allow_html=True)
 
 # ==============================================================================
-# 7. INPUTS (RETAINED SPACING) & ACTION BUTTONS (NO GAP)
+# 7. INPUTS & THE "70/30" ACTION BAR
 # ==============================================================================
 with st.container():
-    # Columns here will have normal Streamlit gaps
     c1, c2, c3, c4 = st.columns([3, 3, 2, 1.5])
     kw_in = c1.text_input("Keywords", placeholder="e.g. hotel, cafe")
     city_in = c2.text_input("Cities", placeholder="e.g. Agadir, Casa")
@@ -208,12 +204,12 @@ with st.container():
     w_phone = f1.checkbox("Phone", True)
     w_web = f2.checkbox("Website", False)
     w_email = f3.checkbox("Deep Email", False)
-    w_nosite = f4.checkbox("No Site", False)
+    w_nosite = f4.checkbox("No Site Only", False)
     depth_in = f5.slider("Scroll Depth", 1, 100, 10)
 
     st.write("")
-    # 🔥 BUTTONS CONTAINER (Will have Zero Gap due to CSS)
-    btn_container = st.columns([1, 1])
+    # 🔥 THE 70/30 PRO BAR (ZERO GAP)
+    btn_container = st.columns([7, 3])
     with btn_container[0]:
         if st.button("Start Extraction", type="primary"):
             if kw_in and city_in:
