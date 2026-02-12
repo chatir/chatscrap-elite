@@ -31,10 +31,10 @@ if 'status_msg' not in st.session_state: st.session_state.status_msg = "READY"
 if 'current_sid' not in st.session_state: st.session_state.current_sid = None
 
 # ==============================================================================
-# 2. DESIGN SYSTEM (ORANGE/RED THEME - SPACED INPUTS)
+# 2. DESIGN SYSTEM (ORANGE/RED THEME - FIXED CSS)
 # ==============================================================================
 orange_grad = "linear-gradient(135deg, #FF8C00 0%, #FF4500 100%)"
-red_grad = "linear-gradient(135deg, #DC3545 0%, #C82333 100%)" # Red for Stop
+red_grad = "linear-gradient(135deg, #DC3545 0%, #C82333 100%)"
 
 st.markdown(f"""
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -46,10 +46,9 @@ st.markdown(f"""
     .centered-logo {{ text-align: center; padding: 20px 0 40px 0; }}
     .logo-img {{ width: 280px; filter: drop-shadow(0 0 15px rgba(255,140,0,0.3)); }}
 
-    /* 🔥 RESTORED INPUT SPACING (Removed Zero Gap Global Rule) */
-    /* Only apply Zero Gap to the Button Row specifically */
+    /* 🔥 Apply spacing logic ONLY to the button row */
     div[data-testid="stHorizontalBlock"]:has(button) {{
-        gap: 5px !important; /* Small gap between buttons as requested */
+        gap: 5px !important;
     }}
     
     .stButton > button {{
@@ -61,7 +60,7 @@ st.markdown(f"""
         text-transform: uppercase;
         letter-spacing: 1px;
         transition: 0.3s all ease-in-out;
-        border-radius: 8px !important; /* Slight rounding for better look */
+        border-radius: 8px !important;
         color: white !important;
     }}
     
@@ -85,14 +84,14 @@ st.markdown(f"""
         box-shadow: 0 4px 15px rgba(220,53,69,0.3) !important;
     }}
 
-    /* Disabled State - Dimmed */
+    /* Disabled State */
     .stButton > button:disabled {{
         opacity: 0.4 !important;
         cursor: not-allowed;
         filter: grayscale(0.8);
     }}
 
-    /* 🔥 PROGRESS BAR (YOUR FAVORITE DESIGN) */
+    /* 🔥 PROGRESS BAR */
     .prog-container {{ width: 100%; background: #1c212d; border-radius: 50px; padding: 4px; border: 1px solid #31333f; margin: 30px 0; }}
     .prog-bar-fill {{ 
         height: 16px; 
@@ -206,7 +205,7 @@ if os.path.exists("chatscrape.png"):
     st.markdown(f'<div class="centered-logo"><img src="data:image/png;base64,{b64}" class="logo-img"></div>', unsafe_allow_html=True)
 
 # ==============================================================================
-# 7. INPUTS (SPACED) & 4-BUTTON ROW
+# 7. INPUTS & 4-BUTTON ROW
 # ==============================================================================
 with st.container():
     # Regular columns for inputs (Streamlit default spacing restored)
@@ -227,7 +226,7 @@ with st.container():
     st.write("")
     
     # 🔥 4 BUTTONS (CLOSELY SPACED)
-    b_start, b_pause, b_cont, b_stop = st.columns([1.2, 1, 1, 1.2]) # Balanced sizing
+    b_start, b_pause, b_cont, b_stop = st.columns([1.2, 1, 1, 1.2]) 
     
     with b_start:
         if st.button("Start Search", disabled=st.session_state.running):
@@ -330,7 +329,6 @@ with tab_live:
                         status_ui.warning("⏸️ Paused...")
                         break 
                     
-                    # Update Progress Real-time
                     st.session_state.progress = int(((i + 1) / total_ops) * 100)
                     prog_spot.markdown(f'<div class="prog-container"><div class="prog-bar-fill" style="width: {st.session_state.progress}%;"></div></div>', unsafe_allow_html=True)
                     status_ui.markdown(f"**Scanning:** `{kw}` in `{city}`... ({i+1}/{total_ops})")
@@ -416,4 +414,4 @@ with tab_archive:
                     st.write(df_l.drop(columns=['id', 'session_id']).to_html(escape=False, index=False), unsafe_allow_html=True)
                 else: st.warning("Empty results.")
 
-st.markdown('<div style="text-align:center;color:#666;padding:30px;">Designed by Chatir Elite Pro - Architect Edition V37</div>', unsafe_allow_html=True)
+st.markdown('<div style="text-align:center;color:#666;padding:30px;">Designed by Chatir Elite Pro - Architect Edition V38</div>', unsafe_allow_html=True)
