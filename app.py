@@ -28,7 +28,7 @@ if 'status_msg' not in st.session_state: st.session_state.status_msg = "READY"
 if 'current_sid' not in st.session_state: st.session_state.current_sid = None
 
 # ==============================================================================
-# 2. DESIGN SYSTEM (70/30 PRECISION FIX)
+# 2. DESIGN SYSTEM (STRICT ORANGE SUPREME - NO LEAKS)
 # ==============================================================================
 orange_grad = "linear-gradient(135deg, #FF8C00 0%, #FF4500 100%)"
 
@@ -92,7 +92,9 @@ st.markdown(f"""
     @keyframes stripes {{ 0% {{background-position: 0 0;}} 100% {{background-position: 48px 48px;}} }}
 
     [data-testid="stMetricValue"] {{ color: #FF8C00 !important; font-weight: 800; }}
-    section[data-testid="stSidebar"] {{ background-color: #161922 !important; }}
+    section[data-testid="stSidebar"] {{ background-color: #161922 !important; border-right: 1px solid #31333F; }}
+    
+    .wa-link {{ color: #25D366 !important; text-decoration: none !important; font-weight: bold; }}
     </style>
 """, unsafe_allow_html=True)
 
@@ -138,39 +140,39 @@ if st.session_state.get("authentication_status") is not True:
         st.warning("🔒 Restricted Access"); st.stop()
 
 # ==============================================================================
-# 5. SIDEBAR & ADMIN PANEL (EDITED FOR ACTIVATION)
+# 5. SIDEBAR & ADMIN PANEL (ACTIVATED)
 # ==============================================================================
 with st.sidebar:
-    st.title("Profile Settings")
+    st.title("User Profile")
     me = st.session_state["username"]
     bal, sts = get_user_data(me)
-    if sts == 'suspended' and me != 'admin': st.error("Account Suspended"); st.stop()
+    if sts == 'suspended' and me != 'admin': st.error("🚫 ACCOUNT SUSPENDED"); st.stop()
     st.metric("Elite Balance", "💎 Unlimited" if me == 'admin' else f"💎 {bal}")
     
     if me == 'admin':
-        with st.expander("🛠️ Admin Panel"):
+        with st.expander("🛠️ ADMIN PANEL", expanded=True):
             conn = sqlite3.connect(DB_NAME)
             u_df = pd.read_sql("SELECT * FROM user_credits", conn)
             st.dataframe(u_df, hide_index=True)
-            target = st.selectbox("Manage User", u_df['username'])
-            col_admin_a, col_admin_b, col_admin_c = st.columns(3)
+            target = st.selectbox("Select Target User", u_df['username'])
+            col_a, col_b, col_c = st.columns(3)
             
-            if col_admin_a.button("💰 +100"): 
+            if col_a.button("💰 +100"): 
                 sqlite3.connect(DB_NAME).execute("UPDATE user_credits SET balance = balance + 100 WHERE username=?", (target,))
                 conn.commit(); st.rerun()
-            if col_admin_b.button("🚫 Status"):
-                current_s = sqlite3.connect(DB_NAME).execute("SELECT status FROM user_credits WHERE username=?", (target,)).fetchone()[0]
-                new_s = 'suspended' if current_s == 'active' else 'active'
+            if col_b.button("🚫 Status"):
+                curr_s = sqlite3.connect(DB_NAME).execute("SELECT status FROM user_credits WHERE username=?", (target,)).fetchone()[0]
+                new_s = 'suspended' if curr_s == 'active' else 'active'
                 sqlite3.connect(DB_NAME).execute("UPDATE user_credits SET status=? WHERE username=?", (new_s, target))
                 conn.commit(); st.rerun()
-            if col_admin_c.button("🗑️ Del"):
+            if col_c.button("🗑️ Del"):
                 sqlite3.connect(DB_NAME).execute("DELETE FROM user_credits WHERE username=?", (target,))
                 conn.commit(); st.rerun()
             
             st.divider()
             st.write("Add New User:")
-            nu = st.text_input("New UN", key="new_u")
-            np = st.text_input("New PW", type="password", key="new_p")
+            nu = st.text_input("New UN", key="sidebar_nu")
+            np = st.text_input("New PW", type="password", key="sidebar_np")
             if st.button("Create Account"):
                 if nu and np:
                     try: hp = stauth.Hasher.hash(np)
@@ -209,8 +211,8 @@ with st.container():
 
     st.write("")
     # 🔥 THE TRULY ATTACHED 70/30 BAR
-    btn_container = st.columns([7, 3])
-    with btn_container[0]:
+    btn_col1, btn_col2 = st.columns([7, 3])
+    with btn_col1:
         if st.button("Start Extraction", type="primary"):
             if kw_in and city_in:
                 st.session_state.running = True
@@ -222,7 +224,7 @@ with st.container():
                     st.session_state.current_sid = cur.lastrowid
                     conn.commit()
                 st.rerun()
-    with btn_container[1]:
+    with btn_col2:
         if st.button("Stop Engine", type="secondary"):
             st.session_state.running = False; st.rerun()
 
@@ -322,7 +324,7 @@ with tab_live:
 # ==============================================================================
 with tab_archive:
     st.subheader("Persistent History")
-    search_f = st.text_input("Filter History", placeholder="🔍 Search e.g. 'lawyer' or 'tiznit'...")
+    search_f = st.text_input("Filter History", placeholder="🔍 Search History...")
     
     with sqlite3.connect(DB_NAME) as conn:
         df_s = pd.read_sql("SELECT * FROM sessions WHERE query LIKE ? ORDER BY id DESC LIMIT 30", conn, params=(f"%{search_f}%",))
@@ -336,4 +338,4 @@ with tab_archive:
                     st.write(df_l.drop(columns=['id', 'session_id']).to_html(escape=False, index=False), unsafe_allow_html=True)
                 else: st.warning("Empty results.")
 
-st.markdown('<div style="text-align:center;color:#666;padding:30px;">Designed by Chatir Elite Pro - Architect Edition</div>', unsafe_allow_html=True)
+st.markdown('<div style="text-align:center;color:#666;padding:30px;">Designed by Chatir Elite Pro - Architect Supreme V31</div>', unsafe_allow_html=True)
