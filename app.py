@@ -6,8 +6,7 @@ import re
 import os
 import base64
 import yaml
-import gspread
-from google.oauth2.service_account import Credentials
+import shutil
 import streamlit_authenticator as stauth
 from yaml.loader import SafeLoader
 from selenium import webdriver
@@ -19,7 +18,7 @@ from webdriver_manager.chrome import ChromeDriverManager
 from urllib.parse import quote
 
 # ==============================================================================
-# 1. SYSTEM SETUP
+# 1. SYSTEM CONFIGURATION
 # ==============================================================================
 st.set_page_config(page_title="ChatScrap Elite Beast", layout="wide", page_icon="🕷️")
 
@@ -29,7 +28,7 @@ if 'progress_val' not in st.session_state: st.session_state.progress_val = 0
 if 'status_txt' not in st.session_state: st.session_state.status_txt = "SYSTEM READY"
 
 # ==============================================================================
-# 2. SECURITY
+# 2. SECURITY & AUTH
 # ==============================================================================
 try:
     with open('config.yaml') as file:
@@ -49,9 +48,9 @@ if st.session_state["authentication_status"] is not True:
     st.warning("🔒 Please Login"); st.stop()
 
 # ==============================================================================
-# 3. DATABASE (SMART MIGRATION FIX)
+# 3. DATABASE (RESTORED & MIGRATED)
 # ==============================================================================
-DB_NAME = "scraper_pro_final.db" # نفس الداتابيز القديمة
+DB_NAME = "scraper_pro_final.db"
 
 def run_query(query, params=(), is_select=False):
     try:
@@ -64,19 +63,17 @@ def run_query(query, params=(), is_select=False):
     except: return [] if is_select else False
 
 def init_db():
-    # 1. Create Tables Basic Structure
-    run_query('''CREATE TABLE IF NOT EXISTS leads (id INTEGER PRIMARY KEY AUTOINCREMENT, session_id INTEGER, keyword TEXT, city TEXT, name TEXT, phone TEXT, website TEXT, email TEXT, address TEXT, whatsapp TEXT)''')
+    run_query('''CREATE TABLE IF NOT EXISTS leads (id INTEGER PRIMARY KEY AUTOINCREMENT, session_id INTEGER, keyword TEXT, city TEXT, country TEXT, name TEXT, phone TEXT, website TEXT, email TEXT, address TEXT, whatsapp TEXT)''')
     run_query('''CREATE TABLE IF NOT EXISTS user_credits (username TEXT PRIMARY KEY, balance INTEGER, status TEXT DEFAULT 'active')''')
     run_query('''CREATE TABLE IF NOT EXISTS sessions (id INTEGER PRIMARY KEY AUTOINCREMENT, query TEXT, date TEXT)''')
     
-    # 2. 🔥 SMART FIX: Add 'country' column if missing (Migration)
+    # Auto-migration for 'country' column
     try:
         with sqlite3.connect(DB_NAME) as conn:
             cursor = conn.cursor()
-            # Check if column exists
             cursor.execute("PRAGMA table_info(leads)")
-            columns = [info[1] for info in cursor.fetchall()]
-            if 'country' not in columns:
+            cols = [i[1] for i in cursor.fetchall()]
+            if 'country' not in cols:
                 cursor.execute("ALTER TABLE leads ADD COLUMN country TEXT")
                 conn.commit()
     except: pass
@@ -102,31 +99,33 @@ def manage_user(action, username, amount=0):
         new_s = 'suspended' if curr == 'active' else 'active'
         run_query("UPDATE user_credits SET status=? WHERE username=?", (new_s, username))
 
-def sync_to_gsheet(df, url):
-    if "gcp_service_account" not in st.secrets: return False
-    try:
-        scope = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
-        creds = Credentials.from_service_account_info(st.secrets["gcp_service_account"], scopes=scope)
-        client = gspread.authorize(creds)
-        sh = client.open_by_url(url)
-        ws = sh.get_worksheet(0)
-        ws.clear()
-        ws.update([df.columns.values.tolist()] + df.fillna("").values.tolist())
-        return True
-    except: return False
-
 # ==============================================================================
-# 4. ENGINE
+# 4. BEAST ENGINE (SERVER-SAFE FIX)
 # ==============================================================================
 def get_driver():
     opts = Options()
     opts.add_argument("--headless=new")
     opts.add_argument("--no-sandbox")
     opts.add_argument("--disable-dev-shm-usage")
+    opts.add_argument("--disable-gpu")
     opts.add_argument("--window-size=1920,1080")
     opts.add_argument("--lang=en-US")
-    opts.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
-    return webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=opts)
+    
+    # 🔥 CRITICAL FIX FOR STREAMLIT CLOUD
+    # Try to find chromium installed via packages.txt
+    chromium_path = shutil.which("chromium")
+    if chromium_path:
+        opts.binary_location = chromium_path
+        
+    try:
+        return webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=opts)
+    except Exception as e:
+        # Fallback if driver manager fails
+        try:
+            return webdriver.Chrome(options=opts)
+        except:
+            st.error("❌ Critical: Browser not found. Please create 'packages.txt' with 'chromium' inside.")
+            return None
 
 def fetch_email_deep(driver, url):
     if not url or "google.com" in url or url == "N/A": return "N/A"
@@ -168,7 +167,7 @@ st.markdown(f"""
     </style>
 """, unsafe_allow_html=True)
 
-# --- APP ---
+# --- APP LOGIC ---
 current_user = st.session_state["username"]
 user_bal, user_st = get_user_data(current_user)
 is_admin = current_user == "admin"
@@ -207,7 +206,7 @@ with st.sidebar:
     st.divider()
     if st.button("Logout"): authenticator.logout('Logout', 'main'); st.session_state.clear(); st.rerun()
 
-# --- HEADER ---
+# --- HEADER (SAFE IMAGE) ---
 cm = st.columns([1, 6, 1])[1]
 with cm:
     if os.path.exists("chatscrape.png"):
@@ -244,7 +243,7 @@ with st.container():
         w_web = f[1].checkbox("Must Have Website", False)
         w_email = f[2].checkbox("Extract Email", False)
         w_nosite = f[3].checkbox("No Website Only", False)
-        scroll_depth = st.number_input("Scroll Depth", 1, 500, 10, key="scr_d")
+        scroll_depth = st.number_input("Scroll Depth", 1, 500, 10)
 
     with cb:
         st.write("")
@@ -274,84 +273,83 @@ with t1:
         total_ops = len(kws) * len(cts)
         curr_op = 0
         
-        # Log Session
         run_query("INSERT INTO sessions (query, date) VALUES (?, ?)", (f"{kw_in} | {city_in} | {country_in}", time.strftime("%Y-%m-%d %H:%M")))
         try: s_id = run_query("SELECT id FROM sessions ORDER BY id DESC LIMIT 1", is_select=True)[0][0]
         except: s_id = 1
 
         driver = get_driver()
-        try:
-            for city in cts:
-                for kw in kws:
-                    if not st.session_state.running: break
-                    curr_op += 1
-                    update_ui(int(((curr_op-1)/total_ops)*100), f"SCANNING: {kw} in {city}, {country_in}")
+        if driver:
+            try:
+                for city in cts:
+                    for kw in kws:
+                        if not st.session_state.running: break
+                        curr_op += 1
+                        update_ui(int(((curr_op-1)/total_ops)*100), f"SCANNING: {kw} in {city}, {country_in}")
 
-                    gl_map = {"Morocco": "ma", "France": "fr", "USA": "us", "Spain": "es", "Germany": "de", "UAE": "ae"}
-                    gl_code = gl_map.get(country_in, "ma")
-                    
-                    url = f"https://www.google.com/maps/search/{quote(kw)}+in+{quote(city)}+{quote(country_in)}?hl=en&gl={gl_code}"
-                    
-                    driver.get(url); time.sleep(5)
-                    try: driver.find_element(By.XPATH, "//button[contains(., 'Accept all')]").click(); time.sleep(2)
-                    except: pass
-
-                    try:
-                        feed = driver.find_element(By.CSS_SELECTOR, 'div[role="feed"]')
-                        for _ in range(scroll_depth):
-                            if not st.session_state.running: break
-                            driver.execute_script("arguments[0].scrollTop = arguments[0].scrollHeight", feed)
-                            time.sleep(1.5)
-                    except: pass
-                    
-                    elements = driver.find_elements(By.XPATH, '//a[contains(@href, "/maps/place/")]')
-                    seen = set(); unique = []
-                    for e in elements:
-                        h = e.get_attribute("href")
-                        if h and h not in seen: seen.add(h); unique.append(e)
-                    
-                    valid_cnt = 0
-                    for el in unique:
-                        if not st.session_state.running or valid_cnt >= limit_in: break
-                        if not is_admin and get_user_data(current_user)[0] <= 0: break
+                        gl_map = {"Morocco": "ma", "France": "fr", "USA": "us", "Spain": "es", "Germany": "de", "UAE": "ae"}
+                        gl_code = gl_map.get(country_in, "ma")
                         
+                        url = f"https://www.google.com/maps/search/{quote(kw)}+in+{quote(city)}+{quote(country_in)}?hl=en&gl={gl_code}"
+                        
+                        driver.get(url); time.sleep(5)
+                        try: driver.find_element(By.XPATH, "//button[contains(., 'Accept all')]").click(); time.sleep(2)
+                        except: pass
+
                         try:
-                            driver.execute_script("arguments[0].click();", el); time.sleep(1.5)
-                            name = "N/A"; phone = "N/A"; web = "N/A"; addr = "N/A"
-                            try: name = driver.find_element(By.CSS_SELECTOR, "h1.DUwDvf").text
-                            except: pass
-                            try: addr = driver.find_element(By.CSS_SELECTOR, 'div.Io6YTe.fontBodyMedium').text
-                            except: pass
-                            try: phone = driver.find_element(By.XPATH, '//*[contains(@data-item-id, "phone:tel")]').get_attribute("aria-label").replace("Phone:", "").strip()
-                            except: pass
-                            try: web = driver.find_element(By.CSS_SELECTOR, 'a[data-item-id="authority"]').get_attribute("href")
-                            except: pass
-
-                            wa_link = None
-                            wa_num = re.sub(r'[^\d]', '', phone)
-                            is_fixe = wa_num.startswith('2125') or (wa_num.startswith('05') and len(wa_num) <= 10)
-                            if (wa_num.startswith('2126') or wa_num.startswith('2127') or wa_num.startswith('06') or wa_num.startswith('07')) and not is_fixe:
-                                wa_link = f"https://wa.me/{wa_num}"
-
-                            if w_phone and (phone == "N/A" or phone == ""): continue
-                            if w_web and (web == "N/A" or web == ""): continue
-                            if w_nosite and web != "N/A": continue
+                            feed = driver.find_element(By.CSS_SELECTOR, 'div[role="feed"]')
+                            for _ in range(scroll_depth):
+                                if not st.session_state.running: break
+                                driver.execute_script("arguments[0].scrollTop = arguments[0].scrollHeight", feed)
+                                time.sleep(1.5)
+                        except: pass
+                        
+                        elements = driver.find_elements(By.XPATH, '//a[contains(@href, "/maps/place/")]')
+                        seen = set(); unique = []
+                        for e in elements:
+                            h = e.get_attribute("href")
+                            if h and h not in seen: seen.add(h); unique.append(e)
+                        
+                        valid_cnt = 0
+                        for el in unique:
+                            if not st.session_state.running or valid_cnt >= limit_in: break
+                            if not is_admin and get_user_data(current_user)[0] <= 0: break
                             
-                            email = "N/A"
-                            if w_email and web != "N/A": email = fetch_email_deep(driver, web)
+                            try:
+                                driver.execute_script("arguments[0].click();", el); time.sleep(1.5)
+                                name = "N/A"; phone = "N/A"; web = "N/A"; addr = "N/A"
+                                try: name = driver.find_element(By.CSS_SELECTOR, "h1.DUwDvf").text
+                                except: pass
+                                try: addr = driver.find_element(By.CSS_SELECTOR, 'div.Io6YTe.fontBodyMedium').text
+                                except: pass
+                                try: phone = driver.find_element(By.XPATH, '//*[contains(@data-item-id, "phone:tel")]').get_attribute("aria-label").replace("Phone:", "").strip()
+                                except: pass
+                                try: web = driver.find_element(By.CSS_SELECTOR, 'a[data-item-id="authority"]').get_attribute("href")
+                                except: pass
 
-                            row = {"Keyword": kw, "City": city, "Country": country_in, "Name": name, "Phone": phone, "WhatsApp": wa_link, "Website": web, "Email": email, "Address": addr}
-                            all_res.append(row); valid_cnt += 1
-                            
-                            if not is_admin: deduct_credit(current_user)
-                            st.session_state.results_df = pd.DataFrame(all_res)
-                            spot.dataframe(st.session_state.results_df[cols], use_container_width=True, column_config={"WhatsApp": st.column_config.LinkColumn("WhatsApp", display_text="🟢 Chat Now")})
-                            
-                            # 🔥 FIX: INSERT includes 'country' (The missing piece)
-                            run_query("INSERT INTO leads (session_id, keyword, city, country, name, phone, website, email, address, whatsapp) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", (s_id, kw, city, country_in, name, phone, web, email, addr, wa_link))
-                        except: continue
-            update_ui(100, "COMPLETED ✅")
-        finally: driver.quit(); st.session_state.running = False; st.rerun()
+                                # WhatsApp Logic
+                                wa_link = None
+                                wa_num = re.sub(r'[^\d]', '', phone)
+                                is_fixe = wa_num.startswith('2125') or (wa_num.startswith('05') and len(wa_num) <= 10)
+                                if (wa_num.startswith('2126') or wa_num.startswith('2127') or wa_num.startswith('06') or wa_num.startswith('07')) and not is_fixe:
+                                    wa_link = f"https://wa.me/{wa_num}"
+
+                                if w_phone and (phone == "N/A" or phone == ""): continue
+                                if w_web and (web == "N/A" or web == ""): continue
+                                if w_nosite and web != "N/A": continue
+                                
+                                email = "N/A"
+                                if w_email and web != "N/A": email = fetch_email_deep(driver, web)
+
+                                row = {"Keyword": kw, "City": city, "Country": country_in, "Name": name, "Phone": phone, "WhatsApp": wa_link, "Website": web, "Email": email, "Address": addr}
+                                all_res.append(row); valid_cnt += 1
+                                
+                                if not is_admin: deduct_credit(current_user)
+                                st.session_state.results_df = pd.DataFrame(all_res)
+                                spot.dataframe(st.session_state.results_df[cols], use_container_width=True, column_config={"WhatsApp": st.column_config.LinkColumn("WhatsApp", display_text="🟢 Chat Now")})
+                                run_query("INSERT INTO leads (session_id, keyword, city, country, name, phone, website, email, address, whatsapp) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", (s_id, kw, city, country_in, name, phone, web, email, addr, wa_link))
+                            except: continue
+                update_ui(100, "COMPLETED ✅")
+            finally: driver.quit(); st.session_state.running = False; st.rerun()
 
 with t2:
     st.subheader("📜 Archives")
@@ -360,7 +358,6 @@ with t2:
         if hist:
             for s in hist:
                 with st.expander(f"📦 {s[2]} | {s[1]}"):
-                    # 🔥 FIX: SELECT includes 'country' to match table
                     d = run_query(f"SELECT keyword, city, country, name, phone, whatsapp, website, email FROM leads WHERE session_id={s[0]}", is_select=True)
                     if d:
                         df_h = pd.DataFrame(d, columns=["KW", "City", "Country", "Name", "Phone", "WA", "Web", "Email"])
@@ -372,4 +369,4 @@ with t3:
     if st.button("Generate Script"):
         st.code(f"Hi! Found your business in {city_in}...")
 
-st.markdown('<div style="text-align:center;color:#666;padding:20px;">Designed by Chatir ❤ | Elite Final Fixed</div>', unsafe_allow_html=True)
+st.markdown('<div style="text-align:center;color:#666;padding:20px;">Designed by Chatir ❤ | Elite Final Beast</div>', unsafe_allow_html=True)
