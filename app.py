@@ -17,24 +17,24 @@ from webdriver_manager.chrome import ChromeDriverManager
 from urllib.parse import quote
 
 # ==============================================================================
-# 1. إعدادات النظام (SYSTEM SETUP)
+# 1. SYSTEM SETUP & STATE
 # ==============================================================================
-st.set_page_config(page_title="ChatScrap Final Beast", layout="wide", page_icon="🕷️")
+st.set_page_config(page_title="ChatScrap The Beast (ENG)", layout="wide", page_icon="🕷️")
 
-# تهيئة المتغيرات
+# Initialize Session State
 if 'results_df' not in st.session_state: st.session_state.results_df = None
 if 'running' not in st.session_state: st.session_state.running = False
 if 'progress_val' not in st.session_state: st.session_state.progress_val = 0
 if 'status_txt' not in st.session_state: st.session_state.status_txt = "SYSTEM READY"
 
 # ==============================================================================
-# 2. الأمان والمصادقة (SECURITY)
+# 2. SECURITY & AUTHENTICATION
 # ==============================================================================
 try:
     with open('config.yaml') as file:
         config = yaml.load(file, Loader=SafeLoader)
 except:
-    st.error("❌ ملف config.yaml مفقود!"); st.stop()
+    st.error("❌ Critical: 'config.yaml' file is missing!"); st.stop()
 
 authenticator = stauth.Authenticate(
     config['credentials'], config['cookie']['name'], config['cookie']['key'], config['cookie']['expiry_days']
@@ -45,29 +45,28 @@ if st.session_state.get("authentication_status") is not True:
     except: pass
 
 if st.session_state["authentication_status"] is not True:
-    st.warning("🔒 المرجو تسجيل الدخول"); st.stop()
+    st.warning("🔒 Please Login to continue"); st.stop()
 
 # ==============================================================================
-# 3. قاعدة البيانات الآمنة (ROBUST DATABASE)
+# 3. ROBUST DATABASE ENGINE
 # ==============================================================================
-DB_NAME = "scraper_final_v3.db" # داتابيز جديدة باش نضمنو النقاء
+# New DB file to prevent conflicts
+DB_NAME = "scraper_beast_english.db"
 
 def run_query(query, params=(), is_select=False):
-    """تنفيذ الاستعلامات مع حماية من الأخطاء"""
+    """Safe DB Execution with Commit"""
     try:
-        # check_same_thread=False كيحل مشكل البلوكاج فـ Streamlit
         with sqlite3.connect(DB_NAME, check_same_thread=False) as conn:
             curr = conn.cursor()
             curr.execute(query, params)
             if is_select:
                 return curr.fetchall()
-            conn.commit() # 🔥 الحفظ الإجباري
+            conn.commit()
             return True
     except Exception as e:
         return [] if is_select else False
 
 def init_db():
-    """إنشاء الجداول فقط إذا لم تكن موجودة"""
     run_query('''CREATE TABLE IF NOT EXISTS leads (id INTEGER PRIMARY KEY AUTOINCREMENT, session_id INTEGER, keyword TEXT, city TEXT, country TEXT, name TEXT, phone TEXT, website TEXT, email TEXT, address TEXT, whatsapp TEXT)''')
     run_query('''CREATE TABLE IF NOT EXISTS user_credits (username TEXT PRIMARY KEY, balance INTEGER, status TEXT DEFAULT 'active')''')
     run_query('''CREATE TABLE IF NOT EXISTS sessions (id INTEGER PRIMARY KEY AUTOINCREMENT, query TEXT, date TEXT)''')
@@ -77,7 +76,6 @@ init_db()
 def get_user_data(username):
     res = run_query("SELECT balance, status FROM user_credits WHERE username=?", (username,), is_select=True)
     if res: return res[0]
-    # إنشاء المستخدم لأول مرة بـ 100 نقطة
     run_query("INSERT INTO user_credits VALUES (?, 100, 'active')", (username,))
     return (100, 'active')
 
@@ -85,11 +83,11 @@ def deduct_credit(username):
     if username != "admin": run_query("UPDATE user_credits SET balance = balance - 1 WHERE username=?", (username,))
 
 def manage_user(action, username, amount=0):
-    if action == "add_credits":
+    if action == "add":
         run_query("UPDATE user_credits SET balance = balance + ? WHERE username=?", (amount, username))
     elif action == "delete":
         run_query("DELETE FROM user_credits WHERE username=?", (username,))
-    elif action == "toggle_status":
+    elif action == "toggle":
         curr = run_query("SELECT status FROM user_credits WHERE username=?", (username,), True)[0][0]
         new_s = 'suspended' if curr == 'active' else 'active'
         run_query("UPDATE user_credits SET status=? WHERE username=?", (new_s, username))
@@ -108,7 +106,7 @@ def sync_to_gsheet(df, url):
     except: return False
 
 # ==============================================================================
-# 4. محرك البحث (ENGINE CORE)
+# 4. BEAST SCRAPER ENGINE (Anti-Detect + Geo Logic)
 # ==============================================================================
 def get_driver():
     opts = Options()
@@ -116,11 +114,9 @@ def get_driver():
     opts.add_argument("--no-sandbox")
     opts.add_argument("--disable-dev-shm-usage")
     opts.add_argument("--window-size=1920,1080")
-    opts.add_argument("--lang=en-US")
-    # User Agent قوي
+    opts.add_argument("--lang=en-US") # Force English
     opts.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
-    try: return webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=opts)
-    except: return webdriver.Chrome(options=opts)
+    return webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=opts)
 
 def fetch_email_deep(driver, url):
     if not url or "google.com" in url or url == "N/A": return "N/A"
@@ -136,7 +132,7 @@ def fetch_email_deep(driver, url):
     except: return "N/A"
 
 # ==============================================================================
-# 5. الواجهة (UI)
+# 5. UI STYLING (Professional English Design)
 # ==============================================================================
 orange_c = "#FF8C00"
 st.markdown(f"""
@@ -144,6 +140,7 @@ st.markdown(f"""
     @import url('https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;600;800&display=swap');
     html, body, .stApp {{ font-family: 'Open Sans', sans-serif !important; background-color: #0f111a; }}
     .stApp p, .stApp label, h1, h2, h3, div, span {{ color: #FFFFFF !important; }}
+    
     .mobile-popup {{
         display: none; position: fixed; top: 10px; left: 5%; width: 90%;
         background: rgba(20, 20, 30, 0.95); border: 2px solid {orange_c};
@@ -151,6 +148,7 @@ st.markdown(f"""
         z-index: 999999; box-shadow: 0 10px 40px rgba(0,0,0,0.4);
     }}
     @media (max-width: 768px) {{ .mobile-popup {{ display: block; }} }}
+    
     .logo-img {{ width: 280px; filter: drop-shadow(0 0 15px rgba(255,140,0,0.5)) saturate(180%); margin-bottom: 25px; }}
     .prog-box {{ width: 100%; background: rgba(255, 140, 0, 0.1); border-radius: 50px; padding: 4px; border: 1px solid {orange_c}; }}
     .prog-fill {{ 
@@ -158,52 +156,53 @@ st.markdown(f"""
         border-radius: 20px; transition: width 0.4s ease; animation: stripes 1s linear infinite; 
     }}
     @keyframes stripes {{ 0% {{background-position: 0 0;}} 100% {{background-position: 50px 50px;}} }}
+    
     div.stButton > button[kind="primary"] {{ background: linear-gradient(135deg, {orange_c} 0%, #FF4500 100%) !important; border: none; font-weight: 800; }}
     </style>
 """, unsafe_allow_html=True)
 
-# --- التطبيق ---
+# --- APP LOGIC ---
 current_user = st.session_state["username"]
 user_bal, user_st = get_user_data(current_user)
 is_admin = current_user == "admin"
 
-if user_st == 'suspended' and not is_admin: st.error("🚫 الحساب معلق"); st.stop()
+if user_st == 'suspended' and not is_admin: st.error("🚫 ACCOUNT SUSPENDED"); st.stop()
 
-# القائمة الجانبية
+# --- SIDEBAR ---
 with st.sidebar:
-    st.title("👤 الملف الشخصي")
-    st.write(f"Logged: **{st.session_state['name']}**")
-    if is_admin: st.success("💎 الرصيد: Unlimited")
-    else: st.warning(f"💎 الرصيد: {user_bal}")
+    st.title("👤 Profile")
+    st.write(f"Logged as: **{st.session_state['name']}**")
+    if is_admin: st.success("💎 Credits: Unlimited")
+    else: st.warning(f"💎 Credits: {user_bal}")
     
-    # 🔥 ADMIN PANEL (FIXED)
     if is_admin:
         with st.expander("🛠️ ADMIN PANEL"):
             users = run_query("SELECT username, balance, status FROM user_credits", is_select=True)
             df_u = pd.DataFrame(users, columns=["User", "Bal", "Sts"])
             st.dataframe(df_u, hide_index=True)
             
-            target = st.selectbox("Target", [u[0] for u in users if u[0]!='admin'])
+            target = st.selectbox("Select User", [u[0] for u in users if u[0]!='admin'])
             c1, c2, c3 = st.columns(3)
-            if c1.button("💰 +100"): manage_user("add_credits", target, 100); st.rerun()
-            if c2.button("🚫 Status"): manage_user("toggle_status", target); st.rerun()
-            if c3.button("🗑️ Del"): manage_user("delete", target); st.rerun()
+            if c1.button("💰 +100"): manage_user("add", target, 100); st.success("Added!"); time.sleep(0.5); st.rerun()
+            if c2.button("🚫 Status"): manage_user("toggle", target); st.success("Changed!"); time.sleep(0.5); st.rerun()
+            if c3.button("🗑️ Del"): manage_user("delete", target); st.warning("Deleted!"); time.sleep(0.5); st.rerun()
             
             st.divider()
-            nu = st.text_input("User")
+            nu = st.text_input("New User")
             np = st.text_input("Pass", type="password")
-            if st.button("Add"):
+            if st.button("Create User"):
                 try: hp = stauth.Hasher.hash(np)
                 except: hp = stauth.Hasher([np]).generate()[0]
                 config['credentials']['usernames'][nu] = {'name': nu, 'password': hp, 'email': 'x'}
                 with open('config.yaml', 'w') as f: yaml.dump(config, f)
                 run_query("INSERT INTO user_credits VALUES (?, 100, 'active')", (nu,))
-                st.success("OK"); time.sleep(0.5); st.rerun()
+                st.success("User Created!"); time.sleep(0.5); st.rerun()
 
     st.divider()
-    if st.button("تسجيل الخروج"): authenticator.logout('Logout', 'main'); st.session_state.clear(); st.rerun()
+    if st.button("Logout", type="secondary"):
+        authenticator.logout('Logout', 'main'); st.session_state.clear(); st.rerun()
 
-# الهيدر
+# --- HEADER & PROGRESS ---
 cm = st.columns([1, 6, 1])[1]
 with cm:
     if os.path.exists("chatscrape.png"):
@@ -221,14 +220,15 @@ def update_ui(prog, txt):
 
 if not st.session_state.running: update_ui(0, "SYSTEM READY")
 
-# المدخلات
+# --- INPUTS ---
 with st.container():
     c1, c2, c3, c4 = st.columns([3, 3, 1.5, 1.5])
-    kw_in = c1.text_input("🔍 Keywords", placeholder="cafe, snack")
-    city_in = c2.text_input("🌍 Cities", placeholder="Tikiwin, Temsia")
-    # 🔥 COUNTRY SELECTOR ADDED
-    country_in = c3.selectbox("🏳️ Country", ["Morocco", "France", "USA", "Spain", "Germany"])
-    limit_in = c4.number_input("Limit", 1, 5000, 20)
+    kw_in = c1.text_input("🔍 Keywords (Multi)", placeholder="cafe, restaurant")
+    city_in = c2.text_input("🌍 Cities (Multi)", placeholder="Agadir, Casablanca")
+    
+    # 🔥 COUNTRY SELECTION (CRITICAL FIX)
+    country_in = c3.selectbox("🏳️ Country", ["Morocco", "France", "USA", "Spain", "Germany", "UK", "UAE"])
+    limit_in = c4.number_input("Target/City", 1, 5000, 20)
 
     st.divider()
     co, cb = st.columns([5, 3])
@@ -237,7 +237,7 @@ with st.container():
         f = st.columns(4)
         w_phone = f[0].checkbox("Must Have Phone", True)
         w_web = f[1].checkbox("Must Have Website", False)
-        w_email = f[2].checkbox("Extract Email", False)
+        w_email = f[2].checkbox("Deep Email Scan", False)
         w_nosite = f[3].checkbox("No Website Only", False)
 
     with cb:
@@ -245,26 +245,29 @@ with st.container():
         b1, b2 = st.columns(2)
         if b1.button("START ENGINE", type="primary", use_container_width=True):
             if kw_in and city_in: st.session_state.running = True; st.session_state.results_df = None; st.rerun()
-        if b2.button("STOP", type="secondary", use_container_width=True): st.session_state.running = False; st.rerun()
+        if b2.button("STOP", type="secondary", use_container_width=True):
+            st.session_state.running = False; st.rerun()
 
-# التبويبات
-t1, t2 = st.tabs(["⚡ LIVE RESULTS", "📜 ARCHIVE"])
+# --- TABS ---
+t1, t2, t3 = st.tabs(["⚡ LIVE RESULTS", "📜 ARCHIVES", "🤖 MARKETING KIT"])
 
+# --- TAB 1: SCRAPER ---
 with t1:
     spot = st.empty()
-    # Dynamic Columns
+    # Dynamic Column Visibility
     cols_to_show = ["Keyword", "City", "Country", "Name", "Phone", "WhatsApp", "Address"]
     if w_web: cols_to_show.append("Website")
     if w_email: cols_to_show.append("Email")
 
     if st.session_state.results_df is not None:
         final_df = st.session_state.results_df[cols_to_show] if not st.session_state.results_df.empty else pd.DataFrame(columns=cols_to_show)
+        
         c_ex1, c_ex2 = st.columns([3, 1])
         gs_url = c_ex1.text_input("Google Sheet URL")
-        if c_ex2.button("Sync"):
-            if sync_to_gsheet(final_df, gs_url): st.success("Synced!")
+        if c_ex2.button("Sync Sheets"):
+            if sync_to_gsheet(final_df, gs_url): st.success("Synced Successfully!")
         
-        st.download_button("📥 CSV", final_df.to_csv(index=False).encode('utf-8-sig'), "leads.csv", use_container_width=True)
+        st.download_button("📥 Download CSV", final_df.to_csv(index=False).encode('utf-8-sig'), "leads.csv", use_container_width=True)
         spot.dataframe(final_df, use_container_width=True, column_config={"WhatsApp": st.column_config.LinkColumn("WhatsApp", display_text="🟢 Chat Now")})
 
     if st.session_state.running:
@@ -275,7 +278,7 @@ with t1:
         curr_op = 0
         
         # Log Session
-        run_query("INSERT INTO sessions (query, date) VALUES (?, ?)", (f"{kw_in} | {city_in} | {country_in}", time.strftime("%Y-%m-%d %H:%M")))
+        run_query("INSERT INTO sessions (query, date) VALUES (?, ?)", (f"{kw_in} in {city_in}, {country_in}", time.strftime("%Y-%m-%d %H:%M")))
         try: s_id = run_query("SELECT id FROM sessions ORDER BY id DESC LIMIT 1", is_select=True)[0][0]
         except: s_id = 1
 
@@ -298,7 +301,7 @@ with t1:
 
                     try:
                         feed = driver.find_element(By.CSS_SELECTOR, 'div[role="feed"]')
-                        for _ in range(10): # Fixed depth to ensure scroll
+                        for _ in range(10): # Scroll depth
                             if not st.session_state.running: break
                             driver.execute_script("arguments[0].scrollTop = arguments[0].scrollHeight", feed)
                             time.sleep(1.5)
@@ -313,7 +316,8 @@ with t1:
                     valid_cnt = 0
                     for el in unique:
                         if not st.session_state.running or valid_cnt >= limit_in: break
-                        if not is_admin and get_user_data(current_user)[0] <= 0: break
+                        if not is_admin and get_user_data(current_user)[0] <= 0: 
+                            st.error("No Credits!"); st.session_state.running = False; break
                         
                         try:
                             driver.execute_script("arguments[0].click();", el); time.sleep(1.5)
@@ -327,18 +331,18 @@ with t1:
                             try: web = driver.find_element(By.CSS_SELECTOR, 'a[data-item-id="authority"]').get_attribute("href")
                             except: pass
 
-                            # 🔥 FIX: 05 numbers & WhatsApp
+                            # 🔥 STRICT FILTER LOGIC
+                            if w_phone and (phone == "N/A" or phone == ""): continue
+                            if w_web and (web == "N/A" or web == ""): continue
+                            if w_nosite and web != "N/A": continue
+                            
+                            # 🔥 SMART WHATSAPP (Exclude 05/Fixe)
                             wa_link = None
                             wa_num = re.sub(r'[^\d]', '', phone)
                             is_fixe = wa_num.startswith('2125') or (wa_num.startswith('05') and len(wa_num) <= 10)
                             if (wa_num.startswith('2126') or wa_num.startswith('2127') or wa_num.startswith('06') or wa_num.startswith('07')) and not is_fixe:
                                 wa_link = f"https://wa.me/{wa_num}"
 
-                            # 🔥 STRICT FILTERS
-                            if w_phone and (phone == "N/A" or phone == ""): continue
-                            if w_web and (web == "N/A" or web == ""): continue
-                            if w_nosite and web != "N/A": continue
-                            
                             email = "N/A"
                             if w_email and web != "N/A": email = fetch_email_deep(driver, web)
 
@@ -348,26 +352,36 @@ with t1:
                             if not is_admin: deduct_credit(current_user)
                             st.session_state.results_df = pd.DataFrame(all_res)
                             
-                            # Live Update with Dynamic Columns
+                            # Update Table Live
                             spot.dataframe(st.session_state.results_df[cols_to_show], use_container_width=True, column_config={"WhatsApp": st.column_config.LinkColumn("WhatsApp", display_text="🟢 Chat Now")})
                             
-                            # 🔥 FIXED ARCHIVE INSERT
-                            run_query("INSERT INTO leads (session_id, keyword, city, country, name, phone, website, email, address, whatsapp) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", (s_id, kw, f"{city}", country_in, name, phone, web, email, addr, wa_link))
+                            # Save to Archive
+                            run_query("INSERT INTO leads (session_id, keyword, city, country, name, phone, website, email, address, whatsapp) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", (s_id, kw, city, country_in, name, phone, web, email, addr, wa_link))
                             
                         except: continue
             update_ui(100, "COMPLETED ✅")
         finally: driver.quit(); st.session_state.running = False; st.rerun()
 
+# --- TAB 2: ARCHIVES ---
 with t2:
-    st.subheader("📜 Archives")
+    st.subheader("📜 Search Archives")
     try:
         hist = run_query("SELECT * FROM sessions ORDER BY id DESC LIMIT 20", is_select=True)
-        for s in hist:
-            with st.expander(f"📦 {s[2]} | {s[1]}"):
-                d = run_query(f"SELECT keyword, city, country, name, phone, whatsapp, website, email FROM leads WHERE session_id={s[0]}", is_select=True)
-                if d:
-                    df_h = pd.DataFrame(d, columns=["KW", "City", "Country", "Name", "Phone", "WA", "Web", "Email"])
-                    st.dataframe(df_h, use_container_width=True)
-    except: st.info("No history yet.")
+        if hist:
+            for s in hist:
+                with st.expander(f"📦 {s[2]} | {s[1]}"):
+                    d = run_query(f"SELECT keyword, city, country, name, phone, whatsapp, website, email FROM leads WHERE session_id={s[0]}", is_select=True)
+                    if d:
+                        df_h = pd.DataFrame(d, columns=["KW", "City", "Country", "Name", "Phone", "WA", "Web", "Email"])
+                        st.dataframe(df_h, use_container_width=True)
+        else: st.info("No archives found.")
+    except: st.info("Database refreshing...")
 
-st.markdown('<div style="text-align:center;color:#666;padding:20px;">Designed by Chatir ❤ | Ultimate Edition</div>', unsafe_allow_html=True)
+# --- TAB 3: MARKETING ---
+with t3:
+    st.subheader("🤖 Marketing Kit")
+    srv = st.selectbox("Service", ["Web Design", "SEO", "Ads"])
+    if st.button("Generate Script"):
+        st.code(f"Hi! I found your business in {city_in}. I noticed you could improve your {srv}...")
+
+st.markdown('<div style="text-align:center;color:#666;padding:20px;">Designed by Chatir ❤ | The Beast V3</div>', unsafe_allow_html=True)
