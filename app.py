@@ -3,8 +3,8 @@ import pandas as pd
 import sqlite3
 import time
 import re
-import os       # 🔥 ضروري باش ما يعطيش Error
-import base64   # 🔥 ضروري للصوّر
+import os
+import base64
 import yaml
 import gspread
 from google.oauth2.service_account import Credentials
@@ -19,18 +19,17 @@ from webdriver_manager.chrome import ChromeDriverManager
 from urllib.parse import quote
 
 # ==============================================================================
-# 1. SYSTEM CONFIGURATION
+# 1. إعدادات النظام (SYSTEM SETUP)
 # ==============================================================================
 st.set_page_config(page_title="ChatScrap Elite Beast", layout="wide", page_icon="🕷️")
 
-# الحفاظ على حالة الجلسة
 if 'results_df' not in st.session_state: st.session_state.results_df = None
 if 'running' not in st.session_state: st.session_state.running = False
 if 'progress_val' not in st.session_state: st.session_state.progress_val = 0
 if 'status_txt' not in st.session_state: st.session_state.status_txt = "SYSTEM READY"
 
 # ==============================================================================
-# 2. SECURITY & AUTH
+# 2. الأمان (SECURITY)
 # ==============================================================================
 try:
     with open('config.yaml') as file:
@@ -50,18 +49,16 @@ if st.session_state["authentication_status"] is not True:
     st.warning("🔒 Please Login"); st.stop()
 
 # ==============================================================================
-# 3. DATABASE (RESTORED ORIGINAL)
+# 3. قاعدة البيانات (DATABASE)
 # ==============================================================================
-# 🔥 رجعنا الاسم القديم باش يرجعو المستخدمين القدام
-DB_NAME = "scraper_pro_final.db"
+DB_NAME = "scraper_pro_final.db" # نفس الداتابيز باش يبقاو اليوزرز
 
 def run_query(query, params=(), is_select=False):
     try:
         with sqlite3.connect(DB_NAME, check_same_thread=False) as conn:
             curr = conn.cursor()
             curr.execute(query, params)
-            if is_select:
-                return curr.fetchall()
+            if is_select: return curr.fetchall()
             conn.commit()
             return True
     except: return [] if is_select else False
@@ -106,17 +103,25 @@ def sync_to_gsheet(df, url):
     except: return False
 
 # ==============================================================================
-# 4. BEAST ENGINE (GEO-TARGETED)
+# 4. المحرك القوي (ROBUST ENGINE WITH SCROLL FIX)
 # ==============================================================================
 def get_driver():
     opts = Options()
     opts.add_argument("--headless=new")
     opts.add_argument("--no-sandbox")
-    opts.add_argument("--disable-dev-shm-usage")
+    opts.add_argument("--disable-dev-shm-usage") # 🔥 مهم جداً للسيرفرات
+    opts.add_argument("--disable-gpu")
     opts.add_argument("--window-size=1920,1080")
     opts.add_argument("--lang=en-US")
     opts.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
-    return webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=opts)
+    
+    # 🔥 محاولة التثبيت الآمن للـ Driver
+    try:
+        service = Service(ChromeDriverManager().install())
+        return webdriver.Chrome(service=service, options=opts)
+    except Exception as e:
+        # Fallback (محاولة ثانية إذا فشلت الأولى)
+        return webdriver.Chrome(options=opts)
 
 def fetch_email_deep(driver, url):
     if not url or "google.com" in url or url == "N/A": return "N/A"
@@ -140,7 +145,6 @@ st.markdown(f"""
     @import url('https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;600;800&display=swap');
     html, body, .stApp {{ font-family: 'Open Sans', sans-serif !important; background-color: #0f111a; }}
     .stApp p, .stApp label, h1, h2, h3, div, span {{ color: #FFFFFF !important; }}
-    
     .mobile-popup {{
         display: none; position: fixed; top: 10px; left: 5%; width: 90%;
         background: rgba(20, 20, 30, 0.95); border: 2px solid {orange_c};
@@ -148,7 +152,6 @@ st.markdown(f"""
         z-index: 999999; box-shadow: 0 10px 40px rgba(0,0,0,0.4);
     }}
     @media (max-width: 768px) {{ .mobile-popup {{ display: block; }} }}
-    
     .logo-img {{ width: 280px; filter: drop-shadow(0 0 15px rgba(255,140,0,0.5)) saturate(180%); margin-bottom: 25px; }}
     .prog-box {{ width: 100%; background: rgba(255, 140, 0, 0.1); border-radius: 50px; padding: 4px; border: 1px solid {orange_c}; }}
     .prog-fill {{ 
@@ -165,9 +168,8 @@ current_user = st.session_state["username"]
 user_bal, user_st = get_user_data(current_user)
 is_admin = current_user == "admin"
 
-if user_st == 'suspended' and not is_admin: st.error("🚫 ACCOUNT SUSPENDED"); st.stop()
+if user_st == 'suspended' and not is_admin: st.error("🚫 SUSPENDED"); st.stop()
 
-# --- SIDEBAR ---
 with st.sidebar:
     st.title("👤 Profile")
     st.write(f"Logged: **{st.session_state['name']}**")
@@ -189,7 +191,7 @@ with st.sidebar:
             st.divider()
             nu = st.text_input("New User")
             np = st.text_input("Pass", type="password")
-            if st.button("Create User"):
+            if st.button("Create"):
                 try: hp = stauth.Hasher.hash(np)
                 except: hp = stauth.Hasher([np]).generate()[0]
                 config['credentials']['usernames'][nu] = {'name': nu, 'password': hp, 'email': 'x'}
@@ -201,7 +203,7 @@ with st.sidebar:
     if st.button("Logout", type="secondary"):
         authenticator.logout('Logout', 'main'); st.session_state.clear(); st.rerun()
 
-# --- HEADER (SAFE IMAGE LOADING) ---
+# --- HEADER (SAFE IMAGE) ---
 cm = st.columns([1, 6, 1])[1]
 with cm:
     if os.path.exists("chatscrape.png"):
@@ -226,9 +228,8 @@ with st.container():
     c1, c2, c3, c4 = st.columns([3, 3, 1.5, 1.5])
     kw_in = c1.text_input("🔍 Keywords", placeholder="cafe, snack")
     city_in = c2.text_input("🌍 Cities", placeholder="Agadir, Casa")
-    # 🔥 COUNTRY SELECTOR (Fixes USA results)
     country_in = c3.selectbox("🏳️ Country", ["Morocco", "France", "USA", "Spain", "Germany", "UAE"])
-    limit_in = c4.number_input("Limit/City", 1, 5000, 20)
+    limit_in = c4.number_input("Limit", 1, 5000, 20)
 
     st.divider()
     co, cb = st.columns([5, 3])
@@ -239,6 +240,8 @@ with st.container():
         w_web = f[1].checkbox("Must Have Website", False)
         w_email = f[2].checkbox("Extract Email", False)
         w_nosite = f[3].checkbox("No Website Only", False)
+        # 🔥 Scroll Option restored
+        scroll_depth = st.number_input("Scroll Depth (Pages)", 1, 100, 10, key="scroll_d")
 
     with cb:
         st.write("")
@@ -247,19 +250,18 @@ with st.container():
             if kw_in and city_in: st.session_state.running = True; st.session_state.results_df = None; st.rerun()
         if b2.button("STOP", type="secondary"): st.session_state.running = False; st.rerun()
 
-# --- TABS ---
+# --- RESULTS ---
 t1, t2, t3 = st.tabs(["⚡ LIVE RESULTS", "📜 ARCHIVES", "🤖 MARKETING"])
 
 with t1:
     spot = st.empty()
-    # Dynamic Cols (Fixes display issues)
     cols = ["Keyword", "City", "Country", "Name", "Phone", "WhatsApp", "Address"]
     if w_web: cols.append("Website")
     if w_email: cols.append("Email")
 
     if st.session_state.results_df is not None:
         final_df = st.session_state.results_df[cols] if not st.session_state.results_df.empty else pd.DataFrame(columns=cols)
-        st.download_button("📥 Download CSV", final_df.to_csv(index=False).encode('utf-8-sig'), "leads.csv")
+        st.download_button("📥 CSV", final_df.to_csv(index=False).encode('utf-8-sig'), "leads.csv")
         spot.dataframe(final_df, use_container_width=True, column_config={"WhatsApp": st.column_config.LinkColumn("WhatsApp", display_text="🟢 Chat Now")})
 
     if st.session_state.running:
@@ -269,7 +271,6 @@ with t1:
         total_ops = len(kws) * len(cts)
         curr_op = 0
         
-        # Log Session
         run_query("INSERT INTO sessions (query, date) VALUES (?, ?)", (f"{kw_in} | {city_in} | {country_in}", time.strftime("%Y-%m-%d %H:%M")))
         try: s_id = run_query("SELECT id FROM sessions ORDER BY id DESC LIMIT 1", is_select=True)[0][0]
         except: s_id = 1
@@ -282,23 +283,23 @@ with t1:
                     curr_op += 1
                     update_ui(int(((curr_op-1)/total_ops)*100), f"SCANNING: {kw} in {city}, {country_in}")
 
-                    # 🔥 GEO-SPECIFIC URL (Fixes location issues)
+                    # Geo-Targeting Logic
                     gl_map = {"Morocco": "ma", "France": "fr", "USA": "us", "Spain": "es", "Germany": "de", "UAE": "ae"}
                     gl_code = gl_map.get(country_in, "ma")
                     
-                    # Search Logic
                     url = f"https://www.google.com/maps/search/{quote(kw)}+in+{quote(city)}+{quote(country_in)}?hl=en&gl={gl_code}"
-                    driver.get(url); time.sleep(5)
                     
+                    driver.get(url); time.sleep(5)
                     try: driver.find_element(By.XPATH, "//button[contains(., 'Accept all')]").click(); time.sleep(2)
                     except: pass
 
+                    # 🔥 SCROLL LOGIC RESTORED & IMPROVED
                     try:
                         feed = driver.find_element(By.CSS_SELECTOR, 'div[role="feed"]')
-                        for _ in range(12): # Deep Scroll
+                        for _ in range(scroll_depth): # Use user input depth
                             if not st.session_state.running: break
                             driver.execute_script("arguments[0].scrollTop = arguments[0].scrollHeight", feed)
-                            time.sleep(1.5)
+                            time.sleep(1.5) # Wait for load
                     except: pass
                     
                     elements = driver.find_elements(By.XPATH, '//a[contains(@href, "/maps/place/")]')
@@ -324,14 +325,13 @@ with t1:
                             try: web = driver.find_element(By.CSS_SELECTOR, 'a[data-item-id="authority"]').get_attribute("href")
                             except: pass
 
-                            # 🔥 WHATSAPP SMART LOGIC (No 05/Fixe)
+                            # WhatsApp Fix (No 05)
                             wa_link = None
                             wa_num = re.sub(r'[^\d]', '', phone)
                             is_fixe = wa_num.startswith('2125') or (wa_num.startswith('05') and len(wa_num) <= 10)
                             if (wa_num.startswith('2126') or wa_num.startswith('2127') or wa_num.startswith('06') or wa_num.startswith('07')) and not is_fixe:
                                 wa_link = f"https://wa.me/{wa_num}"
 
-                            # 🔥 STRICT FILTERS
                             if w_phone and (phone == "N/A" or phone == ""): continue
                             if w_web and (web == "N/A" or web == ""): continue
                             if w_nosite and web != "N/A": continue
@@ -344,11 +344,7 @@ with t1:
                             
                             if not is_admin: deduct_credit(current_user)
                             st.session_state.results_df = pd.DataFrame(all_res)
-                            
-                            # Live Stream
                             spot.dataframe(st.session_state.results_df[cols], use_container_width=True, column_config={"WhatsApp": st.column_config.LinkColumn("WhatsApp", display_text="🟢 Chat Now")})
-                            
-                            # Save to DB
                             run_query("INSERT INTO leads (session_id, keyword, city, country, name, phone, website, email, address, whatsapp) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", (s_id, kw, city, country_in, name, phone, web, email, addr, wa_link))
                         except: continue
             update_ui(100, "COMPLETED ✅")
@@ -372,4 +368,4 @@ with t3:
     if st.button("Generate Script"):
         st.code(f"Hi! Found your business in {city_in}...")
 
-st.markdown('<div style="text-align:center;color:#666;padding:20px;">Designed by Chatir ❤ | Elite Final Beast</div>', unsafe_allow_html=True)
+st.markdown('<div style="text-align:center;color:#666;padding:20px;">Designed by Chatir ❤ | Elite Final Fixed</div>', unsafe_allow_html=True)
