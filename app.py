@@ -17,66 +17,87 @@ from webdriver_manager.chrome import ChromeDriverManager
 from urllib.parse import quote
 
 # ==============================================================================
-# 1. GLOBAL CONFIGURATION
+# 1. GLOBAL CONFIGURATION & STATE
 # ==============================================================================
 st.set_page_config(page_title="ChatScrap Elite Pro", layout="wide", page_icon="💎")
 
+# Initialize Session State
 if 'results_list' not in st.session_state: st.session_state.results_list = []
 if 'running' not in st.session_state: st.session_state.running = False
+if 'paused' not in st.session_state: st.session_state.paused = False
+if 'task_index' not in st.session_state: st.session_state.task_index = 0 # To remember progress
 if 'progress' not in st.session_state: st.session_state.progress = 0
 if 'status_msg' not in st.session_state: st.session_state.status_msg = "READY"
 if 'current_sid' not in st.session_state: st.session_state.current_sid = None
 
 # ==============================================================================
-# 2. DESIGN SYSTEM (ORIGINAL FROM APP 5 - NO CHANGES)
+# 2. DESIGN SYSTEM (4-BUTTON CONTROL ROW)
 # ==============================================================================
 orange_grad = "linear-gradient(135deg, #FF8C00 0%, #FF4500 100%)"
+green_grad = "linear-gradient(135deg, #28a745 0%, #218838 100%)"
+amber_grad = "linear-gradient(135deg, #ffc107 0%, #e0a800 100%)"
+red_grad = "linear-gradient(135deg, #dc3545 0%, #c82333 100%)"
 
 st.markdown(f"""
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap');
     html, body, [data-testid="stAppViewContainer"] {{ font-family: 'Inter', sans-serif !important; background-color: #0e1117; }}
 
-    /* Center Logo */
     .centered-logo {{ text-align: center; padding: 20px 0 40px 0; }}
     .logo-img {{ width: 280px; filter: drop-shadow(0 0 15px rgba(255,140,0,0.3)); }}
 
-    /* 🔥 THE 70/30 BUTTON BAR (Zero Gap Fix) */
-    div[data-testid="stHorizontalBlock"]:has(button) div[data-testid="column"] {{
-        padding: 0 !important;
-        margin: 0 !important;
-        gap: 0 !important;
-    }}
+    /* 🔥 THE 4-BUTTON ZERO GAP FIX */
+    div[data-testid="stHorizontalBlock"]:has(button) {{ gap: 0 !important; }}
+    div[data-testid="stHorizontalBlock"]:has(button) div[data-testid="column"] {{ padding: 0 !important; margin: 0 !important; }}
 
     .stButton > button {{
         width: 100% !important;
         height: 60px !important;
         font-weight: 800 !important;
-        font-size: 17px !important;
+        font-size: 16px !important;
         border: none !important;
         text-transform: uppercase;
-        letter-spacing: 1.5px;
-        transition: 0.3s all ease-in-out;
+        letter-spacing: 1px;
+        transition: 0.3s all ease;
+        border-radius: 0 !important; /* Reset radius for middle buttons */
+        color: white !important;
     }}
     
-    /* START BUTTON (70%) */
-    div.stButton > button[kind="primary"] {{
+    /* 1. START BUTTON (Orange) */
+    div[data-testid="column"]:nth-child(1) button {{
         background: {orange_grad} !important;
-        color: white !important;
         border-radius: 12px 0 0 12px !important;
     }}
     
-    /* STOP BUTTON (30%) */
-    div.stButton > button[kind="secondary"] {{
-        background-color: #1c212d !important;
-        color: #ff4b4b !important;
-        border: 1px solid #31333f !important;
-        border-radius: 0 12px 12px 0 !important;
+    /* 2. PAUSE BUTTON (Amber) */
+    div[data-testid="column"]:nth-child(2) button {{
+        background: {amber_grad} !important;
+        color: #000 !important; /* Black text for visibility */
+        border-left: 1px solid rgba(0,0,0,0.1) !important;
     }}
 
-    /* PROGRESS BAR */
+    /* 3. CONTINUE BUTTON (Green) */
+    div[data-testid="column"]:nth-child(3) button {{
+        background: {green_grad} !important;
+        border-left: 1px solid rgba(0,0,0,0.1) !important;
+    }}
+
+    /* 4. STOP BUTTON (Red) */
+    div[data-testid="column"]:nth-child(4) button {{
+        background: {red_grad} !important;
+        border-radius: 0 12px 12px 0 !important;
+        border-left: 1px solid rgba(0,0,0,0.1) !important;
+    }}
+
+    /* Disabled State styling override */
+    .stButton > button:disabled {{
+        opacity: 0.6 !important;
+        cursor: not-allowed;
+        background: #2b303b !important; /* Grey out if disabled */
+        color: #555 !important;
+    }}
+
     .prog-container {{ width: 100%; background: #1c212d; border-radius: 50px; padding: 4px; border: 1px solid #31333f; margin: 30px 0; }}
     .prog-bar-fill {{ 
         height: 14px; 
@@ -85,15 +106,16 @@ st.markdown(f"""
         transition: width 0.8s ease-in-out; 
         animation: stripes 1.5s linear infinite; 
     }}
-    @keyframes stripes {{ 0% {{background-position: 0 0;}} 100% {{background-position: 48px 48px;}} }}
+    @keyframes stripes {{ 0% {{background-position: 0 0;}} 100% {{background-position: 48px 0;}} }}
 
     [data-testid="stMetricValue"] {{ color: #FF8C00 !important; font-weight: 800; }}
-    section[data-testid="stSidebar"] {{ background-color: #161922 !important; }}
+    section[data-testid="stSidebar"] {{ background-color: #161922 !important; border-right: 1px solid #31333F; }}
+    .wa-link {{ color: #25D366 !important; text-decoration: none !important; font-weight: bold; }}
     </style>
 """, unsafe_allow_html=True)
 
 # ==============================================================================
-# 3. DATABASE ENGINE
+# 3. DATABASE ENGINE (v9 PERSISTENCE)
 # ==============================================================================
 DB_NAME = "chatscrap_elite_pro_v9.db"
 
@@ -123,7 +145,7 @@ def get_user_data(username):
 # ==============================================================================
 try:
     with open('config.yaml') as file: config = yaml.load(file, Loader=SafeLoader)
-except: st.error("config.yaml missing"); st.stop()
+except: st.error("❌ config.yaml required"); st.stop()
 
 authenticator = stauth.Authenticate(config['credentials'], config['cookie']['name'], config['cookie']['key'], config['cookie']['expiry_days'])
 
@@ -131,56 +153,53 @@ if st.session_state.get("authentication_status") is not True:
     try: authenticator.login()
     except: pass
     if st.session_state["authentication_status"] is not True:
-        st.warning("🔒 Restricted Access"); st.stop()
+        st.warning("🔒 Restricted Elite Access"); st.stop()
 
 # ==============================================================================
 # 5. SIDEBAR & ADMIN PANEL
 # ==============================================================================
 with st.sidebar:
-    st.title("Profile Settings")
+    st.title("User Profile")
     me = st.session_state["username"]
     bal, sts = get_user_data(me)
-    if sts == 'suspended' and me != 'admin': st.error("Account Suspended"); st.stop()
+    if sts == 'suspended' and me != 'admin': st.error("🚫 ACCOUNT SUSPENDED"); st.stop()
     st.metric("Elite Balance", "💎 Unlimited" if me == 'admin' else f"💎 {bal}")
     
     if me == 'admin':
-        with st.expander("🛠️ Admin Panel"):
+        with st.expander("🛠️ ADMIN PANEL", expanded=True):
             conn = sqlite3.connect(DB_NAME)
             u_df = pd.read_sql("SELECT * FROM user_credits", conn)
             st.dataframe(u_df, hide_index=True)
+            target = st.selectbox("Select Target User", u_df['username'])
+            col_a, col_b, col_c = st.columns(3)
             
-            target = st.selectbox("Manage User", u_df['username'])
-            col_admin_a, col_admin_b, col_admin_c = st.columns(3)
-            
-            # 🔥 ACTIVATED BUTTONS (LOGIC ONLY)
-            if col_admin_a.button("💰 +100"): 
+            if col_a.button("💰 +100"): 
                 conn.execute("UPDATE user_credits SET balance = balance + 100 WHERE username=?", (target,))
                 conn.commit(); st.rerun()
-            
-            if col_admin_b.button("🚫 Status"):
+            if col_b.button("🚫 Status"):
                 curr_s = conn.execute("SELECT status FROM user_credits WHERE username=?", (target,)).fetchone()[0]
                 new_s = 'suspended' if curr_s == 'active' else 'active'
                 conn.execute("UPDATE user_credits SET status=? WHERE username=?", (new_s, target))
                 conn.commit(); st.rerun()
-
-            if col_admin_c.button("🗑️ Del"):
+            if col_c.button("🗑️ Del"):
                 conn.execute("DELETE FROM user_credits WHERE username=?", (target,))
                 conn.commit(); st.rerun()
             
             st.divider()
             st.write("Add New User:")
-            nu = st.text_input("New Username", key="new_u")
-            np = st.text_input("New Password", type="password", key="new_p")
+            nu = st.text_input("New Username", key="sidebar_nu")
+            np = st.text_input("New Password", type="password", key="sidebar_np")
             if st.button("Create Account"):
                 if nu and np:
-                    try: hashed_pw = stauth.Hasher.hash(np)
-                    except: hashed_pw = stauth.Hasher([np]).generate()[0]
-                    config['credentials']['usernames'][nu] = {'name': nu, 'password': hashed_pw, 'email': 'x'}
+                    try: hp = stauth.Hasher.hash(np)
+                    except: hp = stauth.Hasher([np]).generate()[0]
+                    config['credentials']['usernames'][nu] = {'name': nu, 'password': hp, 'email': 'x'}
                     with open('config.yaml', 'w') as f: yaml.dump(config, f)
                     get_user_data(nu); st.success(f"User {nu} Created!"); st.rerun()
 
     st.divider()
-    if st.button("Logout"): authenticator.logout('Logout', 'main'); st.session_state.clear(); st.rerun()
+    if st.button("Logout"):
+        authenticator.logout('Logout', 'main'); st.session_state.clear(); st.rerun()
 
 # ==============================================================================
 # 6. HEADER LOGO
@@ -190,44 +209,65 @@ if os.path.exists("chatscrape.png"):
     st.markdown(f'<div class="centered-logo"><img src="data:image/png;base64,{b64}" class="logo-img"></div>', unsafe_allow_html=True)
 
 # ==============================================================================
-# 7. INPUTS & THE "70/30" ACTION BAR
+# 7. INPUTS & THE "4-BUTTON" CONTROL BAR
 # ==============================================================================
 with st.container():
-    c1, c2, c3, c4 = st.columns([3, 3, 2, 1.5])
+    c1, c2, c3, c4 = st.columns([3, 3, 2, 1.5]) 
     kw_in = c1.text_input("Keywords", placeholder="e.g. hotel, cafe")
     city_in = c2.text_input("Cities", placeholder="e.g. Agadir, Casa")
     country_in = c3.selectbox("Country", ["Morocco", "France", "USA", "Spain", "UAE", "UK"])
-    limit_in = c4.number_input("Limit/City", 1, 1000, 20)
+    limit_in = c4.number_input("Limit/City", 1, 1000, 3)
 
     st.divider()
-    f1, f2, f3, f4, f5 = st.columns([1, 1, 1, 1, 1.5])
-    w_phone = f1.checkbox("Phone", True)
+    f1, f2, f3, f4, f5 = st.columns([1, 1, 1.2, 1, 1.5])
+    w_phone = f1.checkbox("Phone Only", True)
     w_web = f2.checkbox("Website", False)
-    w_email = f3.checkbox("Deep Email", False)
+    w_email = f3.checkbox("Deep Email Scan", False)
     w_nosite = f4.checkbox("No Site Only", False)
-    depth_in = f5.slider("Scroll Depth", 1, 100, 10)
+    depth_in = f5.slider("Scroll Depth", 1, 100, 5)
 
     st.write("")
-    # 🔥 THE 70/30 PRO BAR (ZERO GAP)
-    btn_container = st.columns([7, 3])
-    with btn_container[0]:
-        if st.button("Start Extraction", type="primary"):
+    
+    # 🔥 THE 4-BUTTON CONTROLS
+    b_start, b_pause, b_cont, b_stop = st.columns([1, 1, 1, 1])
+    
+    with b_start:
+        # Start is disabled if already running
+        if st.button("Start Search", disabled=st.session_state.running):
             if kw_in and city_in:
                 st.session_state.running = True
+                st.session_state.paused = False
                 st.session_state.results_list = []
                 st.session_state.progress = 0
+                st.session_state.task_index = 0 # Reset progress
                 with sqlite3.connect(DB_NAME) as conn:
                     cur = conn.cursor()
                     cur.execute("INSERT INTO sessions (query, date) VALUES (?, ?)", (f"{kw_in} | {city_in}", time.strftime("%Y-%m-%d %H:%M")))
                     st.session_state.current_sid = cur.lastrowid
                     conn.commit()
                 st.rerun()
-    with btn_container[1]:
-        if st.button("Stop Engine", type="secondary"):
-            st.session_state.running = False; st.rerun()
+
+    with b_pause:
+        # Pause is active only if running and not already paused
+        if st.button("Pause", disabled=not st.session_state.running or st.session_state.paused):
+            st.session_state.paused = True
+            st.rerun()
+
+    with b_cont:
+        # Continue is active only if running and paused
+        if st.button("Continue", disabled=not st.session_state.running or not st.session_state.paused):
+            st.session_state.paused = False
+            st.rerun()
+
+    with b_stop:
+        # Stop is active if running
+        if st.button("Stop Search", disabled=not st.session_state.running):
+            st.session_state.running = False
+            st.session_state.paused = False
+            st.rerun()
 
 # ==============================================================================
-# 8. ENGINE & LOGIC (MODIFIED FOR FIXES ONLY)
+# 8. ENGINE & LOGIC (PERSISTENT & PAUSABLE)
 # ==============================================================================
 def get_driver():
     opts = Options()
@@ -240,7 +280,6 @@ def get_driver():
     try: return webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=opts)
     except: return webdriver.Chrome(options=opts)
 
-# 🔥 NEW FUNCTION FOR DEEP EMAIL (LOGIC ONLY)
 def fetch_email_deep(driver, url):
     if not url or "google" in url or url == "N/A": return "N/A"
     try:
@@ -277,19 +316,30 @@ with tab_live:
         table_ui.markdown(df_live.to_html(escape=False, index=False), unsafe_allow_html=True)
 
     if st.session_state.running:
-        driver = get_driver()
-        try:
-            kws = [k.strip() for k in kw_in.split(',')]
-            cts = [c.strip() for c in city_in.split(',')]
-            total = len(kws) * len(cts); curr = 0
-
-            for city in cts:
-                for kw in kws:
+        if st.session_state.paused:
+            status_ui.warning("⏸️ SEARCH PAUSED. Click 'Continue' to resume...")
+        else:
+            driver = get_driver()
+            try:
+                # 🔥 Flatten tasks to handle Resume/Pause Logic
+                kws = [k.strip() for k in kw_in.split(',')]
+                cts = [c.strip() for c in city_in.split(',')]
+                all_tasks = [(c, k) for c in cts for k in kws]
+                total_ops = len(all_tasks)
+                
+                # Iterate using global task_index to enable "Background" persistence
+                for i, (city, kw) in enumerate(all_tasks):
+                    if i < st.session_state.task_index: continue # Skip completed tasks
+                    
                     if not st.session_state.running: break
-                    curr += 1
-                    st.session_state.progress = int((curr / total) * 100)
+                    if st.session_state.paused: 
+                        status_ui.warning("⏸️ Paused...")
+                        break # Exit loop temporarily, state is saved
+                    
+                    # Update Progress
+                    st.session_state.progress = int(((i + 1) / total_ops) * 100)
                     prog_spot.markdown(f'<div class="prog-container"><div class="prog-bar-fill" style="width: {st.session_state.progress}%;"></div></div>', unsafe_allow_html=True)
-                    status_ui.markdown(f"**Scanning:** `{kw}` in `{city}`...")
+                    status_ui.markdown(f"**Scanning:** `{kw}` in `{city}`... ({i+1}/{total_ops})")
                     
                     gl = {"Morocco":"ma", "France":"fr", "USA":"us"}.get(country_in, "ma")
                     driver.get(f"https://www.google.com/maps/search/{quote(kw)}+in+{quote(city)}?hl=en&gl={gl}")
@@ -298,61 +348,62 @@ with tab_live:
                     try:
                         pane = driver.find_element(By.CSS_SELECTOR, 'div[role="feed"]')
                         for _ in range(depth_in):
-                            if not st.session_state.running: break
+                            if not st.session_state.running or st.session_state.paused: break
                             driver.execute_script("arguments[0].scrollTop = arguments[0].scrollHeight", pane); time.sleep(1)
                     except: pass
 
-                    items = driver.find_elements(By.XPATH, '//a[contains(@href, "/maps/place/")]')
-                    processed = 0
-                    for item in items:
-                        if processed >= limit_in or not st.session_state.running: break
-                        try:
-                            driver.execute_script("arguments[0].click();", item); time.sleep(2)
-                            name = driver.find_element(By.CSS_SELECTOR, "h1.DUwDvf").text
-                            phone = "N/A"
-                            try: phone = driver.find_element(By.XPATH, '//*[contains(@data-item-id, "phone:tel")]').get_attribute("aria-label").replace("Phone: ", "")
-                            except: pass
-                            
-                            # 🔥 FIX 1: Website Logic
-                            raw_web = "N/A"
-                            try: raw_web = driver.find_element(By.CSS_SELECTOR, 'a[data-item-id="authority"]').get_attribute("href")
-                            except: pass
-                            
-                            # Determine Display Website (Show ONLY if checked)
-                            display_web = raw_web if w_web else "N/A"
+                    if not st.session_state.paused and st.session_state.running:
+                        items = driver.find_elements(By.XPATH, '//a[contains(@href, "/maps/place/")]')
+                        processed = 0
+                        for item in items:
+                            if processed >= limit_in or not st.session_state.running or st.session_state.paused: break
+                            try:
+                                driver.execute_script("arguments[0].click();", item); time.sleep(2)
+                                name = driver.find_element(By.CSS_SELECTOR, "h1.DUwDvf").text
+                                phone = "N/A"
+                                try: phone = driver.find_element(By.XPATH, '//*[contains(@data-item-id, "phone:tel")]').get_attribute("aria-label").replace("Phone: ", "")
+                                except: pass
+                                
+                                raw_web = "N/A"
+                                try: raw_web = driver.find_element(By.CSS_SELECTOR, 'a[data-item-id="authority"]').get_attribute("href")
+                                except: pass
+                                
+                                display_web = raw_web if w_web else "N/A"
 
-                            if w_phone and (phone == "N/A" or not phone): continue
-                            # Logic for "No Site Only" uses raw_web to decide, not display_web
-                            if w_nosite and raw_web != "N/A": continue
-                            # Logic for Website filter: if user wants ONLY sites (implied by checking Website? usually no, but standard logic):
-                            # Usually checkbox means "Extract field", not "Filter by". 
-                            # If you want to filter out leads with no website, add logic here. For now, following standard request.
+                                if w_phone and (phone == "N/A" or not phone): continue
+                                if w_nosite and raw_web != "N/A": continue
 
-                            wa_link = "N/A"
-                            cp = re.sub(r'\D', '', phone)
-                            if any(cp.startswith(x) for x in ['2126','2127','06','07']) and not (cp.startswith('2125') or cp.startswith('05')):
-                                wa_link = f'<a href="https://wa.me/{cp}" target="_blank" style="color:#25D366; text-decoration:none;"><i class="fab fa-whatsapp"></i> Chat Now</a>'
-                            
-                            # 🔥 FIX 2: Deep Email Logic
-                            email_found = "N/A"
-                            if w_email and raw_web != "N/A":
-                                email_found = fetch_email_deep(driver, raw_web)
+                                wa_link = "N/A"
+                                cp = re.sub(r'\D', '', phone)
+                                if any(cp.startswith(x) for x in ['2126','2127','06','07']) and not (cp.startswith('2125') or cp.startswith('05')):
+                                    wa_link = f'<a href="https://wa.me/{cp}" target="_blank" class="wa-link"><i class="fab fa-whatsapp"></i> Chat Now</a>'
+                                
+                                email_found = "N/A"
+                                if w_email and raw_web != "N/A":
+                                    email_found = fetch_email_deep(driver, raw_web)
 
-                            row = {"Keyword":kw, "City":city, "Name":name, "Phone":phone, "WhatsApp":wa_link, "Website":display_web, "Email":email_found}
-                            
-                            with sqlite3.connect(DB_NAME) as conn:
-                                # Updated INSERT to include Email
-                                conn.execute("""INSERT INTO leads (session_id, keyword, city, country, name, phone, website, email, whatsapp)
-                                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""", (st.session_state.current_sid, kw, city, country_in, name, phone, display_web, email_found, wa_link))
-                                if me != 'admin': conn.execute("UPDATE user_credits SET balance = balance - 1 WHERE username=?", (me,))
-                            
-                            st.session_state.results_list.append(row)
-                            table_ui.markdown(pd.DataFrame(st.session_state.results_list).to_html(escape=False, index=False), unsafe_allow_html=True)
-                            processed += 1
-                        except: continue
-            st.success("🏁 Extraction Finished!")
-        finally:
-            driver.quit(); st.session_state.running = False; st.rerun()
+                                row = {"Keyword":kw, "City":city, "Name":name, "Phone":phone, "WhatsApp":wa_link, "Website":display_web, "Email":email_found}
+                                
+                                with sqlite3.connect(DB_NAME) as conn:
+                                    conn.execute("""INSERT INTO leads (session_id, keyword, city, country, name, phone, website, email, whatsapp)
+                                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""", (st.session_state.current_sid, kw, city, country_in, name, phone, display_web, email_found, wa_link))
+                                    if me != 'admin': conn.execute("UPDATE user_credits SET balance = balance - 1 WHERE username=?", (me,))
+                                    conn.commit()
+                                
+                                st.session_state.results_list.append(row)
+                                table_ui.markdown(pd.DataFrame(st.session_state.results_list).to_html(escape=False, index=False), unsafe_allow_html=True)
+                                processed += 1
+                            except: continue
+                    
+                    # 🔥 Important: Advance Task Index ONLY if not paused/stopped mid-loop
+                    if not st.session_state.paused and st.session_state.running:
+                        st.session_state.task_index += 1 # Mark this city/kw pair as done
+
+                if not st.session_state.paused and st.session_state.running:
+                    st.success("🏁 Extraction Finished!")
+                    st.session_state.running = False
+            finally:
+                driver.quit()
 
 # ==============================================================================
 # 9. ARCHIVE TAB
@@ -373,4 +424,4 @@ with tab_archive:
                     st.write(df_l.drop(columns=['id', 'session_id']).to_html(escape=False, index=False), unsafe_allow_html=True)
                 else: st.warning("Empty results.")
 
-st.markdown('<div style="text-align:center;color:#666;padding:30px;">Designed by Chatir Elite Pro - Architect Edition</div>', unsafe_allow_html=True)
+st.markdown('<div style="text-align:center;color:#666;padding:30px;">Designed by Chatir Elite Pro - Controller V35</div>', unsafe_allow_html=True)
