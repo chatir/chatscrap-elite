@@ -17,21 +17,24 @@ from webdriver_manager.chrome import ChromeDriverManager
 from urllib.parse import quote
 
 # ==============================================================================
-# 1. إعدادات النظام (SYSTEM SETUP)
+# 1. إعدادات النظام وحفظ الحالة (SYSTEM & STATE)
 # ==============================================================================
-st.set_page_config(page_title="ChatScrap Elite Fixed", layout="wide", page_icon="🕷️")
+st.set_page_config(page_title="ChatScrap Final Beast", layout="wide", page_icon="🕷️")
 
+# تهيئة المتغيرات
 if 'results_df' not in st.session_state: st.session_state.results_df = None
 if 'running' not in st.session_state: st.session_state.running = False
 if 'progress_val' not in st.session_state: st.session_state.progress_val = 0
 if 'status_txt' not in st.session_state: st.session_state.status_txt = "SYSTEM READY"
 
 # ==============================================================================
-# 2. الأمان (SECURITY)
+# 2. الأمان والمصادقة (SECURITY)
 # ==============================================================================
 try:
-    with open('config.yaml') as file: config = yaml.load(file, Loader=SafeLoader)
-except: st.error("❌ config.yaml missing!"); st.stop()
+    with open('config.yaml') as file:
+        config = yaml.load(file, Loader=SafeLoader)
+except:
+    st.error("❌ ملف config.yaml مفقود!"); st.stop()
 
 authenticator = stauth.Authenticate(
     config['credentials'], config['cookie']['name'], config['cookie']['key'], config['cookie']['expiry_days']
@@ -40,26 +43,31 @@ authenticator = stauth.Authenticate(
 if st.session_state.get("authentication_status") is not True:
     try: authenticator.login()
     except: pass
-if st.session_state["authentication_status"] is not True: st.stop()
+
+if st.session_state["authentication_status"] is not True:
+    st.warning("🔒 المرجو تسجيل الدخول"); st.stop()
 
 # ==============================================================================
-# 3. إصلاح قاعدة البيانات (DATABASE FIX)
+# 3. قاعدة البيانات الآمنة (ROBUST DATABASE)
 # ==============================================================================
-DB_FILE = 'scraper_fixed_v1.db'
+DB_NAME = "scraper_final_v2.db"
 
 def run_query(query, params=(), is_select=False):
+    """تنفيذ الاستعلامات مع حماية من الأخطاء"""
     try:
-        with sqlite3.connect(DB_FILE, timeout=10, check_same_thread=False) as conn:
+        # check_same_thread=False كيحل مشكل البلوكاج فـ Streamlit
+        with sqlite3.connect(DB_NAME, check_same_thread=False) as conn:
             curr = conn.cursor()
             curr.execute(query, params)
             if is_select:
                 return curr.fetchall()
-            conn.commit() # 🔥 ضروري للحفظ
+            conn.commit()
             return True
     except Exception as e:
         return [] if is_select else False
 
 def init_db():
+    """إنشاء الجداول فقط إذا لم تكن موجودة (حماية البيانات)"""
     run_query('''CREATE TABLE IF NOT EXISTS leads (id INTEGER PRIMARY KEY AUTOINCREMENT, session_id INTEGER, keyword TEXT, city TEXT, country TEXT, name TEXT, phone TEXT, website TEXT, email TEXT, address TEXT, whatsapp TEXT)''')
     run_query('''CREATE TABLE IF NOT EXISTS user_credits (username TEXT PRIMARY KEY, balance INTEGER, status TEXT DEFAULT 'active')''')
     run_query('''CREATE TABLE IF NOT EXISTS sessions (id INTEGER PRIMARY KEY AUTOINCREMENT, query TEXT, date TEXT)''')
@@ -69,22 +77,22 @@ init_db()
 def get_user_data(username):
     res = run_query("SELECT balance, status FROM user_credits WHERE username=?", (username,), is_select=True)
     if res: return res[0]
+    # إنشاء المستخدم لأول مرة بـ 100 نقطة
     run_query("INSERT INTO user_credits VALUES (?, 100, 'active')", (username,))
     return (100, 'active')
 
 def deduct_credit(username):
     if username != "admin": run_query("UPDATE user_credits SET balance = balance - 1 WHERE username=?", (username,))
 
-def add_credits(username, amount):
-    run_query("UPDATE user_credits SET balance = balance + ? WHERE username=?", (amount, username))
-
-def delete_user(username):
-    run_query("DELETE FROM user_credits WHERE username=?", (username,))
-
-def toggle_status(username):
-    curr = run_query("SELECT status FROM user_credits WHERE username=?", (username,), True)[0][0]
-    new_s = 'suspended' if curr == 'active' else 'active'
-    run_query("UPDATE user_credits SET status=? WHERE username=?", (new_s, username))
+def manage_user(action, username, amount=0):
+    if action == "add_credits":
+        run_query("UPDATE user_credits SET balance = balance + ? WHERE username=?", (amount, username))
+    elif action == "delete":
+        run_query("DELETE FROM user_credits WHERE username=?", (username,))
+    elif action == "toggle_status":
+        curr = run_query("SELECT status FROM user_credits WHERE username=?", (username,), True)[0][0]
+        new_s = 'suspended' if curr == 'active' else 'active'
+        run_query("UPDATE user_credits SET status=? WHERE username=?", (new_s, username))
 
 def sync_to_gsheet(df, url):
     if "gcp_service_account" not in st.secrets: return False
@@ -100,7 +108,7 @@ def sync_to_gsheet(df, url):
     except: return False
 
 # ==============================================================================
-# 4. المحرك مع تحديد الدولة (GEO ENGINE)
+# 4. محرك البحث (ENGINE CORE)
 # ==============================================================================
 def get_driver():
     opts = Options()
@@ -108,9 +116,10 @@ def get_driver():
     opts.add_argument("--no-sandbox")
     opts.add_argument("--disable-dev-shm-usage")
     opts.add_argument("--window-size=1920,1080")
-    opts.add_argument("--lang=en-US") # Keep UI English for selectors
+    opts.add_argument("--lang=en-US")
     opts.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
-    return webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=opts)
+    try: return webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=opts)
+    except: return webdriver.Chrome(options=opts)
 
 def fetch_email_deep(driver, url):
     if not url or "google.com" in url or url == "N/A": return "N/A"
@@ -119,14 +128,14 @@ def fetch_email_deep(driver, url):
         try:
             driver.set_page_load_timeout(10); driver.get(url); time.sleep(1.5)
             emails = re.findall(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}", driver.page_source)
-            driver.close(); driver.switch_to.window(driver.window_handles[0])
             valid = [e for e in emails if not e.endswith(('.png','.jpg','.gif','.webp'))]
+            driver.close(); driver.switch_to.window(driver.window_handles[0])
             return valid[0] if valid else "N/A"
         except: driver.close(); driver.switch_to.window(driver.window_handles[0]); return "N/A"
     except: return "N/A"
 
 # ==============================================================================
-# 5. UI STYLING
+# 5. الواجهة (UI)
 # ==============================================================================
 orange_c = "#FF8C00"
 st.markdown(f"""
@@ -152,53 +161,48 @@ st.markdown(f"""
     </style>
 """, unsafe_allow_html=True)
 
-# --- APP LOGIC ---
+# --- التطبيق ---
 current_user = st.session_state["username"]
 user_bal, user_st = get_user_data(current_user)
 is_admin = current_user == "admin"
 
-if user_st == 'suspended' and not is_admin: st.error("🚫 ACCOUNT SUSPENDED"); st.stop()
+if user_st == 'suspended' and not is_admin: st.error("🚫 الحساب معلق"); st.stop()
 
+# القائمة الجانبية
 with st.sidebar:
-    st.title("👤 Profile")
+    st.title("👤 الملف الشخصي")
     st.write(f"Logged: **{st.session_state['name']}**")
-    if is_admin: st.success("💎 Credits: Unlimited")
-    else: st.warning(f"💎 Credits: {user_bal}")
+    if is_admin: st.success("💎 الرصيد: Unlimited")
+    else: st.warning(f"💎 الرصيد: {user_bal}")
     
-    # 🔥 FIXED ADMIN PANEL
+    # 🔥 ADMIN PANEL (FIXED)
     if is_admin:
-        with st.expander("🛠️ ADMIN PANEL (FIXED)"):
+        with st.expander("🛠️ ADMIN PANEL"):
             users = run_query("SELECT username, balance, status FROM user_credits", is_select=True)
             df_u = pd.DataFrame(users, columns=["User", "Bal", "Sts"])
             st.dataframe(df_u, hide_index=True)
             
-            tgt = st.selectbox("Target", [u[0] for u in users if u[0]!='admin'])
+            target = st.selectbox("Target", [u[0] for u in users if u[0]!='admin'])
             c1, c2, c3 = st.columns(3)
-            
-            if c1.button("💰 +100"):
-                add_credits(tgt, 100); st.success("Added!"); time.sleep(0.5); st.rerun()
-            
-            if c2.button("🚫 Status"):
-                toggle_status(tgt); st.success("Changed!"); time.sleep(0.5); st.rerun()
-                
-            if c3.button("🗑️ Delete"):
-                delete_user(tgt); st.warning("Deleted!"); time.sleep(0.5); st.rerun()
+            if c1.button("💰 +100"): manage_user("add_credits", target, 100); st.rerun()
+            if c2.button("🚫 Status"): manage_user("toggle_status", target); st.rerun()
+            if c3.button("🗑️ Del"): manage_user("delete", target); st.rerun()
             
             st.divider()
-            nu = st.text_input("New User")
-            np = st.text_input("Password", type="password")
-            if st.button("Add User"):
+            nu = st.text_input("User")
+            np = st.text_input("Pass", type="password")
+            if st.button("Add"):
                 try: hp = stauth.Hasher.hash(np)
                 except: hp = stauth.Hasher([np]).generate()[0]
                 config['credentials']['usernames'][nu] = {'name': nu, 'password': hp, 'email': 'x'}
                 with open('config.yaml', 'w') as f: yaml.dump(config, f)
                 run_query("INSERT INTO user_credits VALUES (?, 100, 'active')", (nu,))
-                st.success("User Created!"); time.sleep(0.5); st.rerun()
+                st.success("OK"); time.sleep(0.5); st.rerun()
 
     st.divider()
-    if st.button("Logout"): authenticator.logout('Logout', 'main'); st.session_state.clear(); st.rerun()
+    if st.button("تسجيل الخروج"): authenticator.logout('Logout', 'main'); st.session_state.clear(); st.rerun()
 
-# --- HEADER ---
+# الهيدر
 cm = st.columns([1, 6, 1])[1]
 with cm:
     if os.path.exists("chatscrape.png"):
@@ -216,13 +220,13 @@ def update_ui(prog, txt):
 
 if not st.session_state.running: update_ui(0, "SYSTEM READY")
 
-# --- INPUTS ---
+# المدخلات
 with st.container():
     c1, c2, c3, c4 = st.columns([3, 3, 1.5, 1.5])
     kw_in = c1.text_input("🔍 Keywords", placeholder="cafe, snack")
     city_in = c2.text_input("🌍 Cities", placeholder="Tikiwin, Temsia")
-    # 🔥 COUNTRY SELECTOR (Fixes the location issue)
-    country_in = c3.selectbox("🏳️ Country", ["Morocco", "France", "USA", "Spain", "Germany", "UK"])
+    # 🔥 COUNTRY SELECTOR ADDED
+    country_in = c3.selectbox("🏳️ Country", ["Morocco", "France", "USA", "Spain", "Germany"])
     limit_in = c4.number_input("Limit", 1, 5000, 20)
 
     st.divider()
@@ -242,18 +246,23 @@ with st.container():
             if kw_in and city_in: st.session_state.running = True; st.session_state.results_df = None; st.rerun()
         if b2.button("STOP", type="secondary", use_container_width=True): st.session_state.running = False; st.rerun()
 
-# --- TABS ---
+# التبويبات
 t1, t2 = st.tabs(["⚡ LIVE RESULTS", "📜 ARCHIVE"])
 
 with t1:
     spot = st.empty()
-    # Dynamic columns
+    # Dynamic Columns
     cols_to_show = ["Keyword", "City", "Country", "Name", "Phone", "WhatsApp", "Address"]
     if w_web: cols_to_show.append("Website")
     if w_email: cols_to_show.append("Email")
 
     if st.session_state.results_df is not None:
         final_df = st.session_state.results_df[cols_to_show] if not st.session_state.results_df.empty else pd.DataFrame(columns=cols_to_show)
+        c_ex1, c_ex2 = st.columns([3, 1])
+        gs_url = c_ex1.text_input("Google Sheet URL")
+        if c_ex2.button("Sync"):
+            if sync_to_gsheet(final_df, gs_url): st.success("Synced!")
+        
         st.download_button("📥 CSV", final_df.to_csv(index=False).encode('utf-8-sig'), "leads.csv", use_container_width=True)
         spot.dataframe(final_df, use_container_width=True, column_config={"WhatsApp": st.column_config.LinkColumn("WhatsApp", display_text="🟢 Chat Now")})
 
@@ -265,7 +274,7 @@ with t1:
         curr_op = 0
         
         # Log Session
-        run_query("INSERT INTO sessions (query, date) VALUES (?, ?)", (f"{kw_in} in {city_in}, {country_in}", time.strftime("%Y-%m-%d %H:%M")))
+        run_query("INSERT INTO sessions (query, date) VALUES (?, ?)", (f"{kw_in} | {city_in} | {country_in}", time.strftime("%Y-%m-%d %H:%M")))
         try: s_id = run_query("SELECT id FROM sessions ORDER BY id DESC LIMIT 1", is_select=True)[0][0]
         except: s_id = 1
 
@@ -288,7 +297,7 @@ with t1:
 
                     try:
                         feed = driver.find_element(By.CSS_SELECTOR, 'div[role="feed"]')
-                        for _ in range(10): # Fixed depth to ensure scroll
+                        for _ in range(15): # Deep Scroll
                             if not st.session_state.running: break
                             driver.execute_script("arguments[0].scrollTop = arguments[0].scrollHeight", feed)
                             time.sleep(1.5)
@@ -337,10 +346,12 @@ with t1:
                             
                             if not is_admin: deduct_credit(current_user)
                             st.session_state.results_df = pd.DataFrame(all_res)
+                            
+                            # Live Update with Dynamic Columns
                             spot.dataframe(st.session_state.results_df[cols_to_show], use_container_width=True, column_config={"WhatsApp": st.column_config.LinkColumn("WhatsApp", display_text="🟢 Chat Now")})
                             
                             # 🔥 FIXED ARCHIVE INSERT
-                            run_query("INSERT INTO leads (session_id, keyword, city, name, phone, website, email, address, whatsapp) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", (s_id, kw, f"{city}, {country_in}", name, phone, web, email, addr, wa_link))
+                            run_query("INSERT INTO leads (session_id, keyword, city, country, name, phone, website, email, address, whatsapp) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", (s_id, kw, city, country_in, name, phone, web, email, addr, wa_link))
                             
                         except: continue
             update_ui(100, "COMPLETED ✅")
@@ -352,9 +363,9 @@ with t2:
         hist = run_query("SELECT * FROM sessions ORDER BY id DESC LIMIT 20", is_select=True)
         for s in hist:
             with st.expander(f"📦 {s[2]} | {s[1]}"):
-                d = run_query(f"SELECT keyword, city, name, phone, whatsapp, website, email FROM leads WHERE session_id={s[0]}", is_select=True)
+                d = run_query(f"SELECT keyword, city, country, name, phone, whatsapp, website, email FROM leads WHERE session_id={s[0]}", is_select=True)
                 if d:
-                    df_h = pd.DataFrame(d, columns=["KW", "City", "Name", "Phone", "WA", "Web", "Email"])
+                    df_h = pd.DataFrame(d, columns=["KW", "City", "Country", "Name", "Phone", "WA", "Web", "Email"])
                     st.dataframe(df_h, use_container_width=True)
     except: st.info("No history yet.")
 
