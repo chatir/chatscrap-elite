@@ -17,7 +17,7 @@ from webdriver_manager.chrome import ChromeDriverManager
 from urllib.parse import quote
 
 # ==============================================================================
-# 1. GLOBAL CONFIGURATION
+# 1. GLOBAL SYSTEM CONFIG
 # ==============================================================================
 st.set_page_config(page_title="ChatScrap Elite Pro", layout="wide", page_icon="💎")
 
@@ -28,7 +28,7 @@ if 'status_msg' not in st.session_state: st.session_state.status_msg = "READY"
 if 'current_sid' not in st.session_state: st.session_state.current_sid = None
 
 # ==============================================================================
-# 2. DESIGN SYSTEM (V20 ARCHITECT)
+# 2. THE ULTIMATE DESIGN SYSTEM (CSS V21)
 # ==============================================================================
 orange_grad = "linear-gradient(135deg, #FF8C00 0%, #FF4500 100%)"
 
@@ -40,23 +40,25 @@ st.markdown(f"""
 
     /* Centered Logo */
     .centered-logo {{ text-align: center; padding: 20px 0 40px 0; }}
-    .logo-img {{ width: 280px; filter: drop-shadow(0 0 15px rgba(255,140,0,0.3)); }}
+    .logo-img {{ width: 280px; filter: drop-shadow(0 0 20px rgba(255,140,0,0.4)); }}
 
-    /* 🔥 TARGETED 50/50 BUTTONS (ONLY BUTTONS CONTAINER) */
-    div[data-testid="stHorizontalBlock"]:has(button) > div {{
-        padding: 0 !important;
+    /* 🔥 THE 50/50 BUTTON BAR FIX */
+    [data-testid="stHorizontalBlock"]:has(button) {{
         gap: 0 !important;
+    }}
+    [data-testid="stHorizontalBlock"]:has(button) [data-testid="column"] {{
+        padding: 0 !important;
         margin: 0 !important;
     }}
 
     .stButton > button {{
         width: 100% !important;
-        height: 58px !important;
+        height: 60px !important;
         font-weight: 800 !important;
         font-size: 17px !important;
         border: none !important;
         text-transform: uppercase;
-        letter-spacing: 1.2px;
+        letter-spacing: 1.5px;
         transition: 0.3s all ease;
     }}
     
@@ -73,25 +75,30 @@ st.markdown(f"""
         border-radius: 0 12px 12px 0 !important;
     }}
 
-    /* 🔥 CUSTOM ANIMATED PROGRESS BAR */
-    .prog-container {{ width: 100%; background: #1c212d; border-radius: 50px; padding: 4px; border: 1px solid #31333f; margin: 30px 0; }}
+    /* 🔥 THE PRO PROGRESS BAR (ANIMATED STRIPES) */
+    .prog-container {{ width: 100%; background: #1c212d; border-radius: 50px; padding: 4px; border: 1px solid #31333f; margin: 25px 0; }}
     .prog-bar-fill {{ 
-        height: 14px; 
+        height: 16px; 
         background: repeating-linear-gradient(45deg, #FF8C00, #FF8C00 12px, #FF4500 12px, #FF4500 24px); 
+        background-size: 48px 48px;
         border-radius: 20px; 
         transition: width 0.8s ease-in-out; 
-        animation: stripes 1.5s linear infinite; 
+        animation: stripes 1.2s linear infinite; 
     }}
-    @keyframes stripes {{ 0% {{background-position: 0 0;}} 100% {{background-position: 48px 48px;}} }}
+    @keyframes stripes {{ 0% {{background-position: 0 0;}} 100% {{background-position: 48px 0;}} }}
 
     /* Sidebar & Metrics */
     [data-testid="stMetricValue"] {{ color: #FF8C00 !important; font-weight: 800; }}
     section[data-testid="stSidebar"] {{ background-color: #161922 !important; border-right: 1px solid #31333F; }}
+    
+    /* WhatsApp Link Style */
+    .wa-link {{ color: #25D366 !important; text-decoration: none !important; font-weight: bold; font-size: 14px; }}
+    .wa-link i {{ margin-right: 5px; }}
     </style>
 """, unsafe_allow_html=True)
 
 # ==============================================================================
-# 3. DATABASE ENGINE (v9)
+# 3. DATABASE ENGINE (v9 PERSISTENCE)
 # ==============================================================================
 DB_NAME = "chatscrap_elite_pro_v9.db"
 
@@ -129,62 +136,62 @@ if st.session_state.get("authentication_status") is not True:
     try: authenticator.login()
     except: pass
     if st.session_state["authentication_status"] is not True:
-        st.warning("🔒 Login Required"); st.stop()
+        st.warning("🔒 Login to Access the Beast"); st.stop()
 
 # ==============================================================================
-# 5. SIDEBAR & FULL USER MANAGEMENT (RESTORED)
+# 5. SIDEBAR & FULL ADMIN PANEL (RESTORED)
 # ==============================================================================
 with st.sidebar:
     st.title("User Profile")
     me = st.session_state["username"]
     bal, sts = get_user_data(me)
     
-    if sts == 'suspended' and me != 'admin': st.error("🚫 Account Suspended"); st.stop()
+    if sts == 'suspended' and me != 'admin': st.error("🚫 ACCOUNT SUSPENDED"); st.stop()
     st.metric("Elite Balance", "💎 Unlimited" if me == 'admin' else f"💎 {bal}")
     
     if me == 'admin':
-        with st.expander("🛠️ Admin Panel"):
+        with st.expander("🛠️ ADMIN PANEL", expanded=True):
             u_df = pd.read_sql("SELECT * FROM user_credits", sqlite3.connect(DB_NAME))
             st.dataframe(u_df, hide_index=True)
             
-            target = st.selectbox("Select Target User", u_df['username'])
+            target = st.selectbox("Manage User", u_df['username'])
+            col_a, col_b, col_c = st.columns(3)
             
-            c_a, c_b, c_c = st.columns(3)
-            if c_a.button("💰 +100"): 
+            if col_a.button("💰 +100"): 
                 sqlite3.connect(DB_NAME).execute("UPDATE user_credits SET balance = balance + 100 WHERE username=?", (target,)); st.rerun()
-            if c_b.button("🚫 Status"):
-                curr = sqlite3.connect(DB_NAME).execute("SELECT status FROM user_credits WHERE username=?", (target,)).fetchone()[0]
-                new_s = 'suspended' if curr == 'active' else 'active'
+            if col_b.button("🚫 Status"):
+                curr_s = sqlite3.connect(DB_NAME).execute("SELECT status FROM user_credits WHERE username=?", (target,)).fetchone()[0]
+                new_s = 'suspended' if curr_s == 'active' else 'active'
                 sqlite3.connect(DB_NAME).execute("UPDATE user_credits SET status=? WHERE username=?", (new_s, target)); st.rerun()
-            if c_c.button("🗑️ Delete"):
+            if col_c.button("🗑️ Del"):
                 sqlite3.connect(DB_NAME).execute("DELETE FROM user_credits WHERE username=?", (target,)); st.rerun()
             
             st.divider()
-            st.write("Add New User:")
-            nu = st.text_input("New Username", key="new_un")
-            np = st.text_input("New Password", type="password", key="new_pw")
+            st.write("Add New Member:")
+            nu = st.text_input("New Username", key="admin_nu")
+            np = st.text_input("New Password", type="password", key="admin_np")
             if st.button("Create Account"):
                 try: hp = stauth.Hasher.hash(np)
                 except: hp = stauth.Hasher([np]).generate()[0]
                 config['credentials']['usernames'][nu] = {'name': nu, 'password': hp, 'email': 'x'}
                 with open('config.yaml', 'w') as f: yaml.dump(config, f)
-                get_user_data(nu); st.success("User Created!"); st.rerun()
+                get_user_data(nu); st.success("Account Created!"); st.rerun()
 
     st.divider()
-    if st.button("Logout"): authenticator.logout('Logout', 'main'); st.session_state.clear(); st.rerun()
+    if st.button("Sign Out"): authenticator.logout('Logout', 'main'); st.session_state.clear(); st.rerun()
 
 # ==============================================================================
-# 6. HEADER LOGO
+# 6. MAIN HEADER (CENTERED LOGO)
 # ==============================================================================
 if os.path.exists("chatscrape.png"):
     with open("chatscrape.png", "rb") as f: b64 = base64.b64encode(f.read()).decode()
     st.markdown(f'<div class="centered-logo"><img src="data:image/png;base64,{b64}" class="logo-img"></div>', unsafe_allow_html=True)
 
 # ==============================================================================
-# 7. INPUTS & 50/50 ACTION BAR
+# 7. INPUTS & THE 50/50 COMMAND BAR
 # ==============================================================================
 with st.container():
-    c1, c2, c3, c4 = st.columns([3, 3, 2, 1.5]) # Space is natural here
+    c1, c2, c3, c4 = st.columns([3, 3, 2, 1.5])
     kw_in = c1.text_input("Keywords", placeholder="e.g. cafe, snak")
     city_in = c2.text_input("Cities", placeholder="e.g. Agadir, Casablanca")
     country_in = c3.selectbox("Country", ["Morocco", "France", "USA", "Spain", "UAE", "UK"])
@@ -194,12 +201,12 @@ with st.container():
     f1, f2, f3, f4, f5 = st.columns([1, 1, 1.2, 1, 1.5])
     w_phone = f1.checkbox("Phone", True)
     w_web = f2.checkbox("Website", False)
-    w_email = f3.checkbox("Deep Email", False)
+    w_email = f3.checkbox("Deep Email Scan", False)
     w_nosite = f4.checkbox("No Site", False)
     depth_in = f5.slider("Scroll Depth", 1, 100, 5)
 
     st.write("")
-    # 🔥 THE TRULY ATTACHED 50/50 BAR
+    # 🔥 THE ATTACHED 50/50 FLEX BAR
     btn_col1, btn_col2 = st.columns([1, 1])
     with btn_col1:
         if st.button("Start Extraction", type="primary"):
@@ -218,7 +225,7 @@ with st.container():
             st.session_state.running = False; st.rerun()
 
 # ==============================================================================
-# 8. ENGINE & REAL-TIME PROGRESS
+# 8. ENGINE & REAL-TIME PROGRESS BAR
 # ==============================================================================
 def get_driver():
     opts = Options()
@@ -234,11 +241,12 @@ def get_driver():
 tab_live, tab_archive, tab_tools = st.tabs(["⚡ Live Data", "📜 Archives", "🤖 Marketing"])
 
 with tab_live:
+    # 🔥 PROGRESS BAR SPOT (DYNAMIC)
     prog_spot = st.empty()
     status_ui = st.empty()
     table_ui = st.empty()
     
-    # 🔥 Initialize Progress Bar at 0%
+    # Initialize UI
     prog_spot.markdown(f'<div class="prog-container"><div class="prog-bar-fill" style="width: {st.session_state.progress}%;"></div></div>', unsafe_allow_html=True)
 
     if st.session_state.results_list:
@@ -256,7 +264,7 @@ with tab_live:
                 for kw in kws:
                     if not st.session_state.running: break
                     curr_op += 1
-                    # 🔥 PROGRESS CALCULATION (Incremental)
+                    # 🔥 PROGRESS INCREMENT LOGIC
                     st.session_state.progress = int((curr_op / total_ops) * 100)
                     prog_spot.markdown(f'<div class="prog-container"><div class="prog-bar-fill" style="width: {st.session_state.progress}%;"></div></div>', unsafe_allow_html=True)
                     status_ui.markdown(f"**Scanning:** `{kw}` in `{city}`...")
@@ -294,7 +302,7 @@ with tab_live:
                             wa_link = "N/A"
                             cp = re.sub(r'\D', '', phone)
                             if any(cp.startswith(x) for x in ['2126','2127','06','07']) and not (cp.startswith('2125') or cp.startswith('05')):
-                                wa_link = f'<a href="https://wa.me/{cp}" target="_blank" style="color:#25D366; text-decoration:none; font-weight:bold;"><i class="fab fa-whatsapp"></i> Chat Now</a>'
+                                wa_link = f'<a href="https://wa.me/{cp}" target="_blank" class="wa-link"><i class="fab fa-whatsapp"></i> Chat Now</a>'
 
                             row = {"Keyword":kw, "City":city, "Name":name, "Phone":phone, "WhatsApp":wa_link, "Website":web}
                             
@@ -307,7 +315,7 @@ with tab_live:
                             table_ui.markdown(pd.DataFrame(st.session_state.results_list).to_html(escape=False, index=False), unsafe_allow_html=True)
                             processed += 1
                         except: continue
-            st.success("✅ Extraction Completed!")
+            st.success("🏁 Extraction Finished!")
         finally:
             driver.quit(); st.session_state.running = False; st.rerun()
 
@@ -315,8 +323,8 @@ with tab_live:
 # 9. ARCHIVE TAB (SEARCH ICON)
 # ==============================================================================
 with tab_archive:
-    st.subheader("Persistent History")
-    search_f = st.text_input("Filter Archives", placeholder="🔍 Search e.g. 'lawyer' or 'rabat'...")
+    st.subheader("Search Archives")
+    search_f = st.text_input("🔍 Filter History", placeholder="🔍 Search keywords or city...")
     
     with sqlite3.connect(DB_NAME) as conn:
         df_s = pd.read_sql("SELECT * FROM sessions WHERE query LIKE ? ORDER BY id DESC LIMIT 30", conn, params=(f"%{search_f}%",))
@@ -328,7 +336,7 @@ with tab_archive:
                     df_l = pd.read_sql(f"SELECT * FROM leads WHERE session_id={sess['id']}", conn)
                 if not df_l.empty:
                     st.write(df_l.drop(columns=['id', 'session_id']).to_html(escape=False, index=False), unsafe_allow_html=True)
-                    st.download_button("📥 Export CSV", df_l.to_csv(index=False).encode('utf-8-sig'), f"search_{sess['id']}.csv", key=f"dl_{sess['id']}")
+                    st.download_button("📥 Export CSV", df_l.to_csv(index=False).encode('utf-8-sig'), f"archive_{sess['id']}.csv", key=f"dl_{sess['id']}")
                 else: st.warning("Empty result.")
 
-st.markdown('<div style="text-align:center;color:#666;padding:30px;">Designed by Chatir Elite Pro - Architect Masterpiece</div>', unsafe_allow_html=True)
+st.markdown('<div style="text-align:center;color:#666;padding:30px;">Designed by Chatir Elite Pro - Masterpiece V21</div>', unsafe_allow_html=True)
