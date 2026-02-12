@@ -21,7 +21,6 @@ from urllib.parse import quote
 # ==============================================================================
 st.set_page_config(page_title="ChatScrap Elite Pro", layout="wide", page_icon="💎")
 
-# State Management
 if 'results_list' not in st.session_state: st.session_state.results_list = []
 if 'running' not in st.session_state: st.session_state.running = False
 if 'paused' not in st.session_state: st.session_state.paused = False
@@ -31,9 +30,10 @@ if 'status_msg' not in st.session_state: st.session_state.status_msg = "READY"
 if 'current_sid' not in st.session_state: st.session_state.current_sid = None
 
 # ==============================================================================
-# 2. DESIGN SYSTEM (GREEN CONTINUE & RESTORED ICONS)
+# 2. DESIGN SYSTEM (AGGRESSIVE CSS FOR COLORS)
 # ==============================================================================
 st.markdown("""
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap');
 
@@ -48,6 +48,7 @@ html, body, [data-testid="stAppViewContainer"] {
 div[data-testid="stHorizontalBlock"]:has(button) { gap: 5px !important; }
 div[data-testid="stHorizontalBlock"]:has(button) div[data-testid="column"] { padding: 0 !important; margin: 0 !important; }
 
+/* Base Button Style */
 .stButton > button {
     width: 100% !important;
     height: 50px !important;
@@ -58,12 +59,12 @@ div[data-testid="stHorizontalBlock"]:has(button) div[data-testid="column"] { pad
     letter-spacing: 1px;
     transition: all 0.3s ease-in-out;
     border-radius: 8px !important;
+    color: white !important;
 }
 
-/* 1. START BUTTON (Orange) */
+/* 1. START BUTTON (Orange) - Strictly Targeting First Column */
 div[data-testid="column"]:nth-of-type(1) .stButton > button {
     background: linear-gradient(135deg, #FF8C00 0%, #FF4500 100%) !important;
-    color: white !important;
     box-shadow: 0 4px 15px rgba(255,69,0,0.3) !important;
 }
 
@@ -79,9 +80,6 @@ div[data-testid="column"]:nth-of-type(3) .stButton > button {
     background: linear-gradient(135deg, #28a745 0%, #218838 100%) !important;
     color: white !important;
     box-shadow: 0 4px 15px rgba(40, 167, 69, 0.3) !important;
-}
-div[data-testid="column"]:nth-of-type(3) .stButton > button:hover {
-    background: linear-gradient(135deg, #34ce57 0%, #28a745 100%) !important;
 }
 
 /* 4. STOP BUTTON (Red) */
@@ -119,6 +117,17 @@ div[data-testid="column"]:nth-of-type(4) .stButton > button {
 
 [data-testid="stMetricValue"] { color: #FF8C00 !important; font-weight: 800; }
 section[data-testid="stSidebar"] { background-color: #161922 !important; border-right: 1px solid #31333F; }
+
+/* WHATSAPP LINK STYLE */
+.wa-link {
+    color: #25D366 !important;
+    text-decoration: none !important;
+    font-weight: bold;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+}
+.wa-link i { font-size: 16px; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -164,7 +173,7 @@ if st.session_state.get("authentication_status") is not True:
         st.warning("🔒 Restricted Access"); st.stop()
 
 # ==============================================================================
-# 5. SIDEBAR & ADMIN
+# 5. SIDEBAR
 # ==============================================================================
 with st.sidebar:
     st.title("Profile Settings")
@@ -212,14 +221,14 @@ with st.sidebar:
     if st.button("Logout"): authenticator.logout('Logout', 'main'); st.session_state.clear(); st.rerun()
 
 # ==============================================================================
-# 6. HEADER LOGO
+# 6. HEADER
 # ==============================================================================
 if os.path.exists("chatscrape.png"):
     with open("chatscrape.png", "rb") as f: b64 = base64.b64encode(f.read()).decode()
     st.markdown(f'<div class="centered-logo"><img src="data:image/png;base64,{b64}" class="logo-img"></div>', unsafe_allow_html=True)
 
 # ==============================================================================
-# 7. INPUTS & 4-BUTTON ROW
+# 7. INPUTS
 # ==============================================================================
 with st.container():
     c1, c2, c3, c4 = st.columns([3, 3, 2, 1.5])
@@ -273,7 +282,7 @@ with st.container():
             st.rerun()
 
 # ==============================================================================
-# 8. ENGINE & LOGIC
+# 8. ENGINE
 # ==============================================================================
 def get_driver():
     opts = Options()
@@ -307,7 +316,6 @@ def fetch_email_deep(driver, url):
             driver.switch_to.window(driver.window_handles[0])
         return "N/A"
 
-# CSV CONVERTER
 def convert_df(df):
     return df.to_csv(index=False).encode('utf-8')
 
@@ -317,23 +325,23 @@ with tab_live:
     prog_spot = st.empty()
     status_ui = st.empty()
     table_ui = st.empty()
-    download_ui = st.empty() # Placeholder for download button
+    download_btn_spot = st.empty() # Placeholder specifically for the button
     
     prog_spot.markdown(f'<div class="prog-container"><div class="prog-bar-fill" style="width: {st.session_state.progress}%;"></div></div>', unsafe_allow_html=True)
 
     if st.session_state.results_list:
         df_live = pd.DataFrame(st.session_state.results_list)
-        # Using st.dataframe restores the Toolbar (Search, Fullscreen)
-        table_ui.dataframe(df_live, use_container_width=True)
+        # 🔥 RESTORE HTML RENDER FOR WHATSAPP ICON
+        table_ui.markdown(df_live.to_html(escape=False, index=False), unsafe_allow_html=True)
         
-        # 🔥 DOWNLOAD BUTTON ADDED
+        # 🔥 DOWNLOAD BUTTON BELOW TABLE
         csv = convert_df(df_live)
-        download_ui.download_button(
-            label="⬇️ Download Results CSV",
+        download_btn_spot.download_button(
+            label="⬇️ Download CSV",
             data=csv,
             file_name="extraction_results.csv",
             mime="text/csv",
-            key='live_download'
+            key='live_dl'
         )
 
     if st.session_state.running:
@@ -345,7 +353,7 @@ with tab_live:
                 kws = [k.strip() for k in kw_in.split(',')]
                 cts = [c.strip() for c in city_in.split(',')]
                 all_tasks = [(c, k) for c in cts for k in kws]
-                total_estimated = len(all_tasks) * limit_in # Estimate for progress
+                total_estimated = len(all_tasks) * limit_in
                 
                 for i, (city, kw) in enumerate(all_tasks):
                     if i < st.session_state.task_index: continue
@@ -377,7 +385,7 @@ with tab_live:
                             try:
                                 driver.execute_script("arguments[0].click();", item); time.sleep(2)
                                 
-                                # Update Progress based on Items found
+                                # Progress Calculation
                                 current_real = base_progress + processed + 1
                                 st.session_state.progress = min(int((current_real / total_estimated) * 100), 100)
                                 prog_spot.markdown(f'<div class="prog-container"><div class="prog-bar-fill" style="width: {st.session_state.progress}%;"></div></div>', unsafe_allow_html=True)
@@ -395,6 +403,7 @@ with tab_live:
                                 if w_phone and (phone == "N/A" or not phone): continue
                                 if w_nosite and raw_web != "N/A": continue
 
+                                # 🔥 WHATSAPP ICON LOGIC
                                 wa_link = "N/A"
                                 cp = re.sub(r'\D', '', phone)
                                 if any(cp.startswith(x) for x in ['2126','2127','06','07']) and not (cp.startswith('2125') or cp.startswith('05')):
@@ -414,16 +423,17 @@ with tab_live:
                                 
                                 st.session_state.results_list.append(row)
                                 
-                                # Update Table and Button Dynamic
+                                # Update Table HTML & Download Button
                                 df_live = pd.DataFrame(st.session_state.results_list)
-                                table_ui.dataframe(df_live, use_container_width=True)
+                                table_ui.markdown(df_live.to_html(escape=False, index=False), unsafe_allow_html=True)
+                                
                                 csv = convert_df(df_live)
-                                download_ui.download_button(
-                                    label="⬇️ Download Results CSV",
+                                download_btn_spot.download_button(
+                                    label="⬇️ Download CSV",
                                     data=csv,
                                     file_name="extraction_results.csv",
                                     mime="text/csv",
-                                    key=f'live_download_{len(st.session_state.results_list)}'
+                                    key=f'live_dl_{len(st.session_state.results_list)}'
                                 )
                                 processed += 1
                             except: continue
@@ -431,7 +441,8 @@ with tab_live:
                     if not st.session_state.paused and st.session_state.running:
                         st.session_state.task_index += 1
 
-                if not st.session_state.paused and st.session_state.running:
+                # 🔥 FIXED LOGIC: ONLY SHOW SUCCESS IF ACTUALLY FINISHED ALL TASKS
+                if not st.session_state.paused and st.session_state.running and st.session_state.task_index >= len(all_tasks):
                     st.success("🏁 Extraction Finished!")
                     st.session_state.running = False
             finally:
@@ -453,10 +464,10 @@ with tab_archive:
                 with sqlite3.connect(DB_NAME) as conn:
                     df_l = pd.read_sql(f"SELECT * FROM leads WHERE session_id={sess['id']}", conn)
                 if not df_l.empty:
-                    # Using dataframe here also brings back icons for archives
-                    st.dataframe(df_l.drop(columns=['id', 'session_id']), use_container_width=True)
+                    # Archives also use HTML for icons
+                    st.write(df_l.drop(columns=['id', 'session_id']).to_html(escape=False, index=False), unsafe_allow_html=True)
                     
-                    # 🔥 ARCHIVE DOWNLOAD BUTTON
+                    # 🔥 ARCHIVE DOWNLOAD
                     csv_arch = convert_df(df_l)
                     st.download_button(
                         label="⬇️ Download Archive CSV",
@@ -467,4 +478,4 @@ with tab_archive:
                     )
                 else: st.warning("Empty results.")
 
-st.markdown('<div style="text-align:center;color:#666;padding:30px;">Designed by Chatir Elite Pro - Architect Edition V44</div>', unsafe_allow_html=True)
+st.markdown('<div style="text-align:center;color:#666;padding:30px;">Designed by Chatir Elite Pro - Architect Edition V45</div>', unsafe_allow_html=True)
