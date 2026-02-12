@@ -17,7 +17,7 @@ from webdriver_manager.chrome import ChromeDriverManager
 from urllib.parse import quote
 
 # ==============================================================================
-# 1. إعدادات النظام وحفظ الحالة (SYSTEM & STATE)
+# 1. إعدادات النظام (SYSTEM SETUP)
 # ==============================================================================
 st.set_page_config(page_title="ChatScrap Final Beast", layout="wide", page_icon="🕷️")
 
@@ -50,7 +50,7 @@ if st.session_state["authentication_status"] is not True:
 # ==============================================================================
 # 3. قاعدة البيانات الآمنة (ROBUST DATABASE)
 # ==============================================================================
-DB_NAME = "scraper_final_v2.db"
+DB_NAME = "scraper_final_v3.db" # داتابيز جديدة باش نضمنو النقاء
 
 def run_query(query, params=(), is_select=False):
     """تنفيذ الاستعلامات مع حماية من الأخطاء"""
@@ -61,13 +61,13 @@ def run_query(query, params=(), is_select=False):
             curr.execute(query, params)
             if is_select:
                 return curr.fetchall()
-            conn.commit()
+            conn.commit() # 🔥 الحفظ الإجباري
             return True
     except Exception as e:
         return [] if is_select else False
 
 def init_db():
-    """إنشاء الجداول فقط إذا لم تكن موجودة (حماية البيانات)"""
+    """إنشاء الجداول فقط إذا لم تكن موجودة"""
     run_query('''CREATE TABLE IF NOT EXISTS leads (id INTEGER PRIMARY KEY AUTOINCREMENT, session_id INTEGER, keyword TEXT, city TEXT, country TEXT, name TEXT, phone TEXT, website TEXT, email TEXT, address TEXT, whatsapp TEXT)''')
     run_query('''CREATE TABLE IF NOT EXISTS user_credits (username TEXT PRIMARY KEY, balance INTEGER, status TEXT DEFAULT 'active')''')
     run_query('''CREATE TABLE IF NOT EXISTS sessions (id INTEGER PRIMARY KEY AUTOINCREMENT, query TEXT, date TEXT)''')
@@ -117,6 +117,7 @@ def get_driver():
     opts.add_argument("--disable-dev-shm-usage")
     opts.add_argument("--window-size=1920,1080")
     opts.add_argument("--lang=en-US")
+    # User Agent قوي
     opts.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
     try: return webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=opts)
     except: return webdriver.Chrome(options=opts)
@@ -346,10 +347,12 @@ with t1:
                             
                             if not is_admin: deduct_credit(current_user)
                             st.session_state.results_df = pd.DataFrame(all_res)
+                            
+                            # Live Update with Dynamic Columns
                             spot.dataframe(st.session_state.results_df[cols_to_show], use_container_width=True, column_config={"WhatsApp": st.column_config.LinkColumn("WhatsApp", display_text="🟢 Chat Now")})
                             
                             # 🔥 FIXED ARCHIVE INSERT
-                            run_query("INSERT INTO leads (session_id, keyword, city, country, name, phone, website, email, address, whatsapp) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", (s_id, kw, f"{city}, {country_in}", country_in, name, phone, web, email, addr, wa_link))
+                            run_query("INSERT INTO leads (session_id, keyword, city, country, name, phone, website, email, address, whatsapp) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", (s_id, kw, f"{city}", country_in, name, phone, web, email, addr, wa_link))
                             
                         except: continue
             update_ui(100, "COMPLETED ✅")
