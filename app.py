@@ -30,120 +30,142 @@ if 'status_msg' not in st.session_state: st.session_state.status_msg = "READY"
 if 'current_sid' not in st.session_state: st.session_state.current_sid = None
 
 # ==============================================================================
-# 2. DESIGN SYSTEM (SAFE INJECTION METHOD)
+# 2. DESIGN SYSTEM (FORCED COLORS V42)
 # ==============================================================================
-# Define gradients simply
-orange_grad = "linear-gradient(135deg, #FF8C00 0%, #FF4500 100%)"
-red_grad = "linear-gradient(135deg, #DC3545 0%, #C82333 100%)"
-
-# Pure CSS without comments to prevent rendering errors
-custom_css = f"""
+# CSS Injection without comments to ensure stability
+st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap');
 
-html, body, [data-testid="stAppViewContainer"] {{
+html, body, [data-testid="stAppViewContainer"] {
     font-family: 'Inter', sans-serif !important;
     background-color: #0e1117;
-}}
+}
 
-.centered-logo {{
+.centered-logo {
     text-align: center;
     padding: 20px 0 40px 0;
-}}
+}
 
-.logo-img {{
+.logo-img {
     width: 280px;
     filter: drop-shadow(0 0 15px rgba(255,140,0,0.3));
-}}
+}
 
-div[data-testid="stHorizontalBlock"]:has(button) {{
-    gap: 5px !important;
-}}
+div[data-testid="stHorizontalBlock"]:has(button) {
+    gap: 8px !important;
+}
 
-div[data-testid="stHorizontalBlock"]:has(button) div[data-testid="column"] {{
+div[data-testid="stHorizontalBlock"]:has(button) div[data-testid="column"] {
     padding: 0 !important;
     margin: 0 !important;
-}}
+}
 
-.stButton > button {{
+.stButton > button {
     width: 100% !important;
-    height: 55px !important;
-    font-weight: 800 !important;
+    height: 50px !important;
+    font-weight: 700 !important;
     font-size: 14px !important;
     border: none !important;
     text-transform: uppercase;
     letter-spacing: 1px;
-    transition: 0.3s all ease-in-out;
+    transition: all 0.3s ease-in-out;
     border-radius: 8px !important;
     color: white !important;
-}}
+}
 
-div[data-testid="column"]:nth-child(1) div.stButton > button {{
-    background: {orange_grad} !important;
-    box-shadow: 0 4px 15px rgba(255,69,0,0.3) !important;
-}}
+/* 1. START BUTTON (Orange Gradient) */
+div[data-testid="column"]:nth-of-type(1) .stButton > button {
+    background: linear-gradient(135deg, #FF8C00 0%, #FF4500 100%) !important;
+    box-shadow: 0 4px 12px rgba(255, 69, 0, 0.4) !important;
+}
+div[data-testid="column"]:nth-of-type(1) .stButton > button:hover {
+    background: linear-gradient(135deg, #FF9900 0%, #FF5500 100%) !important;
+    transform: translateY(-2px);
+}
 
-div[data-testid="column"]:nth-child(2) div.stButton > button,
-div[data-testid="column"]:nth-child(3) div.stButton > button {{
-    background-color: #1c212d !important;
-    color: #e0e0e0 !important;
-    border: 1px solid #31333f !important;
-}}
+/* 2. PAUSE BUTTON (Dark Grey) */
+div[data-testid="column"]:nth-of-type(2) .stButton > button {
+    background-color: #1F2937 !important;
+    border: 1px solid #374151 !important;
+    color: #E5E7EB !important;
+}
+div[data-testid="column"]:nth-of-type(2) .stButton > button:hover {
+    background-color: #374151 !important;
+    border-color: #FF8C00 !important;
+}
 
-div[data-testid="column"]:nth-child(4) div.stButton > button {{
-    background: {red_grad} !important;
-    box-shadow: 0 4px 15px rgba(220,53,69,0.3) !important;
-}}
+/* 3. CONTINUE BUTTON (Dark Grey) */
+div[data-testid="column"]:nth-of-type(3) .stButton > button {
+    background-color: #1F2937 !important;
+    border: 1px solid #374151 !important;
+    color: #E5E7EB !important;
+}
+div[data-testid="column"]:nth-of-type(3) .stButton > button:hover {
+    background-color: #374151 !important;
+    border-color: #22c55e !important;
+}
 
-.stButton > button:disabled {{
-    opacity: 0.4 !important;
+/* 4. STOP BUTTON (Red Gradient) */
+div[data-testid="column"]:nth-of-type(4) .stButton > button {
+    background: linear-gradient(135deg, #DC2626 0%, #991B1B 100%) !important;
+    box-shadow: 0 4px 12px rgba(220, 38, 38, 0.4) !important;
+}
+div[data-testid="column"]:nth-of-type(4) .stButton > button:hover {
+    background: linear-gradient(135deg, #EF4444 0%, #B91C1C 100%) !important;
+    transform: translateY(-2px);
+}
+
+.stButton > button:disabled {
+    opacity: 0.5 !important;
     cursor: not-allowed;
-    filter: grayscale(0.8);
-}}
+    filter: grayscale(1);
+    transform: none !important;
+    box-shadow: none !important;
+}
 
-.prog-container {{
+.prog-container {
     width: 100%;
-    background: #1c212d;
+    background: #111827;
     border-radius: 50px;
     padding: 4px;
-    border: 1px solid #31333f;
-    margin: 30px 0;
-}}
+    border: 1px solid #374151;
+    margin: 25px 0;
+}
 
-.prog-bar-fill {{
-    height: 16px;
+.prog-bar-fill {
+    height: 14px;
     background: repeating-linear-gradient(45deg, #FF8C00, #FF8C00 12px, #FF4500 12px, #FF4500 24px);
     border-radius: 20px;
     transition: width 0.5s ease-in-out;
-    animation: stripes 1.5s linear infinite;
-}}
+    animation: stripes 1s linear infinite;
+}
 
-@keyframes stripes {{
-    0% {{background-position: 0 0;}}
-    100% {{background-position: 48px 48px;}}
-}}
+@keyframes stripes {
+    0% {background-position: 0 0;}
+    100% {background-position: 48px 48px;}
+}
 
-[data-testid="stMetricValue"] {{
+[data-testid="stMetricValue"] {
     color: #FF8C00 !important;
     font-weight: 800;
-}}
+}
 
-section[data-testid="stSidebar"] {{
+section[data-testid="stSidebar"] {
     background-color: #161922 !important;
     border-right: 1px solid #31333F;
-}}
+}
 
-.wa-link {{
+.wa-link {
     color: #25D366 !important;
     text-decoration: none !important;
     font-weight: bold;
-}}
+}
 </style>
-"""
-st.markdown(custom_css, unsafe_allow_html=True)
+""", unsafe_allow_html=True)
 
 # ==============================================================================
-# 3. DATABASE ENGINE
+# 3. DATABASE
 # ==============================================================================
 DB_NAME = "chatscrap_elite_pro_v9.db"
 
@@ -184,7 +206,7 @@ if st.session_state.get("authentication_status") is not True:
         st.warning("🔒 Restricted Access"); st.stop()
 
 # ==============================================================================
-# 5. SIDEBAR & ADMIN PANEL
+# 5. SIDEBAR & ADMIN
 # ==============================================================================
 with st.sidebar:
     st.title("Profile Settings")
@@ -200,19 +222,19 @@ with st.sidebar:
             st.dataframe(u_df, hide_index=True)
             
             target = st.selectbox("Manage User", u_df['username'])
-            col_admin_a, col_admin_b, col_admin_c = st.columns(3)
+            c1, c2, c3 = st.columns(3)
             
-            if col_admin_a.button("💰 +100"): 
+            if c1.button("💰 +100"): 
                 conn.execute("UPDATE user_credits SET balance = balance + 100 WHERE username=?", (target,))
                 conn.commit(); st.rerun()
             
-            if col_admin_b.button("🚫 Status"):
-                curr_s = conn.execute("SELECT status FROM user_credits WHERE username=?", (target,)).fetchone()[0]
-                new_s = 'suspended' if curr_s == 'active' else 'active'
+            if c2.button("🚫 Status"):
+                curr = conn.execute("SELECT status FROM user_credits WHERE username=?", (target,)).fetchone()[0]
+                new_s = 'suspended' if curr == 'active' else 'active'
                 conn.execute("UPDATE user_credits SET status=? WHERE username=?", (new_s, target))
                 conn.commit(); st.rerun()
 
-            if col_admin_c.button("🗑️ Del"):
+            if c3.button("🗑️ Del"):
                 conn.execute("DELETE FROM user_credits WHERE username=?", (target,))
                 conn.commit(); st.rerun()
             
@@ -250,7 +272,7 @@ with st.container():
 
     st.divider()
     f1, f2, f3, f4, f5 = st.columns([1, 1, 1, 1, 1.5])
-    w_phone = f1.checkbox("Phone", True)
+    w_phone = f1.checkbox("Phone Only", True)
     w_web = f2.checkbox("Website", False)
     w_email = f3.checkbox("Deep Email", False)
     w_nosite = f4.checkbox("No Site Only", False)
@@ -258,8 +280,8 @@ with st.container():
 
     st.write("")
     
-    # 4 BUTTONS ROW
-    b_start, b_pause, b_cont, b_stop = st.columns([1.2, 1, 1, 1.2]) 
+    # 4 BUTTONS ROW - Equal Sizing
+    b_start, b_pause, b_cont, b_stop = st.columns(4) 
     
     with b_start:
         if st.button("Start Search", disabled=st.session_state.running):
@@ -444,4 +466,4 @@ with tab_archive:
                     st.write(df_l.drop(columns=['id', 'session_id']).to_html(escape=False, index=False), unsafe_allow_html=True)
                 else: st.warning("Empty results.")
 
-st.markdown('<div style="text-align:center;color:#666;padding:30px;">Designed by Chatir Elite Pro - Architect Edition V41</div>', unsafe_allow_html=True)
+st.markdown('<div style="text-align:center;color:#666;padding:30px;">Designed by Chatir Elite Pro - Architect Edition V42</div>', unsafe_allow_html=True)
