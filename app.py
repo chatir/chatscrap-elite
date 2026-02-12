@@ -30,9 +30,8 @@ if 'status_msg' not in st.session_state: st.session_state.status_msg = "READY"
 if 'current_sid' not in st.session_state: st.session_state.current_sid = None
 
 # ==============================================================================
-# 2. DESIGN SYSTEM (RAW CSS TECHNIQUE - NO VARIABLES)
+# 2. DESIGN SYSTEM (CLEAN CSS - NO COMMENTS - COLORS FIXED)
 # ==============================================================================
-# This uses standard string literal (not f-string) to prevent parsing errors
 st.markdown("""
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 <style>
@@ -43,30 +42,15 @@ html, body, [data-testid="stAppViewContainer"] {
     background-color: #0e1117;
 }
 
-.centered-logo {
-    text-align: center;
-    padding: 20px 0 40px 0;
-}
+.centered-logo { text-align: center; padding: 20px 0 40px 0; }
+.logo-img { width: 280px; filter: drop-shadow(0 0 15px rgba(255,140,0,0.3)); }
 
-.logo-img {
-    width: 280px;
-    filter: drop-shadow(0 0 15px rgba(255,140,0,0.3));
-}
+div[data-testid="stHorizontalBlock"]:has(button) { gap: 5px !important; }
+div[data-testid="stHorizontalBlock"]:has(button) div[data-testid="column"] { padding: 0 !important; margin: 0 !important; }
 
-/* BUTTON ROW SPACING */
-div[data-testid="stHorizontalBlock"]:has(button) {
-    gap: 8px !important;
-}
-
-div[data-testid="stHorizontalBlock"]:has(button) div[data-testid="column"] {
-    padding: 0 !important;
-    margin: 0 !important;
-}
-
-/* BASE BUTTON STYLE */
 .stButton > button {
     width: 100% !important;
-    height: 52px !important;
+    height: 50px !important;
     font-weight: 700 !important;
     font-size: 14px !important;
     border: none !important;
@@ -77,65 +61,47 @@ div[data-testid="stHorizontalBlock"]:has(button) div[data-testid="column"] {
     color: white !important;
 }
 
-/* 1. START BUTTON (Orange) */
+/* 1. START BUTTON (ORANGE) */
 div[data-testid="column"]:nth-of-type(1) .stButton > button {
     background: linear-gradient(135deg, #FF8C00 0%, #FF4500 100%) !important;
-    box-shadow: 0 4px 12px rgba(255,69,0,0.3) !important;
-}
-div[data-testid="column"]:nth-of-type(1) .stButton > button:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 6px 15px rgba(255,69,0,0.4) !important;
+    box-shadow: 0 4px 15px rgba(255,69,0,0.3) !important;
 }
 
-/* 2. PAUSE BUTTON (Dark) */
+/* 2. PAUSE BUTTON (DARK) */
 div[data-testid="column"]:nth-of-type(2) .stButton > button {
     background-color: #1F2937 !important;
     border: 1px solid #374151 !important;
     color: #E5E7EB !important;
 }
-div[data-testid="column"]:nth-of-type(2) .stButton > button:hover {
-    border-color: #FF8C00 !important;
-    background-color: #374151 !important;
-}
 
-/* 3. CONTINUE BUTTON (Dark) */
+/* 3. CONTINUE BUTTON (GREEN) */
 div[data-testid="column"]:nth-of-type(3) .stButton > button {
-    background-color: #1F2937 !important;
-    border: 1px solid #374151 !important;
-    color: #E5E7EB !important;
-}
-div[data-testid="column"]:nth-of-type(3) .stButton > button:hover {
-    border-color: #28a745 !important;
-    background-color: #374151 !important;
+    background: linear-gradient(135deg, #28a745 0%, #218838 100%) !important;
+    color: white !important;
+    box-shadow: 0 4px 15px rgba(40, 167, 69, 0.3) !important;
 }
 
-/* 4. STOP BUTTON (Red) */
+/* 4. STOP BUTTON (RED) */
 div[data-testid="column"]:nth-of-type(4) .stButton > button {
     background: linear-gradient(135deg, #DC2626 0%, #991B1B 100%) !important;
-    box-shadow: 0 4px 12px rgba(220, 38, 38, 0.4) !important;
-}
-div[data-testid="column"]:nth-of-type(4) .stButton > button:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 6px 15px rgba(220, 38, 38, 0.5) !important;
+    color: white !important;
+    box-shadow: 0 4px 15px rgba(220, 38, 38, 0.4) !important;
 }
 
-/* DISABLED STATE */
 .stButton > button:disabled {
     opacity: 0.5 !important;
     cursor: not-allowed;
     filter: grayscale(1);
-    transform: none !important;
     box-shadow: none !important;
 }
 
-/* PROGRESS BAR */
 .prog-container {
     width: 100%;
     background: #111827;
     border-radius: 50px;
     padding: 4px;
     border: 1px solid #374151;
-    margin: 30px 0;
+    margin: 25px 0;
 }
 
 .prog-bar-fill {
@@ -146,25 +112,20 @@ div[data-testid="column"]:nth-of-type(4) .stButton > button:hover {
     animation: stripes 1s linear infinite;
 }
 
-@keyframes stripes { 
-    0% {background-position: 0 0;} 
-    100% {background-position: 48px 48px;} 
-}
+@keyframes stripes { 0% {background-position: 0 0;} 100% {background-position: 48px 48px;} }
 
 [data-testid="stMetricValue"] { color: #FF8C00 !important; font-weight: 800; }
 section[data-testid="stSidebar"] { background-color: #161922 !important; border-right: 1px solid #31333F; }
 
-/* WHATSAPP LINK */
 .wa-link {
     color: #25D366 !important;
     text-decoration: none !important;
     font-weight: bold;
     display: inline-flex;
     align-items: center;
-    gap: 6px;
-    font-size: 14px;
+    gap: 5px;
 }
-.wa-link:hover { text-decoration: underline !important; }
+.wa-link i { font-size: 16px; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -210,7 +171,7 @@ if st.session_state.get("authentication_status") is not True:
         st.warning("🔒 Restricted Access"); st.stop()
 
 # ==============================================================================
-# 5. SIDEBAR
+# 5. SIDEBAR & ADMIN
 # ==============================================================================
 with st.sidebar:
     st.title("Profile Settings")
@@ -258,14 +219,14 @@ with st.sidebar:
     if st.button("Logout"): authenticator.logout('Logout', 'main'); st.session_state.clear(); st.rerun()
 
 # ==============================================================================
-# 6. HEADER
+# 6. HEADER LOGO
 # ==============================================================================
 if os.path.exists("chatscrape.png"):
     with open("chatscrape.png", "rb") as f: b64 = base64.b64encode(f.read()).decode()
     st.markdown(f'<div class="centered-logo"><img src="data:image/png;base64,{b64}" class="logo-img"></div>', unsafe_allow_html=True)
 
 # ==============================================================================
-# 7. INPUTS
+# 7. INPUTS & 4-BUTTON ROW
 # ==============================================================================
 with st.container():
     c1, c2, c3, c4 = st.columns([3, 3, 2, 1.5])
@@ -368,7 +329,7 @@ with tab_live:
 
     if st.session_state.results_list:
         df_live = pd.DataFrame(st.session_state.results_list)
-        # Using HTML Table to support Icons & Links properly
+        # 🔥 RESTORE HTML RENDER FOR WHATSAPP ICON
         table_ui.markdown(df_live.to_html(escape=False, index=False), unsafe_allow_html=True)
         
         csv = convert_df(df_live)
@@ -391,94 +352,97 @@ with tab_live:
                 all_tasks = [(c, k) for c in cts for k in kws]
                 total_estimated = len(all_tasks) * limit_in
                 
-                # Main Loop
-                for i, (city, kw) in enumerate(all_tasks):
-                    if i < st.session_state.task_index: continue
-                    
-                    if not st.session_state.running: break
-                    if st.session_state.paused: 
-                        status_ui.warning("⏸️ Paused...")
-                        break 
-                    
-                    base_progress = i * limit_in
-                    status_ui.markdown(f"**Scanning:** `{kw}` in `{city}`... ({i+1}/{len(all_tasks)})")
-                    
-                    gl = {"Morocco":"ma", "France":"fr", "USA":"us"}.get(country_in, "ma")
-                    driver.get(f"https://www.google.com/maps/search/{quote(kw)}+in+{quote(city)}?hl=en&gl={gl}")
-                    time.sleep(4)
+                # Check if tasks exist
+                if all_tasks:
+                    for i, (city, kw) in enumerate(all_tasks):
+                        if i < st.session_state.task_index: continue
+                        
+                        if not st.session_state.running: break
+                        if st.session_state.paused: 
+                            status_ui.warning("⏸️ Paused...")
+                            break 
+                        
+                        base_progress = i * limit_in
+                        status_ui.markdown(f"**Scanning:** `{kw}` in `{city}`... ({i+1}/{len(all_tasks)})")
+                        
+                        gl = {"Morocco":"ma", "France":"fr", "USA":"us"}.get(country_in, "ma")
+                        driver.get(f"https://www.google.com/maps/search/{quote(kw)}+in+{quote(city)}?hl=en&gl={gl}")
+                        time.sleep(4)
 
-                    try:
-                        pane = driver.find_element(By.CSS_SELECTOR, 'div[role="feed"]')
-                        for _ in range(depth_in):
-                            if not st.session_state.running or st.session_state.paused: break
-                            driver.execute_script("arguments[0].scrollTop = arguments[0].scrollHeight", pane); time.sleep(1)
-                    except: pass
+                        try:
+                            pane = driver.find_element(By.CSS_SELECTOR, 'div[role="feed"]')
+                            for _ in range(depth_in):
+                                if not st.session_state.running or st.session_state.paused: break
+                                driver.execute_script("arguments[0].scrollTop = arguments[0].scrollHeight", pane); time.sleep(1)
+                        except: pass
 
-                    if not st.session_state.paused and st.session_state.running:
-                        items = driver.find_elements(By.XPATH, '//a[contains(@href, "/maps/place/")]')
-                        processed = 0
-                        for item in items:
-                            if processed >= limit_in or not st.session_state.running or st.session_state.paused: break
-                            try:
-                                driver.execute_script("arguments[0].click();", item); time.sleep(2)
-                                
-                                # Progress based on items
-                                current_real = base_progress + processed + 1
-                                st.session_state.progress = min(int((current_real / total_estimated) * 100), 100)
-                                prog_spot.markdown(f'<div class="prog-container"><div class="prog-bar-fill" style="width: {st.session_state.progress}%;"></div></div>', unsafe_allow_html=True)
-                                
-                                name = driver.find_element(By.CSS_SELECTOR, "h1.DUwDvf").text
-                                phone = "N/A"
-                                try: phone = driver.find_element(By.XPATH, '//*[contains(@data-item-id, "phone:tel")]').get_attribute("aria-label").replace("Phone: ", "")
-                                except: pass
-                                
-                                raw_web = "N/A"
-                                try: raw_web = driver.find_element(By.CSS_SELECTOR, 'a[data-item-id="authority"]').get_attribute("href")
-                                except: pass
-                                display_web = raw_web if w_web else "N/A"
+                        if not st.session_state.paused and st.session_state.running:
+                            items = driver.find_elements(By.XPATH, '//a[contains(@href, "/maps/place/")]')
+                            processed = 0
+                            for item in items:
+                                if processed >= limit_in or not st.session_state.running or st.session_state.paused: break
+                                try:
+                                    driver.execute_script("arguments[0].click();", item); time.sleep(2)
+                                    
+                                    current_real = base_progress + processed + 1
+                                    st.session_state.progress = min(int((current_real / total_estimated) * 100), 100)
+                                    prog_spot.markdown(f'<div class="prog-container"><div class="prog-bar-fill" style="width: {st.session_state.progress}%;"></div></div>', unsafe_allow_html=True)
+                                    
+                                    name = driver.find_element(By.CSS_SELECTOR, "h1.DUwDvf").text
+                                    phone = "N/A"
+                                    try: phone = driver.find_element(By.XPATH, '//*[contains(@data-item-id, "phone:tel")]').get_attribute("aria-label").replace("Phone: ", "")
+                                    except: pass
+                                    
+                                    raw_web = "N/A"
+                                    try: raw_web = driver.find_element(By.CSS_SELECTOR, 'a[data-item-id="authority"]').get_attribute("href")
+                                    except: pass
+                                    display_web = raw_web if w_web else "N/A"
 
-                                if w_phone and (phone == "N/A" or not phone): continue
-                                if w_nosite and raw_web != "N/A": continue
+                                    if w_phone and (phone == "N/A" or not phone): continue
+                                    if w_nosite and raw_web != "N/A": continue
 
-                                wa_link = "N/A"
-                                cp = re.sub(r'\D', '', phone)
-                                if any(cp.startswith(x) for x in ['2126','2127','06','07']) and not (cp.startswith('2125') or cp.startswith('05')):
-                                    wa_link = f'<a href="https://wa.me/{cp}" target="_blank" class="wa-link"><i class="fab fa-whatsapp"></i> Chat Now</a>'
-                                
-                                email_found = "N/A"
-                                if w_email and raw_web != "N/A":
-                                    email_found = fetch_email_deep(driver, raw_web)
+                                    wa_link = "N/A"
+                                    cp = re.sub(r'\D', '', phone)
+                                    if any(cp.startswith(x) for x in ['2126','2127','06','07']) and not (cp.startswith('2125') or cp.startswith('05')):
+                                        wa_link = f'<a href="https://wa.me/{cp}" target="_blank" class="wa-link"><i class="fab fa-whatsapp"></i> Chat Now</a>'
+                                    
+                                    email_found = "N/A"
+                                    if w_email and raw_web != "N/A":
+                                        email_found = fetch_email_deep(driver, raw_web)
 
-                                row = {"Keyword":kw, "City":city, "Name":name, "Phone":phone, "WhatsApp":wa_link, "Website":display_web, "Email":email_found}
-                                
-                                with sqlite3.connect(DB_NAME) as conn:
-                                    conn.execute("""INSERT INTO leads (session_id, keyword, city, country, name, phone, website, email, whatsapp)
-                                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""", (st.session_state.current_sid, kw, city, country_in, name, phone, display_web, email_found, wa_link))
-                                    if me != 'admin': conn.execute("UPDATE user_credits SET balance = balance - 1 WHERE username=?", (me,))
-                                    conn.commit()
-                                
-                                st.session_state.results_list.append(row)
-                                
-                                df_live = pd.DataFrame(st.session_state.results_list)
-                                table_ui.markdown(df_live.to_html(escape=False, index=False), unsafe_allow_html=True)
-                                
-                                csv = convert_df(df_live)
-                                download_btn_spot.download_button(
-                                    label="⬇️ Download CSV",
-                                    data=csv,
-                                    file_name="extraction_results.csv",
-                                    mime="text/csv",
-                                    key=f'live_dl_{len(st.session_state.results_list)}'
-                                )
-                                processed += 1
-                            except: continue
-                    
-                    if not st.session_state.paused and st.session_state.running:
-                        st.session_state.task_index += 1
+                                    row = {"Keyword":kw, "City":city, "Name":name, "Phone":phone, "WhatsApp":wa_link, "Website":display_web, "Email":email_found}
+                                    
+                                    with sqlite3.connect(DB_NAME) as conn:
+                                        conn.execute("""INSERT INTO leads (session_id, keyword, city, country, name, phone, website, email, whatsapp)
+                                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""", (st.session_state.current_sid, kw, city, country_in, name, phone, display_web, email_found, wa_link))
+                                        if me != 'admin': conn.execute("UPDATE user_credits SET balance = balance - 1 WHERE username=?", (me,))
+                                        conn.commit()
+                                    
+                                    st.session_state.results_list.append(row)
+                                    
+                                    df_live = pd.DataFrame(st.session_state.results_list)
+                                    table_ui.markdown(df_live.to_html(escape=False, index=False), unsafe_allow_html=True)
+                                    
+                                    csv = convert_df(df_live)
+                                    download_btn_spot.download_button(
+                                        label="⬇️ Download CSV",
+                                        data=csv,
+                                        file_name="extraction_results.csv",
+                                        mime="text/csv",
+                                        key=f'live_dl_{len(st.session_state.results_list)}'
+                                    )
+                                    processed += 1
+                                except: continue
+                        
+                        if not st.session_state.paused and st.session_state.running:
+                            st.session_state.task_index += 1
 
-                # 🔥 FIXED: Only Show Success if Loop Completes Naturally (not paused/stopped)
-                if not st.session_state.paused and st.session_state.running and st.session_state.task_index >= len(all_tasks):
-                    st.success("🏁 Extraction Finished!")
+                    # 🔥 FIXED: Only Show Success if Loop Completes Naturally (not paused/stopped)
+                    if not st.session_state.paused and st.session_state.running and st.session_state.task_index >= len(all_tasks):
+                        st.success("🏁 Extraction Finished!")
+                        st.session_state.running = False
+                else:
+                    st.warning("⚠️ No tasks found.")
                     st.session_state.running = False
             finally:
                 driver.quit()
@@ -499,6 +463,7 @@ with tab_archive:
                 with sqlite3.connect(DB_NAME) as conn:
                     df_l = pd.read_sql(f"SELECT * FROM leads WHERE session_id={sess['id']}", conn)
                 if not df_l.empty:
+                    # Archives use HTML render for icons
                     st.write(df_l.drop(columns=['id', 'session_id']).to_html(escape=False, index=False), unsafe_allow_html=True)
                     
                     csv_arch = convert_df(df_l)
@@ -511,4 +476,4 @@ with tab_archive:
                     )
                 else: st.warning("Empty results.")
 
-st.markdown('<div style="text-align:center;color:#666;padding:30px;">Designed by Chatir Elite Pro - Architect Edition V47</div>', unsafe_allow_html=True)
+st.markdown('<div style="text-align:center;color:#666;padding:30px;">Designed by Chatir Elite Pro - Architect Edition V48</div>', unsafe_allow_html=True)
