@@ -28,44 +28,49 @@ if 'status_msg' not in st.session_state: st.session_state.status_msg = "READY"
 if 'current_sid' not in st.session_state: st.session_state.current_sid = None
 
 # ==============================================================================
-# 2. DESIGN SYSTEM (TARGETED 70/30 FIX)
+# 2. DESIGN SYSTEM (70/30 PRECISION FIX)
 # ==============================================================================
 orange_grad = "linear-gradient(135deg, #FF8C00 0%, #FF4500 100%)"
 
 st.markdown(f"""
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap');
     html, body, [data-testid="stAppViewContainer"] {{ font-family: 'Inter', sans-serif !important; background-color: #0e1117; }}
 
-    /* Center Logo */
     .centered-logo {{ text-align: center; padding: 20px 0 40px 0; }}
     .logo-img {{ width: 280px; filter: drop-shadow(0 0 15px rgba(255,140,0,0.3)); }}
 
-    /* 🔥 THE 70/30 BUTTON BAR (Zero Gap Fix) */
+    /* 🔥 THE 70/30 ZERO GAP FIX */
+    div[data-testid="stHorizontalBlock"]:has(button) {{
+        gap: 0 !important;
+    }}
     div[data-testid="stHorizontalBlock"]:has(button) div[data-testid="column"] {{
         padding: 0 !important;
         margin: 0 !important;
-        gap: 0 !important;
     }}
 
     .stButton > button {{
         width: 100% !important;
         height: 60px !important;
         font-weight: 800 !important;
-        font-size: 17px !important;
+        font-size: 18px !important;
         border: none !important;
         text-transform: uppercase;
         letter-spacing: 1.5px;
-        transition: 0.3s all ease-in-out;
+        transition: 0.3s all ease;
+        display: flex !important;
+        justify-content: center !important;
+        align-items: center !important;
+        text-align: center !important;
     }}
     
-    /* START BUTTON (70%) */
+    /* START BUTTON - FULL COLOR STRETCH (70%) */
     div.stButton > button[kind="primary"] {{
         background: {orange_grad} !important;
         color: white !important;
         border-radius: 12px 0 0 12px !important;
+        box-shadow: 0 4px 15px rgba(255,69,0,0.3) !important;
     }}
     
     /* STOP BUTTON (30%) */
@@ -76,7 +81,6 @@ st.markdown(f"""
         border-radius: 0 12px 12px 0 !important;
     }}
 
-    /* PROGRESS BAR */
     .prog-container {{ width: 100%; background: #1c212d; border-radius: 50px; padding: 4px; border: 1px solid #31333f; margin: 30px 0; }}
     .prog-bar-fill {{ 
         height: 14px; 
@@ -93,7 +97,7 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 # ==============================================================================
-# 3. DATABASE ENGINE
+# 3. DATABASE ENGINE (v9 STABLE)
 # ==============================================================================
 DB_NAME = "chatscrap_elite_pro_v9.db"
 
@@ -148,44 +152,32 @@ with st.sidebar:
             conn = sqlite3.connect(DB_NAME)
             u_df = pd.read_sql("SELECT * FROM user_credits", conn)
             st.dataframe(u_df, hide_index=True)
-            
             target = st.selectbox("Manage User", u_df['username'])
             col_admin_a, col_admin_b, col_admin_c = st.columns(3)
             
-            # 🔥 TOP-UP ACTIVATED
             if col_admin_a.button("💰 +100"): 
-                conn.execute("UPDATE user_credits SET balance = balance + 100 WHERE username=?", (target,))
-                conn.commit()
-                st.rerun()
-            
-            # 🔥 SUSPEND STATUS ACTIVATED
+                sqlite3.connect(DB_NAME).execute("UPDATE user_credits SET balance = balance + 100 WHERE username=?", (target,))
+                conn.commit(); st.rerun()
             if col_admin_b.button("🚫 Status"):
-                curr_s = conn.execute("SELECT status FROM user_credits WHERE username=?", (target,)).fetchone()[0]
-                new_s = 'suspended' if curr_s == 'active' else 'active'
-                conn.execute("UPDATE user_credits SET status=? WHERE username=?", (new_s, target))
-                conn.commit()
-                st.rerun()
-
-            # 🔥 DELETE ACTIVATED
+                current_s = sqlite3.connect(DB_NAME).execute("SELECT status FROM user_credits WHERE username=?", (target,)).fetchone()[0]
+                new_s = 'suspended' if current_s == 'active' else 'active'
+                sqlite3.connect(DB_NAME).execute("UPDATE user_credits SET status=? WHERE username=?", (new_s, target))
+                conn.commit(); st.rerun()
             if col_admin_c.button("🗑️ Del"):
-                conn.execute("DELETE FROM user_credits WHERE username=?", (target,))
-                conn.commit()
-                st.rerun()
+                sqlite3.connect(DB_NAME).execute("DELETE FROM user_credits WHERE username=?", (target,))
+                conn.commit(); st.rerun()
             
             st.divider()
-            # 🔥 ADD NEW USER ACTIVATED
             st.write("Add New User:")
-            nu = st.text_input("New Username", key="new_u")
-            np = st.text_input("New Password", type="password", key="new_p")
+            nu = st.text_input("New UN", key="new_u")
+            np = st.text_input("New PW", type="password", key="new_p")
             if st.button("Create Account"):
                 if nu and np:
-                    try: hashed_pw = stauth.Hasher.hash(np)
-                    except: hashed_pw = stauth.Hasher([np]).generate()[0]
-                    config['credentials']['usernames'][nu] = {'name': nu, 'password': hashed_pw, 'email': 'x'}
+                    try: hp = stauth.Hasher.hash(np)
+                    except: hp = stauth.Hasher([np]).generate()[0]
+                    config['credentials']['usernames'][nu] = {'name': nu, 'password': hp, 'email': 'x'}
                     with open('config.yaml', 'w') as f: yaml.dump(config, f)
-                    get_user_data(nu) 
-                    st.success(f"User {nu} Created!")
-                    st.rerun()
+                    get_user_data(nu); st.success(f"User {nu} Created!"); st.rerun()
 
     st.divider()
     if st.button("Logout"): authenticator.logout('Logout', 'main'); st.session_state.clear(); st.rerun()
@@ -198,7 +190,7 @@ if os.path.exists("chatscrape.png"):
     st.markdown(f'<div class="centered-logo"><img src="data:image/png;base64,{b64}" class="logo-img"></div>', unsafe_allow_html=True)
 
 # ==============================================================================
-# 7. INPUTS & THE "70/30" ACTION BAR
+# 7. INPUTS & THE "SOLID" 70/30 BAR
 # ==============================================================================
 with st.container():
     c1, c2, c3, c4 = st.columns([3, 3, 2, 1.5])
@@ -216,7 +208,7 @@ with st.container():
     depth_in = f5.slider("Scroll Depth", 1, 100, 10)
 
     st.write("")
-    # 🔥 THE 70/30 PRO BAR (ZERO GAP)
+    # 🔥 THE TRULY ATTACHED 70/30 BAR
     btn_container = st.columns([7, 3])
     with btn_container[0]:
         if st.button("Start Extraction", type="primary"):
@@ -235,7 +227,7 @@ with st.container():
             st.session_state.running = False; st.rerun()
 
 # ==============================================================================
-# 8. ENGINE & PROGRESS
+# 8. ENGINE & PROGRESS BAR
 # ==============================================================================
 def get_driver():
     opts = Options()
