@@ -21,7 +21,7 @@ from urllib.parse import quote
 # ==============================================================================
 st.set_page_config(page_title="ChatScrap Elite Pro", layout="wide", page_icon="💎")
 
-# State Management (Preserved from app 10)
+# State Management (Snapshot Fix Included)
 if 'results_list' not in st.session_state: st.session_state.results_list = []
 if 'running' not in st.session_state: st.session_state.running = False
 if 'paused' not in st.session_state: st.session_state.paused = False
@@ -33,7 +33,7 @@ if 'active_kw' not in st.session_state: st.session_state.active_kw = ""
 if 'active_city' not in st.session_state: st.session_state.active_city = ""
 
 # ==============================================================================
-# 2. DESIGN SYSTEM (EXACT COPY FROM APP 9/10 - NO CHANGES)
+# 2. DESIGN SYSTEM (EXACT COPY FROM APP 10)
 # ==============================================================================
 st.markdown("""
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -61,12 +61,12 @@ div[data-testid="stHorizontalBlock"]:has(button) div[data-testid="column"] { pad
     letter-spacing: 1px;
     transition: all 0.3s ease-in-out;
     border-radius: 8px !important;
+    color: white !important;
 }
 
 /* 1. START BUTTON (Orange) */
 div[data-testid="column"]:nth-of-type(1) .stButton > button {
     background: linear-gradient(135deg, #FF8C00 0%, #FF4500 100%) !important;
-    color: white !important;
     box-shadow: 0 4px 15px rgba(255,69,0,0.3) !important;
 }
 
@@ -82,6 +82,9 @@ div[data-testid="column"]:nth-of-type(3) .stButton > button {
     background: linear-gradient(135deg, #28a745 0%, #218838 100%) !important;
     color: white !important;
     box-shadow: 0 4px 15px rgba(40, 167, 69, 0.3) !important;
+}
+div[data-testid="column"]:nth-of-type(3) .stButton > button:hover {
+    background: linear-gradient(135deg, #34ce57 0%, #28a745 100%) !important;
 }
 
 /* 4. STOP BUTTON (Red) */
@@ -111,7 +114,7 @@ div[data-testid="column"]:nth-of-type(4) .stButton > button {
     background: repeating-linear-gradient(45deg, #FF8C00, #FF8C00 12px, #FF4500 12px, #FF4500 24px);
     border-radius: 20px;
     transition: width 0.3s ease-in-out;
-    animation: stripes 1s linear infinite;
+    animation: stripes 1.5s linear infinite;
 }
 
 @keyframes stripes { 0% {background-position: 0 0;} 100% {background-position: 48px 48px;} }
@@ -126,13 +129,13 @@ section[data-testid="stSidebar"] { background-color: #161922 !important; border-
     font-weight: bold;
     display: inline-flex;
     align-items: center;
-    gap: 6px;
+    gap: 5px;
 }
 </style>
 """, unsafe_allow_html=True)
 
 # ==============================================================================
-# 3. DATABASE (Preserved from app 10)
+# 3. DATABASE
 # ==============================================================================
 DB_NAME = "chatscrap_elite_pro_v9.db"
 
@@ -158,7 +161,7 @@ def get_user_data(username):
         return (100, 'active')
 
 # ==============================================================================
-# 4. AUTHENTICATION (Preserved from app 10)
+# 4. AUTHENTICATION
 # ==============================================================================
 try:
     with open('config.yaml') as file: config = yaml.load(file, Loader=SafeLoader)
@@ -173,7 +176,7 @@ if st.session_state.get("authentication_status") is not True:
         st.warning("🔒 Restricted Access"); st.stop()
 
 # ==============================================================================
-# 5. SIDEBAR & ADMIN PANEL (Preserved from app 10)
+# 5. SIDEBAR & ADMIN
 # ==============================================================================
 with st.sidebar:
     st.title("Profile Settings")
@@ -223,7 +226,7 @@ if os.path.exists("chatscrape.png"):
     st.markdown(f'<div class="centered-logo"><img src="data:image/png;base64,{b64}" class="logo-img"></div>', unsafe_allow_html=True)
 
 # ==============================================================================
-# 7. INPUTS & 4-BUTTON ROW (Preserved from app 10 with Snapshot Fix)
+# 7. INPUTS & 4-BUTTON ROW
 # ==============================================================================
 with st.container():
     c1, c2, c3, c4 = st.columns([3, 3, 2, 1.5])
@@ -324,7 +327,7 @@ with tab_live:
 
     if st.session_state.results_list:
         df_live = pd.DataFrame(st.session_state.results_list)
-        # 🔥 SWITCHED TO HTML TO RENDER THE GREEN WHATSAPP ICON
+        # 🔥 SWITCHED TO HTML TO SHOW THE GREEN WHATSAPP ICON
         table_ui.markdown(df_live.to_html(escape=False, index=False), unsafe_allow_html=True)
         csv = convert_df(df_live)
         download_ui.download_button(label="⬇️ Download Results CSV", data=csv, file_name="extraction_results.csv", mime="text/csv", key='live_dl')
@@ -372,16 +375,18 @@ with tab_live:
                         if w_phone and (phone == "N/A" or not phone): continue
                         if w_nosite and raw_web != "N/A": continue
 
-                        # 🔥 WHATSAPP ICON LOGIC (fa-whatsapp + GREEN COLOR)
+                        # 🔥 WHATSAPP ICON LOGIC (GREEN + Icon)
                         wa_link = "N/A"
                         cp = re.sub(r'\D', '', phone)
                         if any(cp.startswith(x) for x in ['2126','2127','06','07']) and not (cp.startswith('2125') or cp.startswith('05')):
                             wa_link = f'<a href="https://wa.me/{cp}" target="_blank" class="wa-link"><i class="fab fa-whatsapp"></i> Chat Now</a>'
                         
-                        row = {"Keyword":kw, "City":city, "Name":name, "Phone":phone, "WhatsApp":wa_link, "Website":raw_web if w_web else "N/A"}
+                        row = {"Keyword":kw, "City":city, "Name":name, "Phone":phone, "WhatsApp":wa_link, "Website":raw_web if w_web else "N/A", "Email":"N/A"}
+                        if w_email and row["Website"] != "N/A": row["Email"] = fetch_email_deep(driver, row["Website"])
+
                         with sqlite3.connect(DB_NAME) as conn:
-                            conn.execute("""INSERT INTO leads (session_id, keyword, city, country, name, phone, website, whatsapp)
-                                VALUES (?, ?, ?, ?, ?, ?, ?, ?)""", (st.session_state.current_sid, kw, city, "Morocco", name, phone, row["Website"], wa_link))
+                            conn.execute("""INSERT INTO leads (session_id, keyword, city, country, name, phone, website, email, whatsapp)
+                                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""", (st.session_state.current_sid, kw, city, "Morocco", name, phone, row["Website"], row["Email"], wa_link))
                             if me != 'admin': conn.execute("UPDATE user_credits SET balance = balance - 1 WHERE username=?", (me,))
                             conn.commit()
                         
@@ -409,6 +414,8 @@ with tab_archive:
                     df_l = pd.read_sql(f"SELECT * FROM leads WHERE session_id={sess['id']}", conn)
                 if not df_l.empty:
                     st.write(df_l.drop(columns=['id', 'session_id']).to_html(escape=False, index=False), unsafe_allow_html=True)
+                    csv_arch = convert_df(df_l)
+                    st.download_button(label="⬇️ Download Archive CSV", data=csv_arch, file_name=f"archive_{sess['id']}.csv", mime="text/csv", key=f"btn_arch_{sess['id']}")
                 else: st.warning("Empty results.")
 
-st.markdown('<div style="text-align:center;color:#666;padding:30px;">Designed by Chatir Elite Pro - Architect Edition V54</div>', unsafe_allow_html=True)
+st.markdown('<div style="text-align:center;color:#666;padding:30px;">Designed by Chatir Elite Pro - Architect Edition V55</div>', unsafe_allow_html=True)
