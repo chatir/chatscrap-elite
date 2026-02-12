@@ -19,7 +19,7 @@ from urllib.parse import quote
 # ==============================================================================
 # 1. GLOBAL CONFIGURATION & STATE (FROM APP 11)
 # ==============================================================================
-st.set_page_config(page_title="ChatScrap Elite Pro", layout="wide", page_icon="💎")
+st.set_page_config(page_title="ChatScrap Elite Pro", layout="wide", page_icon="💎") #
 
 if 'results_list' not in st.session_state: st.session_state.results_list = [] #
 if 'running' not in st.session_state: st.session_state.running = False #
@@ -30,11 +30,11 @@ if 'status_msg' not in st.session_state: st.session_state.status_msg = "READY" #
 if 'current_sid' not in st.session_state: st.session_state.current_sid = None #
 
 # ==============================================================================
-# 2. DESIGN SYSTEM (FIXED CSS INJECTION + WHATSAPP ICON)
+# 2. DESIGN SYSTEM (SAFE INJECTION + WHATSAPP ENHANCEMENT)
 # ==============================================================================
 st.markdown('<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">', unsafe_allow_html=True)
 
-clean_css = """
+st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap');
 html, body, [data-testid="stAppViewContainer"] { font-family: 'Inter', sans-serif !important; background-color: #0e1117; }
@@ -54,9 +54,9 @@ div[data-testid="column"]:nth-of-type(4) .stButton > button { background: linear
 [data-testid="stMetricValue"] { color: #FF8C00 !important; font-weight: 800; }
 section[data-testid="stSidebar"] { background-color: #161922 !important; border-right: 1px solid #31333F; }
 .wa-link { color: #25D366 !important; text-decoration: none !important; font-weight: bold; display: inline-flex; align-items: center; gap: 5px; }
+.wa-link:hover { text-decoration: underline !important; }
 </style>
-"""
-st.markdown(clean_css, unsafe_allow_html=True)
+""", unsafe_allow_html=True)
 
 # ==============================================================================
 # 3. DATABASE (FROM APP 11)
@@ -208,7 +208,7 @@ with st.container():
             st.rerun() #
 
 # ==============================================================================
-# 8. ENGINE & LOGIC (FROM APP 11 + WHATSAPP ENHANCEMENT)
+# 8. ENGINE & LOGIC (FROM APP 11 + WHATSAPP GREEN ICON)
 # ==============================================================================
 def get_driver():
     opts = Options()
@@ -255,8 +255,8 @@ with tab_live:
 
     if st.session_state.results_list:
         df_live = pd.DataFrame(st.session_state.results_list) #
-        # 🔥 SWITCHED TO HTML FOR GREEN ICON SUPPORT
-        table_ui.markdown(df_live.to_html(escape=False, index=False), unsafe_allow_html=True)
+        # 🔥 SWITCHED TO HTML FOR ICON SUPPORT
+        table_ui.write(df_live.to_html(escape=False, index=False), unsafe_allow_html=True)
         csv = convert_df(df_live) #
         download_ui.download_button(label="⬇️ Download CSV", data=csv, file_name="leads.csv", mime="text/csv", key='live_dl') #
 
@@ -313,12 +313,12 @@ with tab_live:
                         
                         with sqlite3.connect(DB_NAME) as conn:
                             conn.execute("""INSERT INTO leads (session_id, keyword, city, country, name, phone, website, email, whatsapp)
-                                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""", (st.session_state.current_sid, kw, city, "Morocco", name, phone, row["Website"], email_found, wa_link)) #
+                                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""", (st.session_state.current_sid, kw, city, country_in, name, phone, row["Website"], email_found, wa_link)) #
                             if me != 'admin': conn.execute("UPDATE user_credits SET balance = balance - 1 WHERE username=?", (me,)) #
                             conn.commit() #
                         
                         st.session_state.results_list.append(row) #
-                        table_ui.markdown(pd.DataFrame(st.session_state.results_list).to_html(escape=False, index=False), unsafe_allow_html=True) #
+                        table_ui.write(pd.DataFrame(st.session_state.results_list).to_html(escape=False, index=False), unsafe_allow_html=True) #
                         processed += 1 #
                     except Exception: continue #
                 st.session_state.task_index += 1 #
@@ -331,7 +331,7 @@ with tab_live:
 # ==============================================================================
 with tab_archive:
     st.subheader("Persistent History") #
-    search_f = st.text_input("Filter History", placeholder="🔍 Search...") #
+    search_f = st.text_input("Filter History", placeholder="🔍 Search e.g. 'lawyer' or 'tiznit'...") #
     with sqlite3.connect(DB_NAME) as conn:
         df_s = pd.read_sql("SELECT * FROM sessions WHERE query LIKE ? ORDER BY id DESC LIMIT 30", conn, params=(f"%{search_f}%",)) #
     if not df_s.empty:
@@ -340,9 +340,17 @@ with tab_archive:
                 with sqlite3.connect(DB_NAME) as conn:
                     df_l = pd.read_sql(f"SELECT * FROM leads WHERE session_id={sess['id']}", conn) #
                 if not df_l.empty:
-                    st.write(df_l.drop(columns=['id', 'session_id']).to_html(escape=False, index=False), unsafe_allow_html=True) #
+                    # 🔥 SHOW AS HTML TABLE FOR ICONS
+                    st.write(df_l.drop(columns=['id', 'session_id']).to_html(escape=False, index=False), unsafe_allow_html=True)
                     csv_arch = convert_df(df_l) #
                     st.download_button(label="⬇️ Download Archive CSV", data=csv_arch, file_name=f"archive_{sess['id']}.csv", mime="text/csv", key=f"btn_arch_{sess['id']}") #
                 else: st.warning("Empty results.") #
 
-st.markdown('<div style="text-align:center;color:#666;padding:30px;">Designed by Chatir Elite Pro - Architect Edition V60</div>', unsafe_allow_html=True) #
+# ==============================================================================
+# 10. MARKETING TAB (REINSTATED FROM APP 11)
+# ==============================================================================
+with tab_tools:
+    st.subheader("🤖 Marketing Automation") #
+    st.info("Marketing tools coming soon in the next update!") #
+
+st.markdown('<div style="text-align:center;color:#666;padding:30px;">Designed by Chatir Elite Pro - Architect Edition V61</div>', unsafe_allow_html=True) #
