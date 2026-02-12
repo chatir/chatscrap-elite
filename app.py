@@ -31,9 +31,8 @@ if 'status_msg' not in st.session_state: st.session_state.status_msg = "READY"
 if 'current_sid' not in st.session_state: st.session_state.current_sid = None
 
 # ==============================================================================
-# 2. DESIGN SYSTEM (SMART TYPE-BASED COLORING)
+# 2. DESIGN SYSTEM (GREEN CONTINUE & RESTORED ICONS)
 # ==============================================================================
-# Pure CSS - No comments to ensure perfect rendering
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap');
@@ -43,24 +42,11 @@ html, body, [data-testid="stAppViewContainer"] {
     background-color: #0e1117;
 }
 
-.centered-logo {
-    text-align: center;
-    padding: 20px 0 40px 0;
-}
+.centered-logo { text-align: center; padding: 20px 0 40px 0; }
+.logo-img { width: 280px; filter: drop-shadow(0 0 15px rgba(255,140,0,0.3)); }
 
-.logo-img {
-    width: 280px;
-    filter: drop-shadow(0 0 15px rgba(255,140,0,0.3));
-}
-
-div[data-testid="stHorizontalBlock"]:has(button) {
-    gap: 5px !important;
-}
-
-div[data-testid="stHorizontalBlock"]:has(button) div[data-testid="column"] {
-    padding: 0 !important;
-    margin: 0 !important;
-}
+div[data-testid="stHorizontalBlock"]:has(button) { gap: 5px !important; }
+div[data-testid="stHorizontalBlock"]:has(button) div[data-testid="column"] { padding: 0 !important; margin: 0 !important; }
 
 .stButton > button {
     width: 100% !important;
@@ -74,31 +60,37 @@ div[data-testid="stHorizontalBlock"]:has(button) div[data-testid="column"] {
     border-radius: 8px !important;
 }
 
-/* START BUTTON (Primary Type -> Orange) */
-button[kind="primary"] {
+/* 1. START BUTTON (Orange) */
+div[data-testid="column"]:nth-of-type(1) .stButton > button {
     background: linear-gradient(135deg, #FF8C00 0%, #FF4500 100%) !important;
     color: white !important;
     box-shadow: 0 4px 15px rgba(255,69,0,0.3) !important;
 }
 
-/* STOP BUTTON (Targeting the LAST Primary button -> Red) */
-div[data-testid="column"]:last-child button[kind="primary"] {
-    background: linear-gradient(135deg, #DC2626 0%, #991B1B 100%) !important;
-    box-shadow: 0 4px 15px rgba(220, 38, 38, 0.4) !important;
-}
-
-/* PAUSE & CONTINUE (Secondary Type -> Dark) */
-button[kind="secondary"] {
+/* 2. PAUSE BUTTON (Dark) */
+div[data-testid="column"]:nth-of-type(2) .stButton > button {
     background-color: #1F2937 !important;
     border: 1px solid #374151 !important;
     color: #E5E7EB !important;
 }
-button[kind="secondary"]:hover {
-    background-color: #374151 !important;
-    border-color: #FF8C00 !important;
+
+/* 3. CONTINUE BUTTON (Green) */
+div[data-testid="column"]:nth-of-type(3) .stButton > button {
+    background: linear-gradient(135deg, #28a745 0%, #218838 100%) !important;
+    color: white !important;
+    box-shadow: 0 4px 15px rgba(40, 167, 69, 0.3) !important;
+}
+div[data-testid="column"]:nth-of-type(3) .stButton > button:hover {
+    background: linear-gradient(135deg, #34ce57 0%, #28a745 100%) !important;
 }
 
-/* Disabled State */
+/* 4. STOP BUTTON (Red) */
+div[data-testid="column"]:nth-of-type(4) .stButton > button {
+    background: linear-gradient(135deg, #DC2626 0%, #991B1B 100%) !important;
+    color: white !important;
+    box-shadow: 0 4px 15px rgba(220, 38, 38, 0.4) !important;
+}
+
 .stButton > button:disabled {
     opacity: 0.5 !important;
     cursor: not-allowed;
@@ -123,26 +115,10 @@ button[kind="secondary"]:hover {
     animation: stripes 1s linear infinite;
 }
 
-@keyframes stripes {
-    0% {background-position: 0 0;}
-    100% {background-position: 48px 48px;}
-}
+@keyframes stripes { 0% {background-position: 0 0;} 100% {background-position: 48px 48px;} }
 
-[data-testid="stMetricValue"] {
-    color: #FF8C00 !important;
-    font-weight: 800;
-}
-
-section[data-testid="stSidebar"] {
-    background-color: #161922 !important;
-    border-right: 1px solid #31333F;
-}
-
-.wa-link {
-    color: #25D366 !important;
-    text-decoration: none !important;
-    font-weight: bold;
-}
+[data-testid="stMetricValue"] { color: #FF8C00 !important; font-weight: 800; }
+section[data-testid="stSidebar"] { background-color: #161922 !important; border-right: 1px solid #31333F; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -262,12 +238,11 @@ with st.container():
 
     st.write("")
     
-    # 🔥 4 BUTTONS ROW (Equal Sizing)
+    # 4 BUTTONS ROW
     b_start, b_pause, b_cont, b_stop = st.columns(4) 
     
     with b_start:
-        # TYPE PRIMARY -> ORANGE via CSS
-        if st.button("Start Search", type="primary", disabled=st.session_state.running):
+        if st.button("Start Search", disabled=st.session_state.running):
             if kw_in and city_in:
                 st.session_state.running = True
                 st.session_state.paused = False
@@ -282,20 +257,17 @@ with st.container():
                 st.rerun()
 
     with b_pause:
-        # TYPE SECONDARY -> DARK via CSS
-        if st.button("Pause", type="secondary", disabled=not st.session_state.running or st.session_state.paused):
+        if st.button("Pause", disabled=not st.session_state.running or st.session_state.paused):
             st.session_state.paused = True
             st.rerun()
 
     with b_cont:
-        # TYPE SECONDARY -> DARK via CSS
-        if st.button("Continue", type="secondary", disabled=not st.session_state.running or not st.session_state.paused):
+        if st.button("Continue", disabled=not st.session_state.running or not st.session_state.paused):
             st.session_state.paused = False
             st.rerun()
 
     with b_stop:
-        # TYPE PRIMARY -> RED via CSS (Targeted as Last Child)
-        if st.button("Stop Search", type="primary", disabled=not st.session_state.running):
+        if st.button("Stop Search", disabled=not st.session_state.running):
             st.session_state.running = False
             st.session_state.paused = False
             st.rerun()
@@ -335,18 +307,34 @@ def fetch_email_deep(driver, url):
             driver.switch_to.window(driver.window_handles[0])
         return "N/A"
 
+# CSV CONVERTER
+def convert_df(df):
+    return df.to_csv(index=False).encode('utf-8')
+
 tab_live, tab_archive, tab_tools = st.tabs(["⚡ Live Data", "📜 Archives", "🤖 Marketing"])
 
 with tab_live:
     prog_spot = st.empty()
     status_ui = st.empty()
     table_ui = st.empty()
+    download_ui = st.empty() # Placeholder for download button
     
     prog_spot.markdown(f'<div class="prog-container"><div class="prog-bar-fill" style="width: {st.session_state.progress}%;"></div></div>', unsafe_allow_html=True)
 
     if st.session_state.results_list:
         df_live = pd.DataFrame(st.session_state.results_list)
-        table_ui.markdown(df_live.to_html(escape=False, index=False), unsafe_allow_html=True)
+        # Using st.dataframe restores the Toolbar (Search, Fullscreen)
+        table_ui.dataframe(df_live, use_container_width=True)
+        
+        # 🔥 DOWNLOAD BUTTON ADDED
+        csv = convert_df(df_live)
+        download_ui.download_button(
+            label="⬇️ Download Results CSV",
+            data=csv,
+            file_name="extraction_results.csv",
+            mime="text/csv",
+            key='live_download'
+        )
 
     if st.session_state.running:
         if st.session_state.paused:
@@ -357,9 +345,7 @@ with tab_live:
                 kws = [k.strip() for k in kw_in.split(',')]
                 cts = [c.strip() for c in city_in.split(',')]
                 all_tasks = [(c, k) for c in cts for k in kws]
-                
-                # 🔥 NEW PROGRESS LOGIC: Item-based
-                total_estimated_items = len(all_tasks) * limit_in
+                total_estimated = len(all_tasks) * limit_in # Estimate for progress
                 
                 for i, (city, kw) in enumerate(all_tasks):
                     if i < st.session_state.task_index: continue
@@ -369,9 +355,7 @@ with tab_live:
                         status_ui.warning("⏸️ Paused...")
                         break 
                     
-                    # Initial progress for city (base)
-                    base_progress_items = i * limit_in
-                    
+                    base_progress = i * limit_in
                     status_ui.markdown(f"**Scanning:** `{kw}` in `{city}`... ({i+1}/{len(all_tasks)})")
                     
                     gl = {"Morocco":"ma", "France":"fr", "USA":"us"}.get(country_in, "ma")
@@ -393,9 +377,9 @@ with tab_live:
                             try:
                                 driver.execute_script("arguments[0].click();", item); time.sleep(2)
                                 
-                                # 🔥 UPDATE PROGRESS PER ITEM
-                                current_total_progress = base_progress_items + processed + 1
-                                st.session_state.progress = min(int((current_total_progress / total_estimated_items) * 100), 100)
+                                # Update Progress based on Items found
+                                current_real = base_progress + processed + 1
+                                st.session_state.progress = min(int((current_real / total_estimated) * 100), 100)
                                 prog_spot.markdown(f'<div class="prog-container"><div class="prog-bar-fill" style="width: {st.session_state.progress}%;"></div></div>', unsafe_allow_html=True)
                                 
                                 name = driver.find_element(By.CSS_SELECTOR, "h1.DUwDvf").text
@@ -429,7 +413,18 @@ with tab_live:
                                     conn.commit()
                                 
                                 st.session_state.results_list.append(row)
-                                table_ui.markdown(pd.DataFrame(st.session_state.results_list).to_html(escape=False, index=False), unsafe_allow_html=True)
+                                
+                                # Update Table and Button Dynamic
+                                df_live = pd.DataFrame(st.session_state.results_list)
+                                table_ui.dataframe(df_live, use_container_width=True)
+                                csv = convert_df(df_live)
+                                download_ui.download_button(
+                                    label="⬇️ Download Results CSV",
+                                    data=csv,
+                                    file_name="extraction_results.csv",
+                                    mime="text/csv",
+                                    key=f'live_download_{len(st.session_state.results_list)}'
+                                )
                                 processed += 1
                             except: continue
                     
@@ -458,7 +453,18 @@ with tab_archive:
                 with sqlite3.connect(DB_NAME) as conn:
                     df_l = pd.read_sql(f"SELECT * FROM leads WHERE session_id={sess['id']}", conn)
                 if not df_l.empty:
-                    st.write(df_l.drop(columns=['id', 'session_id']).to_html(escape=False, index=False), unsafe_allow_html=True)
+                    # Using dataframe here also brings back icons for archives
+                    st.dataframe(df_l.drop(columns=['id', 'session_id']), use_container_width=True)
+                    
+                    # 🔥 ARCHIVE DOWNLOAD BUTTON
+                    csv_arch = convert_df(df_l)
+                    st.download_button(
+                        label="⬇️ Download Archive CSV",
+                        data=csv_arch,
+                        file_name=f"archive_{sess['id']}.csv",
+                        mime="text/csv",
+                        key=f"btn_arch_{sess['id']}"
+                    )
                 else: st.warning("Empty results.")
 
-st.markdown('<div style="text-align:center;color:#666;padding:30px;">Designed by Chatir Elite Pro - Architect Edition V43</div>', unsafe_allow_html=True)
+st.markdown('<div style="text-align:center;color:#666;padding:30px;">Designed by Chatir Elite Pro - Architect Edition V44</div>', unsafe_allow_html=True)
