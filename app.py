@@ -28,7 +28,7 @@ if 'status_msg' not in st.session_state: st.session_state.status_msg = "READY"
 if 'current_sid' not in st.session_state: st.session_state.current_sid = None
 
 # ==============================================================================
-# 2. DESIGN SYSTEM (ZERO GAPS / FA ICONS)
+# 2. DESIGNER SUPREME CSS (TARGETED FIXES)
 # ==============================================================================
 orange_grad = "linear-gradient(135deg, #FF8C00 0%, #FF4500 100%)"
 
@@ -43,13 +43,10 @@ st.markdown(f"""
     .centered-logo {{ text-align: center; padding: 20px 0 40px 0; }}
     .logo-img {{ width: 280px; filter: drop-shadow(0 0 15px rgba(255,140,0,0.3)); }}
 
-    /* 🔥 THE NUCLEAR 50/50 FIX: No Gaps */
-    [data-testid="column"] {{
+    /* 🔥 TARGETED 50/50 BUTTONS (No spacing only for buttons) */
+    div[data-testid="stHorizontalBlock"]:has(button) div[data-testid="column"] {{
         padding: 0 !important;
         margin: 0 !important;
-    }}
-    
-    [data-testid="stHorizontalBlock"] {{
         gap: 0 !important;
     }}
 
@@ -79,7 +76,7 @@ st.markdown(f"""
         border-radius: 0 12px 12px 0 !important;
     }}
 
-    /* 🔥 PROGRESS BAR: Real Start from 0% */
+    /* PROGRESS BAR */
     .prog-container {{ width: 100%; background: #1c212d; border-radius: 50px; padding: 4px; border: 1px solid #31333f; margin: 30px 0; }}
     .prog-bar-fill {{ 
         height: 14px; 
@@ -90,14 +87,13 @@ st.markdown(f"""
     }}
     @keyframes stripes {{ 0% {{background-position: 0 0;}} 100% {{background-position: 48px 48px;}} }}
 
-    /* Result Styling */
     [data-testid="stMetricValue"] {{ color: #FF8C00 !important; font-weight: 800; }}
     section[data-testid="stSidebar"] {{ background-color: #161922 !important; }}
     </style>
 """, unsafe_allow_html=True)
 
 # ==============================================================================
-# 3. DATABASE ENGINE (v9 STABLE)
+# 3. DATABASE ENGINE
 # ==============================================================================
 DB_NAME = "chatscrap_elite_pro_v9.db"
 
@@ -138,7 +134,7 @@ if st.session_state.get("authentication_status") is not True:
         st.warning("🔒 Restricted Access"); st.stop()
 
 # ==============================================================================
-# 5. SIDEBAR & ADMIN (NO LOGO - CLEAN)
+# 5. SIDEBAR & ADMIN PANEL (ADD / STATUS / DEL)
 # ==============================================================================
 with st.sidebar:
     st.title("Profile Settings")
@@ -149,26 +145,24 @@ with st.sidebar:
     
     if me == 'admin':
         with st.expander("🛠️ Admin Panel"):
-            # Fetch current users
             conn = sqlite3.connect(DB_NAME)
             u_df = pd.read_sql("SELECT * FROM user_credits", conn)
             st.dataframe(u_df, hide_index=True)
             
             target = st.selectbox("Manage User", u_df['username'])
             
-            # 🔥 SUSPEND & CREDIT & DELETE (V25 FIX)
+            # 🔥 ACTION BUTTONS
             col_admin_a, col_admin_b, col_admin_c = st.columns(3)
-            
             if col_admin_a.button("💰 +100"): 
                 sqlite3.connect(DB_NAME).execute("UPDATE user_credits SET balance = balance + 100 WHERE username=?", (target,))
                 st.rerun()
-                
+            
             if col_admin_b.button("🚫 Status"):
                 current_s = sqlite3.connect(DB_NAME).execute("SELECT status FROM user_credits WHERE username=?", (target,)).fetchone()[0]
                 new_s = 'suspended' if current_s == 'active' else 'active'
                 sqlite3.connect(DB_NAME).execute("UPDATE user_credits SET status=? WHERE username=?", (new_s, target))
                 st.rerun()
-                
+
             if col_admin_c.button("🗑️ Del"):
                 sqlite3.connect(DB_NAME).execute("DELETE FROM user_credits WHERE username=?", (target,))
                 st.rerun()
@@ -176,15 +170,15 @@ with st.sidebar:
             st.divider()
             # 🔥 ADD NEW USER SECTION
             st.write("Add New User:")
-            nu = st.text_input("New UN", key="nu")
-            np = st.text_input("New PW", type="password", key="np")
+            nu = st.text_input("New Username", key="new_u")
+            np = st.text_input("New Password", type="password", key="new_p")
             if st.button("Create Account"):
                 if nu and np:
                     try: hashed_pw = stauth.Hasher.hash(np)
                     except: hashed_pw = stauth.Hasher([np]).generate()[0]
                     config['credentials']['usernames'][nu] = {'name': nu, 'password': hashed_pw, 'email': 'x'}
                     with open('config.yaml', 'w') as f: yaml.dump(config, f)
-                    get_user_data(nu) # Initialize in DB
+                    get_user_data(nu) 
                     st.success(f"User {nu} Created!")
                     st.rerun()
 
@@ -199,9 +193,10 @@ if os.path.exists("chatscrape.png"):
     st.markdown(f'<div class="centered-logo"><img src="data:image/png;base64,{b64}" class="logo-img"></div>', unsafe_allow_html=True)
 
 # ==============================================================================
-# 7. INPUTS & THE "SOLID 50/50" BAR
+# 7. INPUTS (RETAINED SPACING) & ACTION BUTTONS (NO GAP)
 # ==============================================================================
 with st.container():
+    # Columns here will have normal Streamlit gaps
     c1, c2, c3, c4 = st.columns([3, 3, 2, 1.5])
     kw_in = c1.text_input("Keywords", placeholder="e.g. hotel, cafe")
     city_in = c2.text_input("Cities", placeholder="e.g. Agadir, Casa")
@@ -217,14 +212,14 @@ with st.container():
     depth_in = f5.slider("Scroll Depth", 1, 100, 10)
 
     st.write("")
-    # 🔥 THE TRULY ATTACHED 50/50 BAR
+    # 🔥 BUTTONS CONTAINER (Will have Zero Gap due to CSS)
     btn_container = st.columns([1, 1])
     with btn_container[0]:
         if st.button("Start Extraction", type="primary"):
             if kw_in and city_in:
                 st.session_state.running = True
                 st.session_state.results_list = []
-                st.session_state.progress = 0 # Reset to Zero
+                st.session_state.progress = 0
                 with sqlite3.connect(DB_NAME) as conn:
                     cur = conn.cursor()
                     cur.execute("INSERT INTO sessions (query, date) VALUES (?, ?)", (f"{kw_in} | {city_in}", time.strftime("%Y-%m-%d %H:%M")))
@@ -236,7 +231,7 @@ with st.container():
             st.session_state.running = False; st.rerun()
 
 # ==============================================================================
-# 8. ENGINE & DYNAMIC PROGRESS BAR
+# 8. ENGINE & PROGRESS
 # ==============================================================================
 def get_driver():
     opts = Options()
@@ -252,12 +247,10 @@ def get_driver():
 tab_live, tab_archive, tab_tools = st.tabs(["⚡ Live Data", "📜 Archives", "🤖 Marketing"])
 
 with tab_live:
-    # 🔥 THE DYNAMIC BAR SPOT
     prog_spot = st.empty()
     status_ui = st.empty()
     table_ui = st.empty()
     
-    # Force initial display at 0
     prog_spot.markdown(f'<div class="prog-container"><div class="prog-bar-fill" style="width: {st.session_state.progress}%;"></div></div>', unsafe_allow_html=True)
 
     if st.session_state.results_list:
@@ -269,14 +262,13 @@ with tab_live:
         try:
             kws = [k.strip() for k in kw_in.split(',')]
             cts = [c.strip() for c in city_in.split(',')]
-            total = len(kws) * len(cts); curr_op = 0
+            total = len(kws) * len(cts); curr = 0
 
             for city in cts:
                 for kw in kws:
                     if not st.session_state.running: break
-                    curr_op += 1
-                    # 🔥 PROGRESS CALCULATION
-                    st.session_state.progress = int((curr_op / total) * 100)
+                    curr += 1
+                    st.session_state.progress = int((curr / total) * 100)
                     prog_spot.markdown(f'<div class="prog-container"><div class="prog-bar-fill" style="width: {st.session_state.progress}%;"></div></div>', unsafe_allow_html=True)
                     status_ui.markdown(f"**Scanning:** `{kw}` in `{city}`...")
                     
@@ -284,7 +276,6 @@ with tab_live:
                     driver.get(f"https://www.google.com/maps/search/{quote(kw)}+in+{quote(city)}?hl=en&gl={gl}")
                     time.sleep(4)
 
-                    # Pane Scroll
                     try:
                         pane = driver.find_element(By.CSS_SELECTOR, 'div[role="feed"]')
                         for _ in range(depth_in):
@@ -310,7 +301,6 @@ with tab_live:
                             if w_web and (web == "N/A" or not web): continue
                             if w_nosite and web != "N/A": continue
 
-                            # 🔥 SMART WHATSAPP WITH FA ICON
                             wa_link = "N/A"
                             cp = re.sub(r'\D', '', phone)
                             if any(cp.startswith(x) for x in ['2126','2127','06','07']) and not (cp.startswith('2125') or cp.startswith('05')):
@@ -332,11 +322,10 @@ with tab_live:
             driver.quit(); st.session_state.running = False; st.rerun()
 
 # ==============================================================================
-# 9. ARCHIVE TAB (ICON IN PLACEHOLDER)
+# 9. ARCHIVE TAB
 # ==============================================================================
 with tab_archive:
     st.subheader("Persistent History")
-    # 🔥 🔍 ICON IN PLACEHOLDER
     search_f = st.text_input("Filter History", placeholder="🔍 Search e.g. 'lawyer' or 'tiznit'...")
     
     with sqlite3.connect(DB_NAME) as conn:
