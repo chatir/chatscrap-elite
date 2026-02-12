@@ -28,7 +28,7 @@ if 'status_msg' not in st.session_state: st.session_state.status_msg = "READY"
 if 'current_sid' not in st.session_state: st.session_state.current_sid = None
 
 # ==============================================================================
-# 2. DESIGN SYSTEM (70/30 PRECISION - NO LEAKS)
+# 2. DESIGN SYSTEM (STRICT ORANGE SUPREME - NO LEAKS)
 # ==============================================================================
 orange_grad = "linear-gradient(135deg, #FF8C00 0%, #FF4500 100%)"
 
@@ -36,18 +36,20 @@ st.markdown(f"""
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap');
-    html, body, [data-testid="stAppViewContainer"] {{ font-family: 'Inter', sans-serif !important; background-color: #0e1117; }}
+    
+    html, body, [data-testid="stAppViewContainer"] {{
+        font-family: 'Inter', sans-serif !important;
+        background-color: #0e1117;
+    }}
 
-    .centered-logo {{ text-align: center; padding: 20px 0 40px 0; }}
+    .centered-logo {{ text-align: center; padding: 10px 0 30px 0; }}
     .logo-img {{ width: 280px; filter: drop-shadow(0 0 15px rgba(255,140,0,0.3)); }}
 
-    /* 🔥 THE 70/30 ZERO GAP FIX */
-    div[data-testid="stHorizontalBlock"]:has(button) {{
-        gap: 0 !important;
-    }}
+    /* 🔥 THE 70/30 ZERO GAP FIX: Targeted column touching */
     div[data-testid="stHorizontalBlock"]:has(button) div[data-testid="column"] {{
         padding: 0 !important;
         margin: 0 !important;
+        gap: 0 !important;
     }}
 
     .stButton > button {{
@@ -84,7 +86,7 @@ st.markdown(f"""
     /* PROGRESS BAR */
     .prog-container {{ width: 100%; background: #1c212d; border-radius: 50px; padding: 4px; border: 1px solid #31333f; margin: 30px 0; }}
     .prog-bar-fill {{ 
-        height: 14px; 
+        height: 16px; 
         background: repeating-linear-gradient(45deg, #FF8C00, #FF8C00 12px, #FF4500 12px, #FF4500 24px); 
         background-size: 48px 48px;
         border-radius: 20px; 
@@ -95,6 +97,8 @@ st.markdown(f"""
 
     [data-testid="stMetricValue"] {{ color: #FF8C00 !important; font-weight: 800; }}
     section[data-testid="stSidebar"] {{ background-color: #161922 !important; border-right: 1px solid #31333F; }}
+    
+    .wa-link {{ color: #25D366 !important; text-decoration: none !important; font-weight: bold; }}
     </style>
 """, unsafe_allow_html=True)
 
@@ -137,10 +141,10 @@ if st.session_state.get("authentication_status") is not True:
     try: authenticator.login()
     except: pass
     if st.session_state["authentication_status"] is not True:
-        st.warning("🔒 Login Required"); st.stop()
+        st.warning("🔒 Restricted Elite Access"); st.stop()
 
 # ==============================================================================
-# 5. SIDEBAR & ADMIN PANEL (ACTIVATED)
+# 5. SIDEBAR & ADMIN PANEL (ACTIVATED & CLEAN)
 # ==============================================================================
 with st.sidebar:
     st.title("User Profile")
@@ -157,6 +161,7 @@ with st.sidebar:
             target = st.selectbox("Select Target User", u_df['username'])
             col_a, col_b, col_c = st.columns(3)
             
+            # 🔥 ACTION BUTTONS FIX (COMMIT ENABLED)
             if col_a.button("💰 +100"): 
                 conn.execute("UPDATE user_credits SET balance = balance + 100 WHERE username=?", (target,))
                 conn.commit(); st.rerun()
@@ -171,8 +176,8 @@ with st.sidebar:
             
             st.divider()
             st.write("Add New User:")
-            nu = st.text_input("New UN", key="sidebar_nu")
-            np = st.text_input("New PW", type="password", key="sidebar_np")
+            nu = st.text_input("New Username", key="sidebar_nu")
+            np = st.text_input("New Password", type="password", key="sidebar_np")
             if st.button("Create Account"):
                 if nu and np:
                     try: hp = stauth.Hasher.hash(np)
@@ -196,6 +201,7 @@ if os.path.exists("chatscrape.png"):
 # 7. INPUTS & THE "SOLID" 70/30 BAR
 # ==============================================================================
 with st.container():
+    # Spacing from app (4).py maintained
     c1, c2, c3, c4 = st.columns([3, 3, 2, 1.5]) 
     kw_in = c1.text_input("Keywords", placeholder="e.g. cafe, snak")
     city_in = c2.text_input("Cities", placeholder="e.g. Agadir, Casa")
@@ -273,7 +279,7 @@ with tab_live:
                     
                     gl = {"Morocco":"ma", "France":"fr", "USA":"us"}.get(country_in, "ma")
                     driver.get(f"https://www.google.com/maps/search/{quote(kw)}+in+{quote(city)}?hl=en&gl={gl}")
-                    time.sleep(4)
+                    time.sleep(5)
 
                     try:
                         pane = driver.find_element(By.CSS_SELECTOR, 'div[role="feed"]')
@@ -311,6 +317,7 @@ with tab_live:
                                 conn.execute("""INSERT INTO leads (session_id, keyword, city, country, name, phone, website, whatsapp)
                                     VALUES (?, ?, ?, ?, ?, ?, ?, ?)""", (st.session_state.current_sid, kw, city, country_in, name, phone, web, wa_link))
                                 if me != 'admin': conn.execute("UPDATE user_credits SET balance = balance - 1 WHERE username=?", (me,))
+                                conn.commit()
                             
                             st.session_state.results_list.append(row)
                             table_ui.markdown(pd.DataFrame(st.session_state.results_list).to_html(escape=False, index=False), unsafe_allow_html=True)
@@ -337,6 +344,6 @@ with tab_archive:
                     df_l = pd.read_sql(f"SELECT * FROM leads WHERE session_id={sess['id']}", conn)
                 if not df_l.empty:
                     st.write(df_l.drop(columns=['id', 'session_id']).to_html(escape=False, index=False), unsafe_allow_html=True)
-                else: st.warning("Empty results.")
+                else: st.warning("Empty result.")
 
-st.markdown('<div style="text-align:center;color:#666;padding:30px;">Designed by Chatir Elite Pro - Architect Supreme V32</div>', unsafe_allow_html=True)
+st.markdown('<div style="text-align:center;color:#666;padding:30px;">Designed by Chatir Elite Pro - Architect Supreme V33</div>', unsafe_allow_html=True)
