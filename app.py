@@ -6,29 +6,26 @@ import re
 import base64
 import os
 import yaml
+import gspread
+from google.oauth2.service_account import Credentials
 import streamlit_authenticator as stauth
 from yaml.loader import SafeLoader
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.common.keys import Keys
 from webdriver_manager.chrome import ChromeDriverManager
 from urllib.parse import quote
 
 # ==============================================================================
-# 1. SYSTEM SETUP
+# 1. BASIC SETUP (NO COMPLICATED STATE)
 # ==============================================================================
-st.set_page_config(page_title="ChatScrap Elite Ultimate", layout="wide", page_icon="🕷️")
+st.set_page_config(page_title="ChatScrap Elite Pro", layout="wide", page_icon="🕷️")
 
-# Initialize Session State
-defaults = {
-    'results_df': None, 'running': False, 'progress_val': 0, 'status_txt': "READY",
-    'p_kw': "", 'p_city': "", 'p_limit': 20, 'p_depth': 10
-}
-for k, v in defaults.items():
-    if k not in st.session_state: st.session_state[k] = v
+if 'results_df' not in st.session_state: st.session_state.results_df = None
+if 'running' not in st.session_state: st.session_state.running = False
+if 'logs' not in st.session_state: st.session_state.logs = []
 
 # ==============================================================================
 # 2. AUTHENTICATION
@@ -49,7 +46,7 @@ if st.session_state["authentication_status"] is False: st.error('❌ Login Faile
 elif st.session_state["authentication_status"] is None: st.warning('🔒 Login Required'); st.stop()
 
 # ==============================================================================
-# 3. DATABASE
+# 3. DATABASE & SYNC
 # ==============================================================================
 def run_query(query, params=(), is_select=False):
     try:
@@ -62,12 +59,11 @@ def run_query(query, params=(), is_select=False):
     except: return [] if is_select else False
 
 def init_db():
-    tables = [
-        '''CREATE TABLE IF NOT EXISTS sessions (id INTEGER PRIMARY KEY AUTOINCREMENT, query TEXT, date TEXT)''',
-        '''CREATE TABLE IF NOT EXISTS leads (id INTEGER PRIMARY KEY AUTOINCREMENT, session_id INTEGER, name TEXT, phone TEXT, website TEXT, email TEXT, address TEXT, whatsapp TEXT)''',
-        '''CREATE TABLE IF NOT EXISTS user_credits (username TEXT PRIMARY KEY, balance INTEGER, status TEXT DEFAULT 'active')'''
-    ]
-    for t in tables: run_query(t)
+    run_query('''CREATE TABLE IF NOT EXISTS sessions (id INTEGER PRIMARY KEY AUTOINCREMENT, query TEXT, date TEXT)''')
+    run_query('''CREATE TABLE IF NOT EXISTS leads (id INTEGER PRIMARY KEY AUTOINCREMENT, session_id INTEGER, name TEXT, phone TEXT, website TEXT, email TEXT, address TEXT, whatsapp TEXT)''')
+    run_query('''CREATE TABLE IF NOT EXISTS user_credits (username TEXT PRIMARY KEY, balance INTEGER, status TEXT DEFAULT 'active')''')
+    try: run_query("SELECT status FROM user_credits LIMIT 1")
+    except: run_query("ALTER TABLE user_credits ADD COLUMN status TEXT DEFAULT 'active'")
     try: run_query("SELECT email FROM leads LIMIT 1")
     except: run_query("ALTER TABLE leads ADD COLUMN email TEXT")
 
@@ -85,8 +81,23 @@ def deduct(u):
 def add_credits(u, amt):
     run_query("UPDATE user_credits SET balance=balance+? WHERE username=?", (amt, u))
 
+def sync_to_gsheet(df, url):
+    if "gcp_service_account" not in st.secrets:
+        st.error("⚠️ Secrets missing for Google Sheets"); return False
+    try:
+        scope = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
+        creds = Credentials.from_service_account_info(st.secrets["gcp_service_account"], scopes=scope)
+        client = gspread.authorize(creds)
+        sh = client.open_by_url(url)
+        ws = sh.get_worksheet(0)
+        ws.clear()
+        ws.update([df.columns.values.tolist()] + df.fillna("").values.tolist())
+        return True
+    except Exception as e:
+        st.error(f"Sync Error: {e}"); return False
+
 # ==============================================================================
-# 4. SCRAPING ENGINE (ANTI-COOKIE WALL)
+# 4. ROBUST ENGINE (THE FIX)
 # ==============================================================================
 def get_driver():
     opts = Options()
@@ -95,25 +106,11 @@ def get_driver():
     opts.add_argument("--disable-dev-shm-usage")
     opts.add_argument("--disable-gpu")
     opts.add_argument("--window-size=1920,1080")
-    opts.add_argument("--lang=en-US") # Force English
+    opts.add_argument("--lang=en-US")
+    # Basic User Agent - Sometimes simpler is better to avoid complex fingerprinting flags
     opts.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
     try: return webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=opts)
     except: return webdriver.Chrome(options=opts)
-
-def bypass_cookies(driver):
-    """Clicks 'Accept all' on Google Consent Screen"""
-    try:
-        # Try finding the 'Accept all' button by text (works for English)
-        buttons = driver.find_elements(By.TAG_NAME, "button")
-        for btn in buttons:
-            if "Accept all" in btn.text or "Tout accepter" in btn.text:
-                btn.click()
-                time.sleep(2)
-                return True
-        # Try generic form submit if button not found
-        try: driver.find_element(By.XPATH, '//form//button[contains(., "Accept")]').click()
-        except: pass
-    except: pass
 
 def fetch_email(driver, url):
     if not url or "google" in url or url == "N/A": return "N/A"
@@ -129,19 +126,18 @@ def fetch_email(driver, url):
         return "N/A"
 
 # ==============================================================================
-# 5. UI STYLING (RESTORED ANIMATED STRIPES & POPUP)
+# 5. ORANGE ELITE DESIGN RESTORED
 # ==============================================================================
 orange_c = "#FF8C00"
 st.markdown(f"""
     <style>
     .stApp {{ background-color: #0f111a; }}
-    .stApp p, .stApp label, h1, h2, h3, div, span {{ color: #FFFFFF !important; font-family: 'Segoe UI'; }}
+    .stApp p, .stApp label, h1, h2, h3 {{ color: #FFFFFF !important; font-family: 'Segoe UI'; }}
     
-    /* 🔥 MOBILE POPUP */
+    /* 🔥 MOBILE POPUP RESTORED */
     .mobile-popup {{
-        display: none; 
-        position: fixed; top: 10px; left: 5%; width: 90%;
-        background: rgba(26, 31, 46, 0.95); border: 2px solid {orange_c};
+        display: none; position: fixed; top: 10px; left: 5%; width: 90%;
+        background: rgba(20, 20, 30, 0.95); border: 2px solid {orange_c};
         border-radius: 12px; padding: 10px; text-align: center;
         z-index: 999999; box-shadow: 0 10px 30px rgba(0,0,0,0.8);
     }}
@@ -150,16 +146,14 @@ st.markdown(f"""
         [data-testid="stHorizontalBlock"] > div {{ flex: 1 1 45% !important; min-width: 45% !important; }}
     }}
     
-    .logo-img {{ width: 280px; filter: drop-shadow(0 0 15px rgba(255,140,0,0.6)) saturate(180%); margin-bottom: 25px; }}
+    .logo-img {{ width: 280px; filter: drop-shadow(0 0 15px rgba(255,140,0,0.5)) saturate(180%); margin-bottom: 25px; }}
     
-    /* 🔥 ELITE STRIPES ANIMATION RESTORED */
+    /* ANIMATED STRIPES */
     .prog-box {{ width: 100%; background: rgba(255, 140, 0, 0.1); border-radius: 50px; padding: 4px; border: 1px solid {orange_c}; }}
     .prog-fill {{ 
         height: 14px; 
         background: repeating-linear-gradient(45deg, {orange_c}, {orange_c} 10px, #FF4500 10px, #FF4500 20px); 
-        border-radius: 20px; 
-        transition: width 0.4s ease;
-        animation: stripes 1s linear infinite;
+        border-radius: 20px; transition: width 0.4s ease; animation: stripes 1s linear infinite;
     }}
     @keyframes stripes {{ 0% {{background-position: 0 0;}} 100% {{background-position: 50px 50px;}} }}
     
@@ -184,7 +178,7 @@ with st.sidebar:
     
     st.divider()
     
-    # ADMIN PANEL (EXPANDER)
+    # ADMIN
     if is_admin:
         with st.expander("🛠️ ADMIN PANEL"):
             data = run_query("SELECT username, balance, status FROM user_credits", is_select=True)
@@ -194,7 +188,6 @@ with st.sidebar:
             if st.button("💰 +100"): 
                 add_credits(tgt, 100); st.rerun()
             
-            st.divider()
             new_u = st.text_input("New User")
             new_p = st.text_input("Pass", type="password")
             if st.button("Add"):
@@ -216,45 +209,16 @@ with cm:
         with open("chatscrape.png", "rb") as f: b64 = base64.b64encode(f.read()).decode()
         st.markdown(f'<div style="text-align:center;"><img src="data:image/png;base64,{b64}" class="logo-img"></div>', unsafe_allow_html=True)
     
-    # Placeholders
-    p_holder = st.empty()
-    m_holder = st.empty()
-
-def update_ui(prog, txt):
-    st.session_state.progress_val = prog
-    st.session_state.status_txt = txt
-    
-    # Desktop
-    p_holder.markdown(f"""
-        <div class="prog-box"><div class="prog-fill" style="width:{prog}%;"></div></div>
-        <div style='color:{orange_c};text-align:center;font-weight:bold;margin-top:5px;'>{txt} {prog}%</div>
-    """, unsafe_allow_html=True)
-    
-    # Mobile
-    if st.session_state.running:
-        m_holder.markdown(f"""
-            <div class="mobile-popup">
-                <span style="color:{orange_c};font-weight:bold;">🚀 {txt}</span><br>
-                <div style="background:#333;height:6px;border-radius:3px;margin-top:5px;">
-                    <div style="background:{orange_c};width:{prog}%;height:100%;border-radius:3px;"></div>
-                </div>
-                <small>{prog}%</small>
-            </div>
-        """, unsafe_allow_html=True)
-
-# Restore state
-if st.session_state.running:
-    update_ui(st.session_state.progress_val, st.session_state.status_txt)
-else:
-    update_ui(0, "READY")
+    p_holder = st.empty() # Desktop Bar
+    m_holder = st.empty() # Mobile Popup
 
 # INPUTS
 with st.container():
     c1, c2, c3, c4 = st.columns([3, 3, 1.5, 1.5])
-    st.session_state.p_kw = c1.text_input("🔍 Keywords (Multi)", st.session_state.p_kw, placeholder="Ex: cafe, hotel")
-    st.session_state.p_city = c2.text_input("🌍 Cities (Multi)", st.session_state.p_city, placeholder="Ex: Agadir, Casa")
-    st.session_state.p_limit = c3.number_input("Target", 1, 5000, st.session_state.p_limit)
-    st.session_state.p_depth = c4.number_input("Depth", 5, 500, st.session_state.p_depth)
+    kws = c1.text_input("🔍 Keywords (Ex: cafe, hotel)")
+    cts = c2.text_input("🌍 Cities (Ex: Agadir, Casa)")
+    limit = c3.number_input("Target", 1, 5000, 20)
+    depth = c4.number_input("Depth", 5, 500, 10)
 
     st.divider()
     co, cb = st.columns([5, 3])
@@ -263,20 +227,19 @@ with st.container():
         f = st.columns(4)
         w_phone = f[0].checkbox("Phone", True)
         w_web = f[1].checkbox("Web", True)
-        w_email = f[2].checkbox("Email (Deep)", False)
+        w_email = f[2].checkbox("Email", False)
         w_nosite = f[3].checkbox("No Website", False)
         w_strict = st.checkbox("Strict City", True)
 
     with cb:
         st.write("")
         b1, b2 = st.columns(2)
-        if b1.button("START ENGINE", type="primary"):
-            if st.session_state.p_kw and st.session_state.p_city:
-                st.session_state.running = True; st.session_state.results_df = None; st.rerun()
-            else: st.error("Data Missing!")
-        
-        if b2.button("STOP", type="secondary"):
-            st.session_state.running = False; st.rerun()
+        start_btn = b1.button("START ENGINE", type="primary")
+        stop_btn = b2.button("STOP", type="secondary")
+
+if stop_btn:
+    st.session_state.running = False
+    st.rerun()
 
 # TABS
 t1, t2, t3 = st.tabs(["⚡ RESULTS", "📜 ARCHIVE", "🤖 MARKETING"])
@@ -284,18 +247,30 @@ t1, t2, t3 = st.tabs(["⚡ RESULTS", "📜 ARCHIVE", "🤖 MARKETING"])
 with t1:
     spot = st.empty()
     if st.session_state.results_df is not None:
+        st.divider()
+        col_e1, col_e2 = st.columns([3, 1])
+        gs_url = col_e1.text_input("Google Sheet URL")
+        if col_e2.button("🚀 Sync"):
+            if sync_to_gsheet(st.session_state.results_df, gs_url): st.success("Synced!")
+            
         st.download_button("📥 CSV", st.session_state.results_df.to_csv(index=False).encode('utf-8-sig'), "leads.csv")
         spot.dataframe(st.session_state.results_df, use_container_width=True, column_config={"WhatsApp": st.column_config.LinkColumn("Chat", display_text="💬")})
 
-    # 🔥 ENGINE CORE (FIXED: COOKIES + WAIT)
-    if st.session_state.running:
-        all_res = []
-        kw_list = [k.strip() for k in st.session_state.p_kw.split(',') if k.strip()]
-        ct_list = [c.strip() for c in st.session_state.p_city.split(',') if c.strip()]
-        total = len(kw_list) * len(ct_list)
-        curr = 0
+    # ==========================
+    # 🔥 THE FIXED ENGINE LOGIC
+    # ==========================
+    if start_btn and kws and cts:
+        st.session_state.running = True
+        st.session_state.results_df = None
         
-        run_query("INSERT INTO sessions (query, date) VALUES (?, ?)", (f"{st.session_state.p_kw}", time.strftime("%Y-%m-%d %H:%M")))
+        all_res = []
+        kw_list = [k.strip() for k in kws.split(',') if k.strip()]
+        ct_list = [c.strip() for c in cts.split(',') if c.strip()]
+        total_ops = len(kw_list) * len(ct_list)
+        curr_op = 0
+        
+        # Insert Session
+        run_query("INSERT INTO sessions (query, date) VALUES (?, ?)", (f"{kws}", time.strftime("%Y-%m-%d %H:%M")))
         try: s_id = run_query("SELECT id FROM sessions ORDER BY id DESC LIMIT 1", is_select=True)[0][0]
         except: s_id = 1
 
@@ -305,43 +280,57 @@ with t1:
                 for city in ct_list:
                     for kw in kw_list:
                         if not st.session_state.running: break
-                        curr += 1
+                        curr_op += 1
                         
-                        update_ui(int(((curr-1)/total)*100), f"SCAN: {kw} in {city}...")
+                        # UPDATE UI (NO RERUN)
+                        prog = int(((curr_op-1)/total_ops)*100)
+                        msg = f"SCANNING: {kw} in {city} ({curr_op}/{total_ops})"
+                        
+                        # Desktop UI
+                        p_holder.markdown(f"""<div class="prog-box"><div class="prog-fill" style="width:{prog}%;"></div></div><div style='color:{orange_c};text-align:center;font-weight:bold;margin-top:5px;'>{msg} {prog}%</div>""", unsafe_allow_html=True)
+                        # Mobile UI
+                        m_holder.markdown(f"""<div class="mobile-popup"><span style="color:{orange_c};font-weight:bold;">🚀 {msg}</span><br><div style="background:#333;height:6px;border-radius:3px;margin-top:5px;"><div style="background:{orange_c};width:{prog}%;height:100%;border-radius:3px;"></div></div><small>{prog}%</small></div>""", unsafe_allow_html=True)
 
-                        # 1. Force English URL to avoid layout shifts
                         url = f"https://www.google.com/maps/search/{quote(kw)}+in+{quote(city)}?hl=en"
                         driver.get(url); time.sleep(5)
 
-                        # 2. 🔥 BYPASS COOKIES (Critical Fix)
-                        bypass_cookies(driver)
-
-                        # 3. Wait for Results to Load
+                        # 🔥 BYPASS COOKIES
                         try:
-                            WebDriverWait(driver, 10).until(
-                                EC.presence_of_element_located((By.XPATH, '//a[contains(@href, "/maps/place/")]'))
-                            )
-                        except: pass # Proceed if timeout, might still have partial results
-
-                        # 4. Scroll Logic
-                        try:
-                            try: feed = driver.find_element(By.CSS_SELECTOR, 'div[role="feed"]')
-                            except: feed = driver.find_element(By.TAG_NAME, 'body')
-                            
-                            for i in range(st.session_state.p_depth):
-                                if not st.session_state.running: break
-                                driver.execute_script("arguments[0].scrollTop = arguments[0].scrollHeight", feed)
-                                time.sleep(1.5)
+                            driver.find_element(By.XPATH, "//button[contains(text(), 'Accept all')]").click()
+                            time.sleep(2)
                         except: pass
+
+                        # 🔥 SCROLL LOGIC (Fallback to Body if Feed fails)
+                        try:
+                            feed = driver.find_element(By.CSS_SELECTOR, 'div[role="feed"]')
+                        except:
+                            # Fallback: Just scroll the body if feed isn't explicitly found
+                            feed = driver.find_element(By.TAG_NAME, "body")
                         
-                        # 5. Extract (XPATH)
+                        for i in range(depth):
+                            if not st.session_state.running: break
+                            # Scroll Down
+                            driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+                            if feed.tag_name == 'div':
+                                driver.execute_script("arguments[0].scrollTop = arguments[0].scrollHeight", feed)
+                            else:
+                                feed.send_keys(Keys.END)
+                            time.sleep(1.5)
+
+                        # 🔥 EXTRACTION (XPATH contains Maps Place)
                         elements = driver.find_elements(By.XPATH, '//a[contains(@href, "/maps/place/")]')
-                        seen = set(); unique = []
-                        for e in elements:
-                            h = e.get_attribute("href")
-                            if h and h not in seen: seen.add(h); unique.append(e)
                         
-                        for idx, el in enumerate(unique[:st.session_state.p_limit]):
+                        # Deduplicate
+                        unique_els = []
+                        seen_urls = set()
+                        for el in elements:
+                            h = el.get_attribute("href")
+                            if h and h not in seen_urls:
+                                seen_urls.add(h)
+                                unique_els.append(el)
+                        
+                        # Process Targets
+                        for idx, el in enumerate(unique_els[:limit]):
                             if not st.session_state.running: break
                             if not is_admin and get_user_data(user)[0] <= 0: break
                             
@@ -384,10 +373,12 @@ with t1:
                                 run_query("INSERT INTO leads (session_id, name, phone, website, address, whatsapp, email) VALUES (?, ?, ?, ?, ?, ?, ?)", (s_id, name, phone, web, addr, wa_link, email))
                             except: continue
                 
-                update_ui(100, "COMPLETED")
-            finally: 
-                driver.quit(); st.session_state.running = False
-                m_holder.empty(); st.rerun()
+                # FINAL UPDATE
+                p_holder.markdown(f"""<div class="prog-box"><div class="prog-fill" style="width:100%;"></div></div><div style='color:{orange_c};text-align:center;font-weight:bold;margin-top:5px;'>COMPLETED 100%</div>""", unsafe_allow_html=True)
+                m_holder.empty()
+                st.session_state.running = False
+                
+            finally: driver.quit()
 
 with t2:
     st.subheader("📜 History")
@@ -404,6 +395,6 @@ with t2:
 with t3:
     st.subheader("🤖 Outreach")
     if st.button("Generate Script"):
-        st.code(f"Hi! Found your business via {st.session_state.p_kw} in {st.session_state.p_city}...")
+        st.code(f"Hi! Found your business via {kws}...")
 
 st.markdown('<div class="footer">Designed by Chatir ❤ | Worldwide Lead Generation 🌍</div>', unsafe_allow_html=True)
