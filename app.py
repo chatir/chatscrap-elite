@@ -17,10 +17,11 @@ from webdriver_manager.chrome import ChromeDriverManager
 from urllib.parse import quote
 
 # ==============================================================================
-# 1. GLOBAL CONFIGURATION
+# 1. GLOBAL CONFIGURATION & STATE
 # ==============================================================================
 st.set_page_config(page_title="ChatScrap Elite Pro", layout="wide", page_icon="💎")
 
+# State Management
 if 'results_list' not in st.session_state: st.session_state.results_list = []
 if 'running' not in st.session_state: st.session_state.running = False
 if 'paused' not in st.session_state: st.session_state.paused = False
@@ -30,9 +31,9 @@ if 'status_msg' not in st.session_state: st.session_state.status_msg = "READY"
 if 'current_sid' not in st.session_state: st.session_state.current_sid = None
 
 # ==============================================================================
-# 2. DESIGN SYSTEM (FORCED COLORS V42)
+# 2. DESIGN SYSTEM (SMART TYPE-BASED COLORING)
 # ==============================================================================
-# CSS Injection without comments to ensure stability
+# Pure CSS - No comments to ensure perfect rendering
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap');
@@ -53,7 +54,7 @@ html, body, [data-testid="stAppViewContainer"] {
 }
 
 div[data-testid="stHorizontalBlock"]:has(button) {
-    gap: 8px !important;
+    gap: 5px !important;
 }
 
 div[data-testid="stHorizontalBlock"]:has(button) div[data-testid="column"] {
@@ -71,56 +72,37 @@ div[data-testid="stHorizontalBlock"]:has(button) div[data-testid="column"] {
     letter-spacing: 1px;
     transition: all 0.3s ease-in-out;
     border-radius: 8px !important;
-    color: white !important;
 }
 
-/* 1. START BUTTON (Orange Gradient) */
-div[data-testid="column"]:nth-of-type(1) .stButton > button {
+/* START BUTTON (Primary Type -> Orange) */
+button[kind="primary"] {
     background: linear-gradient(135deg, #FF8C00 0%, #FF4500 100%) !important;
-    box-shadow: 0 4px 12px rgba(255, 69, 0, 0.4) !important;
-}
-div[data-testid="column"]:nth-of-type(1) .stButton > button:hover {
-    background: linear-gradient(135deg, #FF9900 0%, #FF5500 100%) !important;
-    transform: translateY(-2px);
+    color: white !important;
+    box-shadow: 0 4px 15px rgba(255,69,0,0.3) !important;
 }
 
-/* 2. PAUSE BUTTON (Dark Grey) */
-div[data-testid="column"]:nth-of-type(2) .stButton > button {
+/* STOP BUTTON (Targeting the LAST Primary button -> Red) */
+div[data-testid="column"]:last-child button[kind="primary"] {
+    background: linear-gradient(135deg, #DC2626 0%, #991B1B 100%) !important;
+    box-shadow: 0 4px 15px rgba(220, 38, 38, 0.4) !important;
+}
+
+/* PAUSE & CONTINUE (Secondary Type -> Dark) */
+button[kind="secondary"] {
     background-color: #1F2937 !important;
     border: 1px solid #374151 !important;
     color: #E5E7EB !important;
 }
-div[data-testid="column"]:nth-of-type(2) .stButton > button:hover {
+button[kind="secondary"]:hover {
     background-color: #374151 !important;
     border-color: #FF8C00 !important;
 }
 
-/* 3. CONTINUE BUTTON (Dark Grey) */
-div[data-testid="column"]:nth-of-type(3) .stButton > button {
-    background-color: #1F2937 !important;
-    border: 1px solid #374151 !important;
-    color: #E5E7EB !important;
-}
-div[data-testid="column"]:nth-of-type(3) .stButton > button:hover {
-    background-color: #374151 !important;
-    border-color: #22c55e !important;
-}
-
-/* 4. STOP BUTTON (Red Gradient) */
-div[data-testid="column"]:nth-of-type(4) .stButton > button {
-    background: linear-gradient(135deg, #DC2626 0%, #991B1B 100%) !important;
-    box-shadow: 0 4px 12px rgba(220, 38, 38, 0.4) !important;
-}
-div[data-testid="column"]:nth-of-type(4) .stButton > button:hover {
-    background: linear-gradient(135deg, #EF4444 0%, #B91C1C 100%) !important;
-    transform: translateY(-2px);
-}
-
+/* Disabled State */
 .stButton > button:disabled {
     opacity: 0.5 !important;
     cursor: not-allowed;
     filter: grayscale(1);
-    transform: none !important;
     box-shadow: none !important;
 }
 
@@ -134,10 +116,10 @@ div[data-testid="column"]:nth-of-type(4) .stButton > button:hover {
 }
 
 .prog-bar-fill {
-    height: 14px;
+    height: 16px;
     background: repeating-linear-gradient(45deg, #FF8C00, #FF8C00 12px, #FF4500 12px, #FF4500 24px);
     border-radius: 20px;
-    transition: width 0.5s ease-in-out;
+    transition: width 0.3s ease-in-out;
     animation: stripes 1s linear infinite;
 }
 
@@ -272,7 +254,7 @@ with st.container():
 
     st.divider()
     f1, f2, f3, f4, f5 = st.columns([1, 1, 1, 1, 1.5])
-    w_phone = f1.checkbox("Phone Only", True)
+    w_phone = f1.checkbox("Phone", True)
     w_web = f2.checkbox("Website", False)
     w_email = f3.checkbox("Deep Email", False)
     w_nosite = f4.checkbox("No Site Only", False)
@@ -280,11 +262,12 @@ with st.container():
 
     st.write("")
     
-    # 4 BUTTONS ROW - Equal Sizing
+    # 🔥 4 BUTTONS ROW (Equal Sizing)
     b_start, b_pause, b_cont, b_stop = st.columns(4) 
     
     with b_start:
-        if st.button("Start Search", disabled=st.session_state.running):
+        # TYPE PRIMARY -> ORANGE via CSS
+        if st.button("Start Search", type="primary", disabled=st.session_state.running):
             if kw_in and city_in:
                 st.session_state.running = True
                 st.session_state.paused = False
@@ -299,17 +282,20 @@ with st.container():
                 st.rerun()
 
     with b_pause:
-        if st.button("Pause", disabled=not st.session_state.running or st.session_state.paused):
+        # TYPE SECONDARY -> DARK via CSS
+        if st.button("Pause", type="secondary", disabled=not st.session_state.running or st.session_state.paused):
             st.session_state.paused = True
             st.rerun()
 
     with b_cont:
-        if st.button("Continue", disabled=not st.session_state.running or not st.session_state.paused):
+        # TYPE SECONDARY -> DARK via CSS
+        if st.button("Continue", type="secondary", disabled=not st.session_state.running or not st.session_state.paused):
             st.session_state.paused = False
             st.rerun()
 
     with b_stop:
-        if st.button("Stop Search", disabled=not st.session_state.running):
+        # TYPE PRIMARY -> RED via CSS (Targeted as Last Child)
+        if st.button("Stop Search", type="primary", disabled=not st.session_state.running):
             st.session_state.running = False
             st.session_state.paused = False
             st.rerun()
@@ -371,7 +357,9 @@ with tab_live:
                 kws = [k.strip() for k in kw_in.split(',')]
                 cts = [c.strip() for c in city_in.split(',')]
                 all_tasks = [(c, k) for c in cts for k in kws]
-                total_ops = len(all_tasks)
+                
+                # 🔥 NEW PROGRESS LOGIC: Item-based
+                total_estimated_items = len(all_tasks) * limit_in
                 
                 for i, (city, kw) in enumerate(all_tasks):
                     if i < st.session_state.task_index: continue
@@ -381,9 +369,10 @@ with tab_live:
                         status_ui.warning("⏸️ Paused...")
                         break 
                     
-                    st.session_state.progress = int(((i + 1) / total_ops) * 100)
-                    prog_spot.markdown(f'<div class="prog-container"><div class="prog-bar-fill" style="width: {st.session_state.progress}%;"></div></div>', unsafe_allow_html=True)
-                    status_ui.markdown(f"**Scanning:** `{kw}` in `{city}`... ({i+1}/{total_ops})")
+                    # Initial progress for city (base)
+                    base_progress_items = i * limit_in
+                    
+                    status_ui.markdown(f"**Scanning:** `{kw}` in `{city}`... ({i+1}/{len(all_tasks)})")
                     
                     gl = {"Morocco":"ma", "France":"fr", "USA":"us"}.get(country_in, "ma")
                     driver.get(f"https://www.google.com/maps/search/{quote(kw)}+in+{quote(city)}?hl=en&gl={gl}")
@@ -403,6 +392,12 @@ with tab_live:
                             if processed >= limit_in or not st.session_state.running or st.session_state.paused: break
                             try:
                                 driver.execute_script("arguments[0].click();", item); time.sleep(2)
+                                
+                                # 🔥 UPDATE PROGRESS PER ITEM
+                                current_total_progress = base_progress_items + processed + 1
+                                st.session_state.progress = min(int((current_total_progress / total_estimated_items) * 100), 100)
+                                prog_spot.markdown(f'<div class="prog-container"><div class="prog-bar-fill" style="width: {st.session_state.progress}%;"></div></div>', unsafe_allow_html=True)
+                                
                                 name = driver.find_element(By.CSS_SELECTOR, "h1.DUwDvf").text
                                 phone = "N/A"
                                 try: phone = driver.find_element(By.XPATH, '//*[contains(@data-item-id, "phone:tel")]').get_attribute("aria-label").replace("Phone: ", "")
@@ -466,4 +461,4 @@ with tab_archive:
                     st.write(df_l.drop(columns=['id', 'session_id']).to_html(escape=False, index=False), unsafe_allow_html=True)
                 else: st.warning("Empty results.")
 
-st.markdown('<div style="text-align:center;color:#666;padding:30px;">Designed by Chatir Elite Pro - Architect Edition V42</div>', unsafe_allow_html=True)
+st.markdown('<div style="text-align:center;color:#666;padding:30px;">Designed by Chatir Elite Pro - Architect Edition V43</div>', unsafe_allow_html=True)
