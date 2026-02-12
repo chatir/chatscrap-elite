@@ -48,7 +48,7 @@ if st.session_state["authentication_status"] is not True:
     st.warning("🔒 Login Required"); st.stop()
 
 # ==============================================================================
-# 3. DATABASE (SMART READER)
+# 3. DATABASE (EMERGENCY REPAIR SYSTEM)
 # ==============================================================================
 DB_NAME = "scraper_pro_final.db"
 
@@ -60,26 +60,37 @@ def run_query(query, params=(), is_select=False):
             if is_select: return curr.fetchall()
             conn.commit()
             return True
-    except: return [] if is_select else False
+    except Exception as e:
+        return [] if is_select else False
 
-def init_db():
-    # Basic Structure
-    run_query('''CREATE TABLE IF NOT EXISTS leads (id INTEGER PRIMARY KEY AUTOINCREMENT, session_id INTEGER, keyword TEXT, city TEXT, country TEXT, name TEXT, phone TEXT, website TEXT, email TEXT, address TEXT, whatsapp TEXT)''')
-    run_query('''CREATE TABLE IF NOT EXISTS user_credits (username TEXT PRIMARY KEY, balance INTEGER, status TEXT DEFAULT 'active')''')
-    run_query('''CREATE TABLE IF NOT EXISTS sessions (id INTEGER PRIMARY KEY AUTOINCREMENT, query TEXT, date TEXT)''')
-    
-    # 🔥 AUTO-FIX: Add 'country' column silently if missing
+def emergency_fix_db():
+    """This function runs ONCE to fix the missing column issue completely"""
     try:
         with sqlite3.connect(DB_NAME) as conn:
             cursor = conn.cursor()
+            
+            # 1. Create tables if not exist
+            cursor.execute('''CREATE TABLE IF NOT EXISTS leads (id INTEGER PRIMARY KEY AUTOINCREMENT, session_id INTEGER, keyword TEXT, city TEXT, country TEXT, name TEXT, phone TEXT, website TEXT, email TEXT, address TEXT, whatsapp TEXT)''')
+            cursor.execute('''CREATE TABLE IF NOT EXISTS user_credits (username TEXT PRIMARY KEY, balance INTEGER, status TEXT DEFAULT 'active')''')
+            cursor.execute('''CREATE TABLE IF NOT EXISTS sessions (id INTEGER PRIMARY KEY AUTOINCREMENT, query TEXT, date TEXT)''')
+            
+            # 2. Check and Force-Add 'country' column
             cursor.execute("PRAGMA table_info(leads)")
-            cols = [c[1] for c in cursor.fetchall()]
-            if 'country' not in cols:
+            columns = [col[1] for col in cursor.fetchall()]
+            
+            if 'country' not in columns:
                 cursor.execute("ALTER TABLE leads ADD COLUMN country TEXT")
                 conn.commit()
-    except: pass
+                
+            if 'whatsapp' not in columns:
+                cursor.execute("ALTER TABLE leads ADD COLUMN whatsapp TEXT")
+                conn.commit()
+                
+    except Exception as e:
+        st.error(f"DB Fix Error: {e}")
 
-init_db()
+# Run the fix immediately
+emergency_fix_db()
 
 def get_user_data(username):
     res = run_query("SELECT balance, status FROM user_credits WHERE username=?", (username,), is_select=True)
@@ -114,7 +125,7 @@ def sync_to_gsheet(df, url):
     except: return False
 
 # ==============================================================================
-# 4. ENGINE
+# 4. ENGINE (DRIVER STABILITY FIX)
 # ==============================================================================
 def get_driver():
     opts = Options()
@@ -122,17 +133,25 @@ def get_driver():
     opts.add_argument("--no-sandbox")
     opts.add_argument("--disable-dev-shm-usage")
     opts.add_argument("--disable-gpu")
+    opts.add_argument("--remote-debugging-port=9222") # 🔥 Fixes SessionNotCreated
     opts.add_argument("--window-size=1920,1080")
     opts.add_argument("--lang=en-US")
     
+    # Try finding system chromium first (Best for Cloud)
     chromium_path = shutil.which("chromium") or shutil.which("chromium-browser")
     if chromium_path:
         opts.binary_location = chromium_path
     
     try:
+        # Priority 1: Manager
         return webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=opts)
     except:
-        return webdriver.Chrome(options=opts)
+        # Priority 2: Direct
+        try:
+            return webdriver.Chrome(options=opts)
+        except Exception as e:
+            st.error(f"Driver Error: {e}")
+            return None
 
 def fetch_email_deep(driver, url):
     if not url or "google.com" in url or url == "N/A": return "N/A"
@@ -250,7 +269,7 @@ with st.container():
         w_web = f[1].checkbox("Must Have Website", False)
         w_email = f[2].checkbox("Deep Email Scan", False)
         w_nosite = f[3].checkbox("No Website Only", False)
-        depth_in = st.number_input("Scroll Depth (Pages)", 1, 200, 10)
+        depth_in = st.number_input("Scroll Depth", 1, 200, 10)
 
     with cb:
         st.write("")
@@ -281,6 +300,7 @@ with t1:
         total_ops = len(kws) * len(cts)
         curr_op = 0
         
+        # Log Session
         run_query("INSERT INTO sessions (query, date) VALUES (?, ?)", (f"{kw_in} | {city_in} | {country_in}", time.strftime("%Y-%m-%d %H:%M")))
         try: s_id = run_query("SELECT id FROM sessions ORDER BY id DESC LIMIT 1", is_select=True)[0][0]
         except: s_id = 1
@@ -354,47 +374,49 @@ with t1:
                                 if not is_admin: deduct_credit(current_user)
                                 st.session_state.results_df = pd.DataFrame(all_res)
                                 spot.dataframe(st.session_state.results_df[cols], use_container_width=True, column_config={"WhatsApp": st.column_config.LinkColumn("WhatsApp", display_text="🟢 Chat Now")})
-                                run_query("INSERT INTO leads (session_id, keyword, city, country, name, phone, website, email, address, whatsapp) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", (s_id, kw, city, country_in, name, phone, web, email, addr, wa_link))
+                                
+                                # 🔥 ROBUST INSERT: Matches TABLE structure exactly
+                                try:
+                                    run_query("INSERT INTO leads (session_id, keyword, city, country, name, phone, website, email, address, whatsapp) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", (s_id, kw, city, country_in, name, phone, web, email, addr, wa_link))
+                                except Exception as e:
+                                    # This print will show in logs if insert fails
+                                    print(f"Insert Error: {e}")
+                                    
                             except: continue
                 update_ui(100, "COMPLETED ✅")
             finally: driver.quit(); st.session_state.running = False; st.rerun()
 
 with t2:
     st.subheader("📜 Search History")
-    # 🔥 SEARCH BAR ADDED
-    search_query = st.text_input("🔍 Filter by Keyword or City", placeholder="Type e.g., 'cafe' or 'agadir'...")
+    search_query = st.text_input("🔍 Filter Archives", placeholder="Type keyword or city...")
     
     q_sql = "SELECT * FROM sessions ORDER BY id DESC LIMIT 20"
-    params = ()
+    p_sql = ()
     if search_query:
         q_sql = "SELECT * FROM sessions WHERE query LIKE ? ORDER BY id DESC"
-        params = (f"%{search_query}%",)
+        p_sql = (f"%{search_query}%",)
         
-    try:
-        hist = run_query(q_sql, params, is_select=True)
-        if hist:
-            for s in hist:
-                with st.expander(f"📦 {s[2]} | {s[1]}"):
-                    # 🔥 SMART SELECT: Reads whatever exists without crashing
-                    try:
-                        with sqlite3.connect(DB_NAME) as conn:
-                            # Use Pandas to handle column mismatch automatically
-                            df_raw = pd.read_sql_query(f"SELECT * FROM leads WHERE session_id={s[0]}", conn)
-                            if not df_raw.empty:
-                                # Clean up ID columns
-                                cols_to_hide = ['id', 'session_id']
-                                df_display = df_raw.drop(columns=[c for c in cols_to_hide if c in df_raw.columns])
-                                st.dataframe(df_display, use_container_width=True)
-                            else:
-                                st.warning("No data found (Session might have been interrupted).")
-                    except Exception as e: st.error(f"Error reading data: {e}")
-        else:
-            st.info("No matching history found.")
-    except: st.info("No archives found.")
+    hist = run_query(q_sql, p_sql, is_select=True)
+    
+    if hist:
+        for s in hist:
+            with st.expander(f"📦 {s[2]} | {s[1]}"):
+                try:
+                    with sqlite3.connect(DB_NAME) as conn:
+                        df_raw = pd.read_sql_query(f"SELECT * FROM leads WHERE session_id={s[0]}", conn)
+                        if not df_raw.empty:
+                            cols_drop = [c for c in ['id', 'session_id'] if c in df_raw.columns]
+                            df_final = df_raw.drop(columns=cols_drop)
+                            st.dataframe(df_final, use_container_width=True)
+                        else:
+                            st.info("No data found (Session might have been interrupted).")
+                except Exception as e: st.error(f"Read Error: {e}")
+    else:
+        st.info("No history found.")
 
 with t3:
     st.subheader("🤖 Marketing Kit")
     if st.button("Generate Script"):
         st.code(f"Hello! I found your business in {city_in} and I can help you with...")
 
-st.markdown('<div style="text-align:center;color:#666;padding:20px;">Designed by Chatir ❤ | Elite Pro Fixed</div>', unsafe_allow_html=True)
+st.markdown('<div style="text-align:center;color:#666;padding:20px;">Designed by Chatir ❤ | Elite Pro Max</div>', unsafe_allow_html=True)
