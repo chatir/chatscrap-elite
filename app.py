@@ -18,7 +18,7 @@ from webdriver_manager.chrome import ChromeDriverManager
 from urllib.parse import quote
 
 # ==============================================================================
-# 1. SYSTEM CONFIGURATION
+# 1. SYSTEM SETUP
 # ==============================================================================
 st.set_page_config(page_title="ChatScrap Elite Pro", layout="wide", page_icon="💎")
 
@@ -48,7 +48,7 @@ if st.session_state["authentication_status"] is not True:
     st.warning("🔒 Login Required"); st.stop()
 
 # ==============================================================================
-# 3. DATABASE (SMART MIGRATION & RECOVERY)
+# 3. DATABASE (SMART READER)
 # ==============================================================================
 DB_NAME = "scraper_pro_final.db"
 
@@ -63,18 +63,18 @@ def run_query(query, params=(), is_select=False):
     except: return [] if is_select else False
 
 def init_db():
-    # 1. Ensure basic tables exist
+    # Basic Structure
     run_query('''CREATE TABLE IF NOT EXISTS leads (id INTEGER PRIMARY KEY AUTOINCREMENT, session_id INTEGER, keyword TEXT, city TEXT, country TEXT, name TEXT, phone TEXT, website TEXT, email TEXT, address TEXT, whatsapp TEXT)''')
     run_query('''CREATE TABLE IF NOT EXISTS user_credits (username TEXT PRIMARY KEY, balance INTEGER, status TEXT DEFAULT 'active')''')
     run_query('''CREATE TABLE IF NOT EXISTS sessions (id INTEGER PRIMARY KEY AUTOINCREMENT, query TEXT, date TEXT)''')
     
-    # 2. 🔥 RECOVERY FIX: Ensure 'country' exists to prevent crash
+    # 🔥 AUTO-FIX: Add 'country' column silently if missing
     try:
         with sqlite3.connect(DB_NAME) as conn:
             cursor = conn.cursor()
             cursor.execute("PRAGMA table_info(leads)")
-            columns = [c[1] for c in cursor.fetchall()]
-            if 'country' not in columns:
+            cols = [c[1] for c in cursor.fetchall()]
+            if 'country' not in cols:
                 cursor.execute("ALTER TABLE leads ADD COLUMN country TEXT")
                 conn.commit()
     except: pass
@@ -99,6 +99,19 @@ def manage_user(action, username, amount=0):
         curr = run_query("SELECT status FROM user_credits WHERE username=?", (username,), True)[0][0]
         new_s = 'suspended' if curr == 'active' else 'active'
         run_query("UPDATE user_credits SET status=? WHERE username=?", (new_s, username))
+
+def sync_to_gsheet(df, url):
+    if "gcp_service_account" not in st.secrets: return False
+    try:
+        scope = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
+        creds = Credentials.from_service_account_info(st.secrets["gcp_service_account"], scopes=scope)
+        client = gspread.authorize(creds)
+        sh = client.open_by_url(url)
+        ws = sh.get_worksheet(0)
+        ws.clear()
+        ws.update([df.columns.values.tolist()] + df.fillna("").values.tolist())
+        return True
+    except: return False
 
 # ==============================================================================
 # 4. ENGINE
@@ -237,7 +250,7 @@ with st.container():
         w_web = f[1].checkbox("Must Have Website", False)
         w_email = f[2].checkbox("Deep Email Scan", False)
         w_nosite = f[3].checkbox("No Website Only", False)
-        depth_in = st.number_input("Scroll Depth", 1, 200, 10)
+        depth_in = st.number_input("Scroll Depth (Pages)", 1, 200, 10)
 
     with cb:
         st.write("")
@@ -348,36 +361,36 @@ with t1:
 
 with t2:
     st.subheader("📜 Search History")
-    search_query = st.text_input("🔍 Search Archives (Type Keyword/City)", placeholder="Filter history...")
+    # 🔥 SEARCH BAR ADDED
+    search_query = st.text_input("🔍 Filter by Keyword or City", placeholder="Type e.g., 'cafe' or 'agadir'...")
     
-    # 1. Fetch Sessions
     q_sql = "SELECT * FROM sessions ORDER BY id DESC LIMIT 20"
-    p_sql = ()
+    params = ()
     if search_query:
         q_sql = "SELECT * FROM sessions WHERE query LIKE ? ORDER BY id DESC"
-        p_sql = (f"%{search_query}%",)
+        params = (f"%{search_query}%",)
         
-    hist = run_query(q_sql, p_sql, is_select=True)
-    
-    if hist:
-        for s in hist:
-            with st.expander(f"📦 {s[2]} | {s[1]}"):
-                # 🔥 DYNAMIC SELECT: This fixes the "Empty Archive" issue
-                # It grabs whatever columns exist in your specific DB version
-                try:
-                    with sqlite3.connect(DB_NAME) as conn:
-                        df_raw = pd.read_sql_query(f"SELECT * FROM leads WHERE session_id={s[0]}", conn)
-                        if not df_raw.empty:
-                            # Clean up for display
-                            cols_to_hide = ['id', 'session_id']
-                            df_display = df_raw.drop(columns=[c for c in cols_to_hide if c in df_raw.columns])
-                            st.dataframe(df_display, use_container_width=True)
-                        else:
-                            st.info("No leads recorded for this session.")
-                except Exception as e:
-                    st.error(f"Error loading data: {e}")
-    else:
-        st.info("No history found.")
+    try:
+        hist = run_query(q_sql, params, is_select=True)
+        if hist:
+            for s in hist:
+                with st.expander(f"📦 {s[2]} | {s[1]}"):
+                    # 🔥 SMART SELECT: Reads whatever exists without crashing
+                    try:
+                        with sqlite3.connect(DB_NAME) as conn:
+                            # Use Pandas to handle column mismatch automatically
+                            df_raw = pd.read_sql_query(f"SELECT * FROM leads WHERE session_id={s[0]}", conn)
+                            if not df_raw.empty:
+                                # Clean up ID columns
+                                cols_to_hide = ['id', 'session_id']
+                                df_display = df_raw.drop(columns=[c for c in cols_to_hide if c in df_raw.columns])
+                                st.dataframe(df_display, use_container_width=True)
+                            else:
+                                st.warning("No data found (Session might have been interrupted).")
+                    except Exception as e: st.error(f"Error reading data: {e}")
+        else:
+            st.info("No matching history found.")
+    except: st.info("No archives found.")
 
 with t3:
     st.subheader("🤖 Marketing Kit")
