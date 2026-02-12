@@ -7,7 +7,6 @@ import base64
 import os
 import yaml
 import gspread
-import threading
 from google.oauth2.service_account import Credentials
 import streamlit_authenticator as stauth
 from yaml.loader import SafeLoader
@@ -19,54 +18,68 @@ from webdriver_manager.chrome import ChromeDriverManager
 from urllib.parse import quote
 
 # ==========================================
-# 1. SYSTEM CONFIGURATION & STATE INIT
+# 1. CONFIG & STATE INIT
 # ==========================================
 st.set_page_config(page_title="ChatScrap Elite", layout="wide", page_icon="🕷️")
 
-# Initialize Session State Variables (Prevent Data Loss)
-if 'results_df' not in st.session_state: st.session_state.results_df = None
-if 'running' not in st.session_state: st.session_state.running = False
-if 'progress_val' not in st.session_state: st.session_state.progress_val = 0
-if 'status_txt' not in st.session_state: st.session_state.status_txt = "READY"
+# Initialize Session State (Persistence)
+keys = [
+    'niche_val', 'city_val', 'limit_val', 'depth_val',
+    'results_df', 'running', 'progress_val', 'status_txt', 'lang'
+]
+for k in keys:
+    if k not in st.session_state:
+        st.session_state[k] = "English" if k == 'lang' else (None if k == 'results_df' else 0)
 if 'niche_val' not in st.session_state: st.session_state.niche_val = ""
 if 'city_val' not in st.session_state: st.session_state.city_val = ""
 if 'limit_val' not in st.session_state: st.session_state.limit_val = 20
 if 'depth_val' not in st.session_state: st.session_state.depth_val = 30
-if 'lang' not in st.session_state: st.session_state.lang = "English"
 
-# Translations Dictionary
+# Translations Dictionary (Multi-Language Sync Included)
 TRANS = {
     "English": {
         "nav_engine": "🚀 SCRAPER ENGINE", "nav_admin": "🛠️ USER MANAGEMENT",
         "lbl_niche": "Business Niche", "lbl_city": "Target City",
         "lbl_limit": "Leads Target", "lbl_depth": "Scroll Depth",
-        "btn_start": "START ENGINE", "btn_stop": "STOP SYSTEM",
-        "tab_live": "⚡ LIVE DATA", "tab_arch": "📜 ARCHIVE", "tab_mkt": "🤖 MARKETING KIT"
+        "btn_start": "START ENGINE", "btn_stop": "STOP",
+        "tab_live": "⚡ LIVE DATA", "tab_arch": "📜 ARCHIVE", "tab_mkt": "🤖 MARKETING KIT",
+        "sync_title": "📤 Export to Google Sheets",
+        "sync_place": "Paste Google Sheet URL here...",
+        "sync_btn": "🚀 Sync Now", "sync_ok": "✅ Synced Successfully!",
+        "filters": "Search Filters"
     },
     "Français": {
         "nav_engine": "🚀 MOTEUR DE SCRAPING", "nav_admin": "🛠️ GESTION UTILISATEURS",
         "lbl_niche": "Niche d'activité", "lbl_city": "Ville Cible",
         "lbl_limit": "Objectif Leads", "lbl_depth": "Profondeur",
         "btn_start": "DÉMARRER", "btn_stop": "ARRÊTER",
-        "tab_live": "⚡ RÉSULTATS", "tab_arch": "📜 ARCHIVE", "tab_mkt": "🤖 MARKETING KIT"
+        "tab_live": "⚡ RÉSULTATS", "tab_arch": "📜 ARCHIVE", "tab_mkt": "🤖 KIT MARKETING",
+        "sync_title": "📤 Exporter vers Google Sheets",
+        "sync_place": "Collez l'URL Google Sheet ici...",
+        "sync_btn": "🚀 Synchroniser", "sync_ok": "✅ Synchronisé avec succès!",
+        "filters": "Filtres de Recherche"
     },
     "العربية": {
         "nav_engine": "🚀 محرك البحث", "nav_admin": "🛠️ إدارة المستخدمين",
         "lbl_niche": "مجال العمل", "lbl_city": "المدينة",
         "lbl_limit": "عدد النتائج", "lbl_depth": "عمق البحث",
         "btn_start": "ابدأ البحث", "btn_stop": "توقف",
-        "tab_live": "⚡ نتائج حية", "tab_arch": "📜 الأرشيف", "tab_mkt": "🤖 التسويق الذكي"
+        "tab_live": "⚡ نتائج حية", "tab_arch": "📜 الأرشيف", "tab_mkt": "🤖 التسويق الذكي",
+        "sync_title": "📤 تصدير إلى Google Sheets",
+        "sync_place": "ضع رابط Google Sheet هنا...",
+        "sync_btn": "🚀 إرسال الآن", "sync_ok": "✅ تم الإرسال بنجاح!",
+        "filters": "فلاتر البحث"
     }
 }
 
 # ==========================================
-# 2. AUTHENTICATION & SECURITY
+# 2. AUTHENTICATION
 # ==========================================
 try:
     with open('config.yaml') as file:
         config = yaml.load(file, Loader=SafeLoader)
 except FileNotFoundError:
-    st.error("❌ Critical Error: config.yaml file is missing!"); st.stop()
+    st.error("❌ config.yaml missing!"); st.stop()
 
 authenticator = stauth.Authenticate(
     config['credentials'],
@@ -80,14 +93,15 @@ if st.session_state.get("authentication_status") is not True:
     except Exception as e: st.error(f"Auth Error: {e}")
 
 if st.session_state["authentication_status"] is False:
-    st.error('❌ Username/password is incorrect'); st.stop()
+    st.error('❌ Username/password incorrect'); st.stop()
 elif st.session_state["authentication_status"] is None:
-    st.warning('🔒 Please enter your credentials'); st.stop()
+    st.warning('🔒 Please login'); st.stop()
 
 # ==========================================
-# 3. DATABASE & UTILITY FUNCTIONS
+# 3. DATABASE & SYNC FUNCTIONS (FIXED)
 # ==========================================
 def run_query(query, params=(), is_select=False):
+    # 🔥 FIXED: params defaults to empty tuple, is_select handles return logic
     with sqlite3.connect('scraper_pro_final.db', timeout=30) as conn:
         curr = conn.cursor()
         curr.execute(query, params)
@@ -121,7 +135,7 @@ def add_credits(username, amount):
 
 def sync_to_gsheet(df, url):
     if "gcp_service_account" not in st.secrets:
-        st.error("❌ Secrets Error: 'gcp_service_account' missing."); return False
+        st.error("❌ Error: 'gcp_service_account' missing in Secrets."); return False
     try:
         scope = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
         creds = Credentials.from_service_account_info(st.secrets["gcp_service_account"], scopes=scope)
@@ -135,7 +149,7 @@ def sync_to_gsheet(df, url):
         st.error(f"Sync Failed: {e}"); return False
 
 # ==========================================
-# 4. SCRAPING ENGINE (FULL LOGIC)
+# 4. SCRAPING ENGINE (FULL BEAST MODE)
 # ==========================================
 def get_driver_fresh():
     opts = Options()
@@ -146,11 +160,11 @@ def get_driver_fresh():
     except: return webdriver.Chrome(options=opts)
 
 def fetch_email_deep(driver, url):
-    """Deep extraction of emails from website"""
+    """Deep extraction of emails"""
     if not url or url == "N/A" or "google" in url: return "N/A"
     try:
         driver.execute_script("window.open('');"); driver.switch_to.window(driver.window_handles[-1])
-        driver.get(url); time.sleep(2)
+        driver.get(url); time.sleep(1.5)
         html = driver.page_source
         emails = re.findall(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}", html)
         driver.close(); driver.switch_to.window(driver.window_handles[0])
@@ -161,7 +175,7 @@ def fetch_email_deep(driver, url):
         return "N/A"
 
 # ==========================================
-# 5. UI & CSS (ORANGE ELITE + RESPONSIVE)
+# 5. UI & CSS (ORANGE ELITE + MOBILE POPUP)
 # ==========================================
 orange_c = "#FF8C00"
 st.markdown(f"""
@@ -189,7 +203,7 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 # ==========================================
-# 6. APP NAVIGATION & LAYOUT
+# 6. APP LAYOUT
 # ==========================================
 current_user = st.session_state["username"]
 user_bal, user_st = get_user_data(current_user)
@@ -197,7 +211,7 @@ is_admin = current_user == "admin"
 
 if user_st == 'suspended' and not is_admin: st.error("🚫 ACCOUNT SUSPENDED"); st.stop()
 
-# Get Translation
+# Translation
 T = TRANS[st.session_state.lang]
 
 with st.sidebar:
@@ -208,7 +222,7 @@ with st.sidebar:
     st.session_state.lang = st.selectbox("🌐 Language", ["English", "Français", "العربية"])
     st.divider()
     
-    # Navigation
+    # Persistent Navigation
     menu_opts = [T['nav_engine']]
     if is_admin: menu_opts.append(T['nav_admin'])
     choice = st.radio("GO TO:", menu_opts, key="nav_main")
@@ -222,6 +236,7 @@ with st.sidebar:
 # ---------------------------
 if is_admin and choice == T['nav_admin']:
     st.markdown(f"<h1>{T['nav_admin']}</h1>", unsafe_allow_html=True)
+    # 🔥 FIXED SQL Call
     users_sql = run_query("SELECT username, balance, status FROM user_credits", is_select=True)
     st.dataframe(pd.DataFrame(users_sql, columns=["Username", "Balance", "Status"]), use_container_width=True)
 
@@ -290,35 +305,33 @@ elif choice == T['nav_engine']:
         st.session_state.depth_val = c4.number_input(T['lbl_depth'], 5, 500, st.session_state.depth_val)
 
         st.divider()
-        co, cb = st.columns([5, 3])
-        with co:
-            st.caption("⚙️ Active Filters:")
-            f = st.columns(4)
-            w_phone = f[0].checkbox("Phone", True)
-            w_web = f[1].checkbox("Web", True)
-            w_email = f[2].checkbox("Email (Slow)", False)
-            w_nosite = f[3].checkbox("No Website", False)
-            w_strict = st.checkbox("Strict City Match", True)
+        st.markdown(f"**⚙️ {T['filters']}**")
+        f = st.columns(4)
+        w_phone = f[0].checkbox(T['phone'], True)
+        w_web = f[1].checkbox(T['web'], True)
+        w_email = f[2].checkbox("Email (Slow)", False)
+        w_nosite = f[3].checkbox("No Website", False)
+        w_strict = st.checkbox("Strict City Match", True)
 
-        with cb:
-            st.write("")
-            b1, b2 = st.columns(2)
-            if b1.button(T['btn_start'], type="primary", use_container_width=True):
-                if st.session_state.niche_val and st.session_state.city_val:
-                    st.session_state.running = True; st.session_state.results_df = None; st.rerun()
-            if b2.button(T['btn_stop'], type="secondary", use_container_width=True):
-                st.session_state.running = False; st.rerun()
+        b1, b2 = st.columns(2)
+        if b1.button(T['btn_start'], type="primary", use_container_width=True):
+            if st.session_state.niche_val and st.session_state.city_val:
+                st.session_state.running = True; st.session_state.results_df = None; st.rerun()
+        if b2.button(T['btn_stop'], type="secondary", use_container_width=True):
+            st.session_state.running = False; st.rerun()
 
     # TABS (FULL)
     t1, t2, t3 = st.tabs([T['tab_live'], T['tab_arch'], T['tab_mkt']])
     
     with t1:
         table_spot = st.empty()
-        # Persistent Data View
+        
+        # 🔥 MULTI-LANGUAGE SYNC SECTION
         if st.session_state.results_df is not None:
             st.divider()
+            st.subheader(T['sync_title'])
             c_ex1, c_ex2 = st.columns([3, 1])
-            gs_url = c_ex1.text_input("Google Sheet URL", key="gs_url_main")
+            gs_url = c_ex1.text_input(T['sync_place'], key="gs_url_main")
             if c_ex2.button(T['sync_btn']):
                 if sync_to_gsheet(st.session_state.results_df, gs_url): st.success(T['sync_ok'])
             
@@ -330,8 +343,10 @@ elif choice == T['nav_engine']:
         # ENGINE CORE
         if st.session_state.running:
             results = []
+            # 🔥 FIXED SQL Call
             run_query("INSERT INTO sessions (query, date) VALUES (?, ?)", (f"{st.session_state.niche_val} - {st.session_state.city_val}", time.strftime("%Y-%m-%d %H:%M")))
-            s_id = run_query("SELECT id FROM sessions ORDER BY id DESC LIMIT 1", True)[0][0]
+            # 🔥 FIXED SQL Call: Explicitly pass is_select=True
+            s_id = run_query("SELECT id FROM sessions ORDER BY id DESC LIMIT 1", is_select=True)[0][0]
             
             driver = get_driver_fresh()
             if driver:
@@ -350,7 +365,7 @@ elif choice == T['nav_engine']:
                         time.sleep(1.2)
                         st.session_state.progress_val = 10 + int((i/st.session_state.depth_val)*30)
                         st.session_state.status_txt = "SCROLLING..."
-                        st.rerun() # Update Popup
+                        st.rerun() 
                     
                     # Extraction Loop
                     items = driver.find_elements(By.CLASS_NAME, "hfpxzc")[:st.session_state.limit_val*2]
@@ -375,7 +390,7 @@ elif choice == T['nav_engine']:
                             except: pass
                             if w_nosite and web != "N/A": continue
                             
-                            # Deep Email Extraction (Restored)
+                            # Email Extraction
                             email = "N/A"
                             if w_email and web != "N/A": email = fetch_email_deep(driver, web)
                             
@@ -389,7 +404,6 @@ elif choice == T['nav_engine']:
 
                             results.append({"Name": name, "Phone": phone, "WhatsApp": wa_link, "Website": web, "Address": addr, "Email": email})
                             
-                            # Update DB & UI
                             if not is_admin: deduct_credit(current_user)
                             st.session_state.results_df = pd.DataFrame(results)
                             table_spot.dataframe(st.session_state.results_df, use_container_width=True, column_config={"WhatsApp": st.column_config.LinkColumn("Chat", display_text="💬")})
@@ -401,10 +415,12 @@ elif choice == T['nav_engine']:
 
     with t2:
         try:
-            hists = run_query("SELECT * FROM sessions ORDER BY id DESC LIMIT 20", True)
+            # 🔥 FIXED SQL Call
+            hists = run_query("SELECT * FROM sessions ORDER BY id DESC LIMIT 20", is_select=True)
             for h in hists:
                 with st.expander(f"📦 {h[2]} | {h[1]}"):
-                    d = run_query(f"SELECT name, phone, whatsapp, website, email, address FROM leads WHERE session_id={h[0]}", True)
+                    # 🔥 FIXED SQL Call
+                    d = run_query(f"SELECT name, phone, whatsapp, website, email, address FROM leads WHERE session_id={h[0]}", is_select=True)
                     df_h = pd.DataFrame(d, columns=["Name", "Phone", "WhatsApp", "Website", "Email", "Address"])
                     st.dataframe(df_h, use_container_width=True, column_config={"WhatsApp": st.column_config.LinkColumn("Chat", display_text="💬")})
                     st.download_button("📥 Export CSV", df_h.to_csv(index=False).encode('utf-8-sig'), f"archive_{h[0]}.csv")
@@ -414,12 +430,11 @@ elif choice == T['nav_engine']:
         st.subheader(T['tab_mkt'])
         c_m1, c_m2 = st.columns(2)
         srv = c_m1.selectbox("Service", ["Web Design", "SEO", "Ads", "SMMA"])
-        lang = c_m2.selectbox("Language", ["English", "Français", "العربية"])
         
         if st.button("✨ Generate Outreach Script"):
             msg = f"Subject: Proposal for {st.session_state.niche_val} in {st.session_state.city_val}\n\nHi,\nI noticed your business..."
-            if lang == "Français": msg = "Bonjour,\nJ'ai remarqué votre entreprise..."
-            if lang == "العربية": msg = "مرحباً،\nلقد لاحظت نشاطك التجاري..."
+            if st.session_state.lang == "Français": msg = "Bonjour,\nJ'ai remarqué votre entreprise..."
+            if st.session_state.lang == "العربية": msg = "مرحباً،\nلقد لاحظت نشاطك التجاري..."
             st.text_area("Copy this message:", value=msg, height=200)
 
 st.markdown('<div class="footer">Designed by Chatir ❤ | Worldwide Lead Generation 🌍</div>', unsafe_allow_html=True)
