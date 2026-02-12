@@ -17,10 +17,11 @@ from webdriver_manager.chrome import ChromeDriverManager
 from urllib.parse import quote
 
 # ==============================================================================
-# 1. CONFIGURATION
+# 1. GLOBAL CONFIGURATION & STATE
 # ==============================================================================
 st.set_page_config(page_title="ChatScrap Elite Pro", layout="wide", page_icon="💎")
 
+# State Management
 if 'results_list' not in st.session_state: st.session_state.results_list = []
 if 'running' not in st.session_state: st.session_state.running = False
 if 'paused' not in st.session_state: st.session_state.paused = False
@@ -30,10 +31,9 @@ if 'status_msg' not in st.session_state: st.session_state.status_msg = "READY"
 if 'current_sid' not in st.session_state: st.session_state.current_sid = None
 
 # ==============================================================================
-# 2. DESIGN SYSTEM (CLEAN CSS - NO COMMENTS - COLORS FIXED)
+# 2. DESIGN SYSTEM (GREEN CONTINUE & RESTORED ICONS)
 # ==============================================================================
 st.markdown("""
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap');
 
@@ -58,30 +58,33 @@ div[data-testid="stHorizontalBlock"]:has(button) div[data-testid="column"] { pad
     letter-spacing: 1px;
     transition: all 0.3s ease-in-out;
     border-radius: 8px !important;
-    color: white !important;
 }
 
-/* 1. START BUTTON (ORANGE) */
+/* 1. START BUTTON (Orange) */
 div[data-testid="column"]:nth-of-type(1) .stButton > button {
     background: linear-gradient(135deg, #FF8C00 0%, #FF4500 100%) !important;
+    color: white !important;
     box-shadow: 0 4px 15px rgba(255,69,0,0.3) !important;
 }
 
-/* 2. PAUSE BUTTON (DARK) */
+/* 2. PAUSE BUTTON (Dark) */
 div[data-testid="column"]:nth-of-type(2) .stButton > button {
     background-color: #1F2937 !important;
     border: 1px solid #374151 !important;
     color: #E5E7EB !important;
 }
 
-/* 3. CONTINUE BUTTON (GREEN) */
+/* 3. CONTINUE BUTTON (Green) */
 div[data-testid="column"]:nth-of-type(3) .stButton > button {
     background: linear-gradient(135deg, #28a745 0%, #218838 100%) !important;
     color: white !important;
     box-shadow: 0 4px 15px rgba(40, 167, 69, 0.3) !important;
 }
+div[data-testid="column"]:nth-of-type(3) .stButton > button:hover {
+    background: linear-gradient(135deg, #34ce57 0%, #28a745 100%) !important;
+}
 
-/* 4. STOP BUTTON (RED) */
+/* 4. STOP BUTTON (Red) */
 div[data-testid="column"]:nth-of-type(4) .stButton > button {
     background: linear-gradient(135deg, #DC2626 0%, #991B1B 100%) !important;
     color: white !important;
@@ -116,16 +119,6 @@ div[data-testid="column"]:nth-of-type(4) .stButton > button {
 
 [data-testid="stMetricValue"] { color: #FF8C00 !important; font-weight: 800; }
 section[data-testid="stSidebar"] { background-color: #161922 !important; border-right: 1px solid #31333F; }
-
-.wa-link {
-    color: #25D366 !important;
-    text-decoration: none !important;
-    font-weight: bold;
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-}
-.wa-link i { font-size: 16px; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -237,7 +230,7 @@ with st.container():
 
     st.divider()
     f1, f2, f3, f4, f5 = st.columns([1, 1, 1, 1, 1.5])
-    w_phone = f1.checkbox("Phone Only", True)
+    w_phone = f1.checkbox("Phone", True)
     w_web = f2.checkbox("Website", False)
     w_email = f3.checkbox("Deep Email", False)
     w_nosite = f4.checkbox("No Site Only", False)
@@ -314,6 +307,7 @@ def fetch_email_deep(driver, url):
             driver.switch_to.window(driver.window_handles[0])
         return "N/A"
 
+# CSV CONVERTER
 def convert_df(df):
     return df.to_csv(index=False).encode('utf-8')
 
@@ -323,22 +317,23 @@ with tab_live:
     prog_spot = st.empty()
     status_ui = st.empty()
     table_ui = st.empty()
-    download_btn_spot = st.empty()
+    download_ui = st.empty() # Placeholder for download button
     
     prog_spot.markdown(f'<div class="prog-container"><div class="prog-bar-fill" style="width: {st.session_state.progress}%;"></div></div>', unsafe_allow_html=True)
 
     if st.session_state.results_list:
         df_live = pd.DataFrame(st.session_state.results_list)
-        # 🔥 RESTORE HTML RENDER FOR WHATSAPP ICON
-        table_ui.markdown(df_live.to_html(escape=False, index=False), unsafe_allow_html=True)
+        # Using st.dataframe restores the Toolbar (Search, Fullscreen)
+        table_ui.dataframe(df_live, use_container_width=True)
         
+        # 🔥 DOWNLOAD BUTTON ADDED
         csv = convert_df(df_live)
-        download_btn_spot.download_button(
-            label="⬇️ Download CSV",
+        download_ui.download_button(
+            label="⬇️ Download Results CSV",
             data=csv,
             file_name="extraction_results.csv",
             mime="text/csv",
-            key='live_dl'
+            key='live_download'
         )
 
     if st.session_state.running:
@@ -350,103 +345,97 @@ with tab_live:
                 kws = [k.strip() for k in kw_in.split(',')]
                 cts = [c.strip() for c in city_in.split(',')]
                 all_tasks = [(c, k) for c in cts for k in kws]
-                total_estimated = len(all_tasks) * limit_in
+                total_estimated = len(all_tasks) * limit_in # Estimate for progress
                 
-                # Check if tasks exist
-                if all_tasks:
-                    for i, (city, kw) in enumerate(all_tasks):
-                        if i < st.session_state.task_index: continue
-                        
-                        if not st.session_state.running: break
-                        if st.session_state.paused: 
-                            status_ui.warning("⏸️ Paused...")
-                            break 
-                        
-                        base_progress = i * limit_in
-                        status_ui.markdown(f"**Scanning:** `{kw}` in `{city}`... ({i+1}/{len(all_tasks)})")
-                        
-                        gl = {"Morocco":"ma", "France":"fr", "USA":"us"}.get(country_in, "ma")
-                        driver.get(f"https://www.google.com/maps/search/{quote(kw)}+in+{quote(city)}?hl=en&gl={gl}")
-                        time.sleep(4)
+                for i, (city, kw) in enumerate(all_tasks):
+                    if i < st.session_state.task_index: continue
+                    
+                    if not st.session_state.running: break
+                    if st.session_state.paused: 
+                        status_ui.warning("⏸️ Paused...")
+                        break 
+                    
+                    base_progress = i * limit_in
+                    status_ui.markdown(f"**Scanning:** `{kw}` in `{city}`... ({i+1}/{len(all_tasks)})")
+                    
+                    gl = {"Morocco":"ma", "France":"fr", "USA":"us"}.get(country_in, "ma")
+                    driver.get(f"https://www.google.com/maps/search/{quote(kw)}+in+{quote(city)}?hl=en&gl={gl}")
+                    time.sleep(4)
 
-                        try:
-                            pane = driver.find_element(By.CSS_SELECTOR, 'div[role="feed"]')
-                            for _ in range(depth_in):
-                                if not st.session_state.running or st.session_state.paused: break
-                                driver.execute_script("arguments[0].scrollTop = arguments[0].scrollHeight", pane); time.sleep(1)
-                        except: pass
+                    try:
+                        pane = driver.find_element(By.CSS_SELECTOR, 'div[role="feed"]')
+                        for _ in range(depth_in):
+                            if not st.session_state.running or st.session_state.paused: break
+                            driver.execute_script("arguments[0].scrollTop = arguments[0].scrollHeight", pane); time.sleep(1)
+                    except: pass
 
-                        if not st.session_state.paused and st.session_state.running:
-                            items = driver.find_elements(By.XPATH, '//a[contains(@href, "/maps/place/")]')
-                            processed = 0
-                            for item in items:
-                                if processed >= limit_in or not st.session_state.running or st.session_state.paused: break
-                                try:
-                                    driver.execute_script("arguments[0].click();", item); time.sleep(2)
-                                    
-                                    current_real = base_progress + processed + 1
-                                    st.session_state.progress = min(int((current_real / total_estimated) * 100), 100)
-                                    prog_spot.markdown(f'<div class="prog-container"><div class="prog-bar-fill" style="width: {st.session_state.progress}%;"></div></div>', unsafe_allow_html=True)
-                                    
-                                    name = driver.find_element(By.CSS_SELECTOR, "h1.DUwDvf").text
-                                    phone = "N/A"
-                                    try: phone = driver.find_element(By.XPATH, '//*[contains(@data-item-id, "phone:tel")]').get_attribute("aria-label").replace("Phone: ", "")
-                                    except: pass
-                                    
-                                    raw_web = "N/A"
-                                    try: raw_web = driver.find_element(By.CSS_SELECTOR, 'a[data-item-id="authority"]').get_attribute("href")
-                                    except: pass
-                                    display_web = raw_web if w_web else "N/A"
+                    if not st.session_state.paused and st.session_state.running:
+                        items = driver.find_elements(By.XPATH, '//a[contains(@href, "/maps/place/")]')
+                        processed = 0
+                        for item in items:
+                            if processed >= limit_in or not st.session_state.running or st.session_state.paused: break
+                            try:
+                                driver.execute_script("arguments[0].click();", item); time.sleep(2)
+                                
+                                # Update Progress based on Items found
+                                current_real = base_progress + processed + 1
+                                st.session_state.progress = min(int((current_real / total_estimated) * 100), 100)
+                                prog_spot.markdown(f'<div class="prog-container"><div class="prog-bar-fill" style="width: {st.session_state.progress}%;"></div></div>', unsafe_allow_html=True)
+                                
+                                name = driver.find_element(By.CSS_SELECTOR, "h1.DUwDvf").text
+                                phone = "N/A"
+                                try: phone = driver.find_element(By.XPATH, '//*[contains(@data-item-id, "phone:tel")]').get_attribute("aria-label").replace("Phone: ", "")
+                                except: pass
+                                
+                                raw_web = "N/A"
+                                try: raw_web = driver.find_element(By.CSS_SELECTOR, 'a[data-item-id="authority"]').get_attribute("href")
+                                except: pass
+                                display_web = raw_web if w_web else "N/A"
 
-                                    if w_phone and (phone == "N/A" or not phone): continue
-                                    if w_nosite and raw_web != "N/A": continue
+                                if w_phone and (phone == "N/A" or not phone): continue
+                                if w_nosite and raw_web != "N/A": continue
 
-                                    wa_link = "N/A"
-                                    cp = re.sub(r'\D', '', phone)
-                                    if any(cp.startswith(x) for x in ['2126','2127','06','07']) and not (cp.startswith('2125') or cp.startswith('05')):
-                                        wa_link = f'<a href="https://wa.me/{cp}" target="_blank" class="wa-link"><i class="fab fa-whatsapp"></i> Chat Now</a>'
-                                    
-                                    email_found = "N/A"
-                                    if w_email and raw_web != "N/A":
-                                        email_found = fetch_email_deep(driver, raw_web)
+                                wa_link = "N/A"
+                                cp = re.sub(r'\D', '', phone)
+                                if any(cp.startswith(x) for x in ['2126','2127','06','07']) and not (cp.startswith('2125') or cp.startswith('05')):
+                                    wa_link = f'<a href="https://wa.me/{cp}" target="_blank" class="wa-link"><i class="fab fa-whatsapp"></i> Chat Now</a>'
+                                
+                                email_found = "N/A"
+                                if w_email and raw_web != "N/A":
+                                    email_found = fetch_email_deep(driver, raw_web)
 
-                                    row = {"Keyword":kw, "City":city, "Name":name, "Phone":phone, "WhatsApp":wa_link, "Website":display_web, "Email":email_found}
-                                    
-                                    with sqlite3.connect(DB_NAME) as conn:
-                                        conn.execute("""INSERT INTO leads (session_id, keyword, city, country, name, phone, website, email, whatsapp)
-                                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""", (st.session_state.current_sid, kw, city, country_in, name, phone, display_web, email_found, wa_link))
-                                        if me != 'admin': conn.execute("UPDATE user_credits SET balance = balance - 1 WHERE username=?", (me,))
-                                        conn.commit()
-                                    
-                                    st.session_state.results_list.append(row)
-                                    
-                                    df_live = pd.DataFrame(st.session_state.results_list)
-                                    table_ui.markdown(df_live.to_html(escape=False, index=False), unsafe_allow_html=True)
-                                    
-                                    csv = convert_df(df_live)
-                                    download_btn_spot.download_button(
-                                        label="⬇️ Download CSV",
-                                        data=csv,
-                                        file_name="extraction_results.csv",
-                                        mime="text/csv",
-                                        key=f'live_dl_{len(st.session_state.results_list)}'
-                                    )
-                                    processed += 1
-                                # 🔥 FIX 1: CHANGE 'except:' TO 'except Exception:' TO AVOID SWALLOWING STOP SIGNAL
-                                except Exception: continue
-                        
-                        if not st.session_state.paused and st.session_state.running:
-                            st.session_state.task_index += 1
+                                row = {"Keyword":kw, "City":city, "Name":name, "Phone":phone, "WhatsApp":wa_link, "Website":display_web, "Email":email_found}
+                                
+                                with sqlite3.connect(DB_NAME) as conn:
+                                    conn.execute("""INSERT INTO leads (session_id, keyword, city, country, name, phone, website, email, whatsapp)
+                                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""", (st.session_state.current_sid, kw, city, country_in, name, phone, display_web, email_found, wa_link))
+                                    if me != 'admin': conn.execute("UPDATE user_credits SET balance = balance - 1 WHERE username=?", (me,))
+                                    conn.commit()
+                                
+                                st.session_state.results_list.append(row)
+                                
+                                # Update Table and Button Dynamic
+                                df_live = pd.DataFrame(st.session_state.results_list)
+                                table_ui.dataframe(df_live, use_container_width=True)
+                                csv = convert_df(df_live)
+                                download_ui.download_button(
+                                    label="⬇️ Download Results CSV",
+                                    data=csv,
+                                    file_name="extraction_results.csv",
+                                    mime="text/csv",
+                                    key=f'live_download_{len(st.session_state.results_list)}'
+                                )
+                                processed += 1
+                            except: continue
+                    
+                    if not st.session_state.paused and st.session_state.running:
+                        st.session_state.task_index += 1
 
-                    # 🔥 FIX 2: ONLY SHOW SUCCESS IF ACTUALLY COMPLETED
-                    if not st.session_state.paused and st.session_state.running and st.session_state.task_index >= len(all_tasks):
-                        st.success("🏁 Extraction Finished!")
-                        st.session_state.running = False
-                else:
-                    st.warning("⚠️ No tasks found.")
+                if not st.session_state.paused and st.session_state.running:
+                    st.success("🏁 Extraction Finished!")
                     st.session_state.running = False
             finally:
-                if 'driver' in locals(): driver.quit()
+                driver.quit()
 
 # ==============================================================================
 # 9. ARCHIVE TAB
@@ -464,9 +453,10 @@ with tab_archive:
                 with sqlite3.connect(DB_NAME) as conn:
                     df_l = pd.read_sql(f"SELECT * FROM leads WHERE session_id={sess['id']}", conn)
                 if not df_l.empty:
-                    # Archives use HTML render for icons
-                    st.write(df_l.drop(columns=['id', 'session_id']).to_html(escape=False, index=False), unsafe_allow_html=True)
+                    # Using dataframe here also brings back icons for archives
+                    st.dataframe(df_l.drop(columns=['id', 'session_id']), use_container_width=True)
                     
+                    # 🔥 ARCHIVE DOWNLOAD BUTTON
                     csv_arch = convert_df(df_l)
                     st.download_button(
                         label="⬇️ Download Archive CSV",
@@ -477,4 +467,4 @@ with tab_archive:
                     )
                 else: st.warning("Empty results.")
 
-st.markdown('<div style="text-align:center;color:#666;padding:30px;">Designed by Chatir Elite Pro - Architect Edition V49</div>', unsafe_allow_html=True)
+st.markdown('<div style="text-align:center;color:#666;padding:30px;">Designed by Chatir Elite Pro - Architect Edition V44</div>', unsafe_allow_html=True)
