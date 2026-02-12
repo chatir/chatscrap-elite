@@ -19,7 +19,7 @@ from webdriver_manager.chrome import ChromeDriverManager
 from urllib.parse import quote
 
 # ==============================================================================
-# 1. إعدادات النظام (SYSTEM SETUP)
+# 1. SYSTEM SETUP
 # ==============================================================================
 st.set_page_config(page_title="ChatScrap Elite Beast", layout="wide", page_icon="🕷️")
 
@@ -29,7 +29,7 @@ if 'progress_val' not in st.session_state: st.session_state.progress_val = 0
 if 'status_txt' not in st.session_state: st.session_state.status_txt = "SYSTEM READY"
 
 # ==============================================================================
-# 2. الأمان (SECURITY)
+# 2. SECURITY
 # ==============================================================================
 try:
     with open('config.yaml') as file:
@@ -49,9 +49,9 @@ if st.session_state["authentication_status"] is not True:
     st.warning("🔒 Please Login"); st.stop()
 
 # ==============================================================================
-# 3. قاعدة البيانات (DATABASE)
+# 3. DATABASE (SMART MIGRATION FIX)
 # ==============================================================================
-DB_NAME = "scraper_pro_final.db" # نفس الداتابيز باش يبقاو اليوزرز
+DB_NAME = "scraper_pro_final.db" # نفس الداتابيز القديمة
 
 def run_query(query, params=(), is_select=False):
     try:
@@ -64,9 +64,22 @@ def run_query(query, params=(), is_select=False):
     except: return [] if is_select else False
 
 def init_db():
-    run_query('''CREATE TABLE IF NOT EXISTS leads (id INTEGER PRIMARY KEY AUTOINCREMENT, session_id INTEGER, keyword TEXT, city TEXT, country TEXT, name TEXT, phone TEXT, website TEXT, email TEXT, address TEXT, whatsapp TEXT)''')
+    # 1. Create Tables Basic Structure
+    run_query('''CREATE TABLE IF NOT EXISTS leads (id INTEGER PRIMARY KEY AUTOINCREMENT, session_id INTEGER, keyword TEXT, city TEXT, name TEXT, phone TEXT, website TEXT, email TEXT, address TEXT, whatsapp TEXT)''')
     run_query('''CREATE TABLE IF NOT EXISTS user_credits (username TEXT PRIMARY KEY, balance INTEGER, status TEXT DEFAULT 'active')''')
     run_query('''CREATE TABLE IF NOT EXISTS sessions (id INTEGER PRIMARY KEY AUTOINCREMENT, query TEXT, date TEXT)''')
+    
+    # 2. 🔥 SMART FIX: Add 'country' column if missing (Migration)
+    try:
+        with sqlite3.connect(DB_NAME) as conn:
+            cursor = conn.cursor()
+            # Check if column exists
+            cursor.execute("PRAGMA table_info(leads)")
+            columns = [info[1] for info in cursor.fetchall()]
+            if 'country' not in columns:
+                cursor.execute("ALTER TABLE leads ADD COLUMN country TEXT")
+                conn.commit()
+    except: pass
 
 init_db()
 
@@ -103,25 +116,17 @@ def sync_to_gsheet(df, url):
     except: return False
 
 # ==============================================================================
-# 4. المحرك القوي (ROBUST ENGINE WITH SCROLL FIX)
+# 4. ENGINE
 # ==============================================================================
 def get_driver():
     opts = Options()
     opts.add_argument("--headless=new")
     opts.add_argument("--no-sandbox")
-    opts.add_argument("--disable-dev-shm-usage") # 🔥 مهم جداً للسيرفرات
-    opts.add_argument("--disable-gpu")
+    opts.add_argument("--disable-dev-shm-usage")
     opts.add_argument("--window-size=1920,1080")
     opts.add_argument("--lang=en-US")
     opts.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
-    
-    # 🔥 محاولة التثبيت الآمن للـ Driver
-    try:
-        service = Service(ChromeDriverManager().install())
-        return webdriver.Chrome(service=service, options=opts)
-    except Exception as e:
-        # Fallback (محاولة ثانية إذا فشلت الأولى)
-        return webdriver.Chrome(options=opts)
+    return webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=opts)
 
 def fetch_email_deep(driver, url):
     if not url or "google.com" in url or url == "N/A": return "N/A"
@@ -163,7 +168,7 @@ st.markdown(f"""
     </style>
 """, unsafe_allow_html=True)
 
-# --- APP LOGIC ---
+# --- APP ---
 current_user = st.session_state["username"]
 user_bal, user_st = get_user_data(current_user)
 is_admin = current_user == "admin"
@@ -200,10 +205,9 @@ with st.sidebar:
                 st.success("User Created!"); st.rerun()
 
     st.divider()
-    if st.button("Logout", type="secondary"):
-        authenticator.logout('Logout', 'main'); st.session_state.clear(); st.rerun()
+    if st.button("Logout"): authenticator.logout('Logout', 'main'); st.session_state.clear(); st.rerun()
 
-# --- HEADER (SAFE IMAGE) ---
+# --- HEADER ---
 cm = st.columns([1, 6, 1])[1]
 with cm:
     if os.path.exists("chatscrape.png"):
@@ -240,8 +244,7 @@ with st.container():
         w_web = f[1].checkbox("Must Have Website", False)
         w_email = f[2].checkbox("Extract Email", False)
         w_nosite = f[3].checkbox("No Website Only", False)
-        # 🔥 Scroll Option restored
-        scroll_depth = st.number_input("Scroll Depth (Pages)", 1, 100, 10, key="scroll_d")
+        scroll_depth = st.number_input("Scroll Depth", 1, 500, 10, key="scr_d")
 
     with cb:
         st.write("")
@@ -250,7 +253,7 @@ with st.container():
             if kw_in and city_in: st.session_state.running = True; st.session_state.results_df = None; st.rerun()
         if b2.button("STOP", type="secondary"): st.session_state.running = False; st.rerun()
 
-# --- RESULTS ---
+# --- TABS ---
 t1, t2, t3 = st.tabs(["⚡ LIVE RESULTS", "📜 ARCHIVES", "🤖 MARKETING"])
 
 with t1:
@@ -271,6 +274,7 @@ with t1:
         total_ops = len(kws) * len(cts)
         curr_op = 0
         
+        # Log Session
         run_query("INSERT INTO sessions (query, date) VALUES (?, ?)", (f"{kw_in} | {city_in} | {country_in}", time.strftime("%Y-%m-%d %H:%M")))
         try: s_id = run_query("SELECT id FROM sessions ORDER BY id DESC LIMIT 1", is_select=True)[0][0]
         except: s_id = 1
@@ -283,7 +287,6 @@ with t1:
                     curr_op += 1
                     update_ui(int(((curr_op-1)/total_ops)*100), f"SCANNING: {kw} in {city}, {country_in}")
 
-                    # Geo-Targeting Logic
                     gl_map = {"Morocco": "ma", "France": "fr", "USA": "us", "Spain": "es", "Germany": "de", "UAE": "ae"}
                     gl_code = gl_map.get(country_in, "ma")
                     
@@ -293,13 +296,12 @@ with t1:
                     try: driver.find_element(By.XPATH, "//button[contains(., 'Accept all')]").click(); time.sleep(2)
                     except: pass
 
-                    # 🔥 SCROLL LOGIC RESTORED & IMPROVED
                     try:
                         feed = driver.find_element(By.CSS_SELECTOR, 'div[role="feed"]')
-                        for _ in range(scroll_depth): # Use user input depth
+                        for _ in range(scroll_depth):
                             if not st.session_state.running: break
                             driver.execute_script("arguments[0].scrollTop = arguments[0].scrollHeight", feed)
-                            time.sleep(1.5) # Wait for load
+                            time.sleep(1.5)
                     except: pass
                     
                     elements = driver.find_elements(By.XPATH, '//a[contains(@href, "/maps/place/")]')
@@ -325,7 +327,6 @@ with t1:
                             try: web = driver.find_element(By.CSS_SELECTOR, 'a[data-item-id="authority"]').get_attribute("href")
                             except: pass
 
-                            # WhatsApp Fix (No 05)
                             wa_link = None
                             wa_num = re.sub(r'[^\d]', '', phone)
                             is_fixe = wa_num.startswith('2125') or (wa_num.startswith('05') and len(wa_num) <= 10)
@@ -345,7 +346,9 @@ with t1:
                             if not is_admin: deduct_credit(current_user)
                             st.session_state.results_df = pd.DataFrame(all_res)
                             spot.dataframe(st.session_state.results_df[cols], use_container_width=True, column_config={"WhatsApp": st.column_config.LinkColumn("WhatsApp", display_text="🟢 Chat Now")})
-                            run_query("INSERT INTO leads (session_id, keyword, city, country, name, phone, website, email, address, whatsapp) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", (s_id, kw, city, country_in, name, phone, web, email, addr, wa_link))
+                            
+                            # 🔥 FIX: INSERT includes 'country' (The missing piece)
+                            run_query("INSERT INTO leads (session_id, keyword, city, country, name, phone, website, email, address, whatsapp) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", (s_id, kw, city, country_in, name, phone, web, email, addr, wa_link))
                         except: continue
             update_ui(100, "COMPLETED ✅")
         finally: driver.quit(); st.session_state.running = False; st.rerun()
@@ -357,6 +360,7 @@ with t2:
         if hist:
             for s in hist:
                 with st.expander(f"📦 {s[2]} | {s[1]}"):
+                    # 🔥 FIX: SELECT includes 'country' to match table
                     d = run_query(f"SELECT keyword, city, country, name, phone, whatsapp, website, email FROM leads WHERE session_id={s[0]}", is_select=True)
                     if d:
                         df_h = pd.DataFrame(d, columns=["KW", "City", "Country", "Name", "Phone", "WA", "Web", "Email"])
