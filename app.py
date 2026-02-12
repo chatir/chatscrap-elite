@@ -17,9 +17,9 @@ from webdriver_manager.chrome import ChromeDriverManager
 from urllib.parse import quote
 
 # ==============================================================================
-# 1. GLOBAL CONFIGURATION & STATE (FROM APP 11)
+# 1. GLOBAL CONFIGURATION & STATE (FROM APP 11 + PERSISTENCE FIX)
 # ==============================================================================
-st.set_page_config(page_title="ChatScrap Elite Pro", layout="wide", page_icon="💎") #
+st.set_page_config(page_title="ChatScrap Elite Pro", layout="wide", page_icon="💎")
 
 if 'results_list' not in st.session_state: st.session_state.results_list = [] #
 if 'running' not in st.session_state: st.session_state.running = False #
@@ -29,8 +29,12 @@ if 'progress' not in st.session_state: st.session_state.progress = 0 #
 if 'status_msg' not in st.session_state: st.session_state.status_msg = "READY" #
 if 'current_sid' not in st.session_state: st.session_state.current_sid = None #
 
+# 🔥 PERSISTENCE STORAGE: Saves inputs to survive Admin Panel reruns
+if 'stored_kws' not in st.session_state: st.session_state.stored_kws = ""
+if 'stored_cities' not in st.session_state: st.session_state.stored_cities = ""
+
 # ==============================================================================
-# 2. DESIGN SYSTEM (SAFE INJECTION + WHATSAPP ENHANCEMENT)
+# 2. DESIGN SYSTEM (SAFE CSS INJECTION)
 # ==============================================================================
 st.markdown('<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">', unsafe_allow_html=True)
 
@@ -46,13 +50,14 @@ div[data-testid="stHorizontalBlock"]:has(button) div[data-testid="column"] { pad
 div[data-testid="column"]:nth-of-type(1) .stButton > button { background: linear-gradient(135deg, #FF8C00 0%, #FF4500 100%) !important; box-shadow: 0 4px 15px rgba(255,69,0,0.3) !important; }
 div[data-testid="column"]:nth-of-type(2) .stButton > button { background-color: #1F2937 !important; border: 1px solid #374151 !important; color: #E5E7EB !important; }
 div[data-testid="column"]:nth-of-type(3) .stButton > button { background: linear-gradient(135deg, #28a745 0%, #218838 100%) !important; color: white !important; box-shadow: 0 4px 15px rgba(40, 167, 69, 0.3) !important; }
-div[data-testid="column"]:nth-of-type(4) .stButton > button { background: linear-gradient(135deg, #DC2626 0%, #991B1B 100%) !important; color: white !important; box-shadow: 0 4px 15px rgba(220, 38, 38, 0.4) !important; }
+div[data-testid="column"]:nth-of-type(4) .stButton > button { background: linear-gradient(135deg, #DC2626 0%, #991B1B 100%) !important; box-shadow: 0 4px 15px rgba(220, 38, 38, 0.4) !important; }
 .stButton > button:disabled { opacity: 0.5 !important; cursor: not-allowed; filter: grayscale(1); box-shadow: none !important; }
 .prog-container { width: 100%; background: #111827; border-radius: 50px; padding: 4px; border: 1px solid #374151; margin: 25px 0; }
 .prog-bar-fill { height: 16px; background: repeating-linear-gradient(45deg, #FF8C00, #FF8C00 12px, #FF4500 12px, #FF4500 24px); border-radius: 20px; transition: width 0.3s ease-in-out; animation: stripes 1s linear infinite; }
 @keyframes stripes { 0% {background-position: 0 0;} 100% {background-position: 48px 48px;} }
 [data-testid="stMetricValue"] { color: #FF8C00 !important; font-weight: 800; }
 section[data-testid="stSidebar"] { background-color: #161922 !important; border-right: 1px solid #31333F; }
+/* 🔥 WHATSAPP GREEN STYLE */
 .wa-link { color: #25D366 !important; text-decoration: none !important; font-weight: bold; display: inline-flex; align-items: center; gap: 5px; }
 .wa-link:hover { text-decoration: underline !important; }
 </style>
@@ -114,24 +119,19 @@ with st.sidebar:
             conn = sqlite3.connect(DB_NAME)
             u_df = pd.read_sql("SELECT * FROM user_credits", conn) #
             st.dataframe(u_df, hide_index=True) #
-            
             target = st.selectbox("Manage User", u_df['username']) #
             c1, c2, c3 = st.columns(3) #
-            
             if c1.button("💰 +100"): 
                 conn.execute("UPDATE user_credits SET balance = balance + 100 WHERE username=?", (target,)) #
                 conn.commit(); st.rerun() #
-            
             if c2.button("🚫 Status"):
                 curr = conn.execute("SELECT status FROM user_credits WHERE username=?", (target,)).fetchone()[0] #
                 new_s = 'suspended' if curr == 'active' else 'active' #
                 conn.execute("UPDATE user_credits SET status=? WHERE username=?", (new_s, target)) #
                 conn.commit(); st.rerun() #
-
             if c3.button("🗑️ Del"):
                 conn.execute("DELETE FROM user_credits WHERE username=?", (target,)) #
                 conn.commit(); st.rerun() #
-            
             st.divider() #
             st.write("Add New User:") #
             nu = st.text_input("New Username", key="new_u") #
@@ -179,6 +179,10 @@ with st.container():
     with b_start:
         if st.button("Start Search", disabled=st.session_state.running): #
             if kw_in and city_in:
+                # 🔥 SNAPSHOT FIX: Store keywords/cities permanently to survive Admin Panel Reruns
+                st.session_state.stored_kws = kw_in
+                st.session_state.stored_cities = city_in
+                
                 st.session_state.running = True #
                 st.session_state.paused = False #
                 st.session_state.results_list = [] #
@@ -208,7 +212,7 @@ with st.container():
             st.rerun() #
 
 # ==============================================================================
-# 8. ENGINE & LOGIC (FROM APP 11 + WHATSAPP GREEN ICON)
+# 8. ENGINE & LOGIC (FROM APP 11 + PERSISTENCE & WHATSAPP FIX)
 # ==============================================================================
 def get_driver():
     opts = Options()
@@ -261,70 +265,73 @@ with tab_live:
         download_ui.download_button(label="⬇️ Download CSV", data=csv, file_name="leads.csv", mime="text/csv", key='live_dl') #
 
     if st.session_state.running and not st.session_state.paused:
-        driver = get_driver() #
-        try:
-            kws = [k.strip() for k in kw_in.split(',') if k.strip()] #
-            cts = [c.strip() for c in city_in.split(',') if c.strip()] #
-            all_tasks = [(c, k) for c in cts for k in kws] #
-            total_estimated = len(all_tasks) * limit_in #
-            
-            for i, (city, kw) in enumerate(all_tasks):
-                if i < st.session_state.task_index: continue #
-                if not st.session_state.running: break #
-                
-                base_progress = i * limit_in #
-                status_ui.markdown(f"**Scanning:** `{kw}` in `{city}`... ({i+1}/{len(all_tasks)})") #
-                gl = {"Morocco":"ma", "France":"fr", "USA":"us"}.get(country_in, "ma") #
-                driver.get(f"https://www.google.com/maps/search/{quote(kw)}+in+{quote(city)}?hl=en&gl={gl}") #
-                time.sleep(4) #
+        # 🔥 READ FROM STORED SNAPSHOT INSTEAD OF WIDGETS
+        active_kws = [k.strip() for k in st.session_state.stored_kws.split(',') if k.strip()]
+        active_cts = [c.strip() for c in st.session_state.stored_cities.split(',') if c.strip()]
+        all_tasks = [(c, k) for c in active_cts for k in active_kws]
+        
+        if all_tasks:
+            driver = get_driver() #
+            try:
+                total_estimated = len(all_tasks) * limit_in #
+                for i, (city, kw) in enumerate(all_tasks):
+                    if i < st.session_state.task_index: continue #
+                    if not st.session_state.running: break #
+                    
+                    base_progress = i * limit_in #
+                    status_ui.markdown(f"**Scanning:** `{kw}` in `{city}`... ({i+1}/{len(all_tasks)})") #
+                    gl = {"Morocco":"ma", "France":"fr", "USA":"us"}.get(country_in, "ma") #
+                    driver.get(f"https://www.google.com/maps/search/{quote(kw)}+in+{quote(city)}?hl=en&gl={gl}") #
+                    time.sleep(4) #
 
-                try:
-                    pane = driver.find_element(By.CSS_SELECTOR, 'div[role="feed"]') #
-                    for _ in range(depth_in):
-                        driver.execute_script("arguments[0].scrollTop = arguments[0].scrollHeight", pane); time.sleep(1) #
-                except: pass #
-
-                items = driver.find_elements(By.XPATH, '//a[contains(@href, "/maps/place/")]') #
-                processed = 0 #
-                for item in items:
-                    if processed >= limit_in or not st.session_state.running: break #
                     try:
-                        driver.execute_script("arguments[0].click();", item); time.sleep(2) #
-                        st.session_state.progress = min(int(((base_progress + processed + 1) / total_estimated) * 100), 100) #
-                        prog_spot.markdown(f'<div class="prog-container"><div class="prog-bar-fill" style="width: {st.session_state.progress}%;"></div></div>', unsafe_allow_html=True) #
-                        
-                        name = driver.find_element(By.CSS_SELECTOR, "h1.DUwDvf").text #
-                        phone = "N/A" #
-                        try: phone = driver.find_element(By.XPATH, '//*[contains(@data-item-id, "phone:tel")]').get_attribute("aria-label").replace("Phone: ", "") #
-                        except: pass #
-                        raw_web = driver.find_element(By.CSS_SELECTOR, 'a[data-item-id="authority"]').get_attribute("href") if driver.find_elements(By.CSS_SELECTOR, 'a[data-item-id="authority"]') else "N/A" #
-                        
-                        if w_phone and (phone == "N/A" or not phone): continue #
-                        if w_nosite and raw_web != "N/A": continue #
+                        pane = driver.find_element(By.CSS_SELECTOR, 'div[role="feed"]') #
+                        for _ in range(depth_in):
+                            driver.execute_script("arguments[0].scrollTop = arguments[0].scrollHeight", pane); time.sleep(1) #
+                    except: pass #
 
-                        # 🔥 WHATSAPP ICON + GREEN COLOR LOGIC
-                        wa_link = "N/A" #
-                        cp = re.sub(r'\D', '', phone) #
-                        if any(cp.startswith(x) for x in ['2126','2127','06','07']) and not (cp.startswith('2125') or cp.startswith('05')): #
-                            wa_link = f'<a href="https://wa.me/{cp}" target="_blank" class="wa-link"><i class="fab fa-whatsapp"></i> Chat Now</a>'
-                        
-                        email_found = fetch_email_deep(driver, raw_web) if w_email and raw_web != "N/A" else "N/A" #
-                        row = {"Keyword":kw, "City":city, "Name":name, "Phone":phone, "WhatsApp":wa_link, "Website":raw_web if w_web else "N/A", "Email":email_found} #
-                        
-                        with sqlite3.connect(DB_NAME) as conn:
-                            conn.execute("""INSERT INTO leads (session_id, keyword, city, country, name, phone, website, email, whatsapp)
-                                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""", (st.session_state.current_sid, kw, city, country_in, name, phone, row["Website"], email_found, wa_link)) #
-                            if me != 'admin': conn.execute("UPDATE user_credits SET balance = balance - 1 WHERE username=?", (me,)) #
-                            conn.commit() #
-                        
-                        st.session_state.results_list.append(row) #
-                        table_ui.write(pd.DataFrame(st.session_state.results_list).to_html(escape=False, index=False), unsafe_allow_html=True) #
-                        processed += 1 #
-                    except Exception: continue #
-                st.session_state.task_index += 1 #
-            if st.session_state.task_index >= len(all_tasks):
-                st.success("🏁 Extraction Finished!"); st.session_state.running = False #
-        finally: driver.quit() #
+                    items = driver.find_elements(By.XPATH, '//a[contains(@href, "/maps/place/")]') #
+                    processed = 0 #
+                    for item in items:
+                        if processed >= limit_in or not st.session_state.running: break #
+                        try:
+                            driver.execute_script("arguments[0].click();", item); time.sleep(2) #
+                            st.session_state.progress = min(int(((base_progress + processed + 1) / total_estimated) * 100), 100) #
+                            prog_spot.markdown(f'<div class="prog-container"><div class="prog-bar-fill" style="width: {st.session_state.progress}%;"></div></div>', unsafe_allow_html=True) #
+                            
+                            name = driver.find_element(By.CSS_SELECTOR, "h1.DUwDvf").text #
+                            phone = "N/A" #
+                            try: phone = driver.find_element(By.XPATH, '//*[contains(@data-item-id, "phone:tel")]').get_attribute("aria-label").replace("Phone: ", "") #
+                            except: pass #
+                            raw_web = driver.find_element(By.CSS_SELECTOR, 'a[data-item-id="authority"]').get_attribute("href") if driver.find_elements(By.CSS_SELECTOR, 'a[data-item-id="authority"]') else "N/A" #
+                            
+                            if w_phone and (phone == "N/A" or not phone): continue #
+                            if w_nosite and raw_web != "N/A": continue #
+
+                            # 🔥 WHATSAPP ICON + GREEN COLOR LOGIC
+                            wa_link = "N/A" #
+                            cp = re.sub(r'\D', '', phone) #
+                            if any(cp.startswith(x) for x in ['2126','2127','06','07']) and not (cp.startswith('2125') or cp.startswith('05')): #
+                                wa_link = f'<a href="https://wa.me/{cp}" target="_blank" class="wa-link"><i class="fab fa-whatsapp"></i> Chat Now</a>'
+                            
+                            email_found = fetch_email_deep(driver, raw_web) if w_email and raw_web != "N/A" else "N/A" #
+                            row = {"Keyword":kw, "City":city, "Name":name, "Phone":phone, "WhatsApp":wa_link, "Website":raw_web if w_web else "N/A", "Email":email_found} #
+                            
+                            with sqlite3.connect(DB_NAME) as conn:
+                                conn.execute("""INSERT INTO leads (session_id, keyword, city, country, name, phone, website, email, whatsapp)
+                                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""", (st.session_state.current_sid, kw, city, country_in, name, phone, row["Website"], email_found, wa_link)) #
+                                if me != 'admin': conn.execute("UPDATE user_credits SET balance = balance - 1 WHERE username=?", (me,)) #
+                                conn.commit() #
+                            
+                            st.session_state.results_list.append(row) #
+                            table_ui.write(pd.DataFrame(st.session_state.results_list).to_html(escape=False, index=False), unsafe_allow_html=True) #
+                            processed += 1 #
+                        except Exception: continue #
+                    st.session_state.task_index += 1 #
+                if st.session_state.task_index >= len(all_tasks) and st.session_state.running:
+                    st.success("🏁 Extraction Finished!"); st.session_state.running = False #
+            finally:
+                driver.quit() #
 
 # ==============================================================================
 # 9. ARCHIVE TAB (FROM APP 11)
@@ -340,17 +347,16 @@ with tab_archive:
                 with sqlite3.connect(DB_NAME) as conn:
                     df_l = pd.read_sql(f"SELECT * FROM leads WHERE session_id={sess['id']}", conn) #
                 if not df_l.empty:
-                    # 🔥 SHOW AS HTML TABLE FOR ICONS
-                    st.write(df_l.drop(columns=['id', 'session_id']).to_html(escape=False, index=False), unsafe_allow_html=True)
+                    st.write(df_l.drop(columns=['id', 'session_id']).to_html(escape=False, index=False), unsafe_allow_html=True) #
                     csv_arch = convert_df(df_l) #
                     st.download_button(label="⬇️ Download Archive CSV", data=csv_arch, file_name=f"archive_{sess['id']}.csv", mime="text/csv", key=f"btn_arch_{sess['id']}") #
                 else: st.warning("Empty results.") #
 
 # ==============================================================================
-# 10. MARKETING TAB (REINSTATED FROM APP 11)
+# 10. MARKETING TAB (FROM APP 11)
 # ==============================================================================
 with tab_tools:
     st.subheader("🤖 Marketing Automation") #
     st.info("Marketing tools coming soon in the next update!") #
 
-st.markdown('<div style="text-align:center;color:#666;padding:30px;">Designed by Chatir Elite Pro - Architect Edition V61</div>', unsafe_allow_html=True) #
+st.markdown('<div style="text-align:center;color:#666;padding:30px;">Designed by Chatir Elite Pro - Architect Edition V62</div>', unsafe_allow_html=True) #
