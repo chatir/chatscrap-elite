@@ -48,7 +48,7 @@ if st.session_state["authentication_status"] is not True:
     st.warning("🔒 Login Required"); st.stop()
 
 # ==============================================================================
-# 3. DATABASE ENGINE
+# 3. DATABASE (SMART MIGRATION & RECOVERY)
 # ==============================================================================
 DB_NAME = "scraper_pro_final.db"
 
@@ -63,18 +63,18 @@ def run_query(query, params=(), is_select=False):
     except: return [] if is_select else False
 
 def init_db():
-    # Ensure tables exist
+    # 1. Ensure basic tables exist
     run_query('''CREATE TABLE IF NOT EXISTS leads (id INTEGER PRIMARY KEY AUTOINCREMENT, session_id INTEGER, keyword TEXT, city TEXT, country TEXT, name TEXT, phone TEXT, website TEXT, email TEXT, address TEXT, whatsapp TEXT)''')
     run_query('''CREATE TABLE IF NOT EXISTS user_credits (username TEXT PRIMARY KEY, balance INTEGER, status TEXT DEFAULT 'active')''')
     run_query('''CREATE TABLE IF NOT EXISTS sessions (id INTEGER PRIMARY KEY AUTOINCREMENT, query TEXT, date TEXT)''')
     
-    # Auto-Migration: Add country if missing from old DB
+    # 2. 🔥 RECOVERY FIX: Ensure 'country' exists to prevent crash
     try:
         with sqlite3.connect(DB_NAME) as conn:
             cursor = conn.cursor()
             cursor.execute("PRAGMA table_info(leads)")
-            cols = [c[1] for c in cursor.fetchall()]
-            if 'country' not in cols:
+            columns = [c[1] for c in cursor.fetchall()]
+            if 'country' not in columns:
                 cursor.execute("ALTER TABLE leads ADD COLUMN country TEXT")
                 conn.commit()
     except: pass
@@ -100,21 +100,8 @@ def manage_user(action, username, amount=0):
         new_s = 'suspended' if curr == 'active' else 'active'
         run_query("UPDATE user_credits SET status=? WHERE username=?", (new_s, username))
 
-def sync_to_gsheet(df, url):
-    if "gcp_service_account" not in st.secrets: return False
-    try:
-        scope = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
-        creds = Credentials.from_service_account_info(st.secrets["gcp_service_account"], scopes=scope)
-        client = gspread.authorize(creds)
-        sh = client.open_by_url(url)
-        ws = sh.get_worksheet(0)
-        ws.clear()
-        ws.update([df.columns.values.tolist()] + df.fillna("").values.tolist())
-        return True
-    except: return False
-
 # ==============================================================================
-# 4. ENGINE (SERVER OPTIMIZED)
+# 4. ENGINE
 # ==============================================================================
 def get_driver():
     opts = Options()
@@ -250,7 +237,7 @@ with st.container():
         w_web = f[1].checkbox("Must Have Website", False)
         w_email = f[2].checkbox("Deep Email Scan", False)
         w_nosite = f[3].checkbox("No Website Only", False)
-        depth_in = st.number_input("Scroll Depth (Pages)", 1, 200, 10)
+        depth_in = st.number_input("Scroll Depth", 1, 200, 10)
 
     with cb:
         st.write("")
@@ -260,7 +247,7 @@ with st.container():
         if b2.button("STOP", type="secondary", use_container_width=True):
             st.session_state.running = False; st.rerun()
 
-# --- TABS ---
+# --- RESULTS ---
 t1, t2, t3 = st.tabs(["⚡ LIVE DATA", "📜 ARCHIVES", "🤖 MARKETING"])
 
 with t1:
@@ -361,45 +348,40 @@ with t1:
 
 with t2:
     st.subheader("📜 Search History")
-    # 🔥 ADDED SEARCH BAR IN ARCHIVES
-    search_query = st.text_input("🔍 Filter History (City or Keyword)", placeholder="Type to search...")
+    search_query = st.text_input("🔍 Search Archives (Type Keyword/City)", placeholder="Filter history...")
     
-    query_sql = "SELECT * FROM sessions ORDER BY id DESC LIMIT 20"
-    params_sql = ()
-    
+    # 1. Fetch Sessions
+    q_sql = "SELECT * FROM sessions ORDER BY id DESC LIMIT 20"
+    p_sql = ()
     if search_query:
-        query_sql = "SELECT * FROM sessions WHERE query LIKE ? ORDER BY id DESC"
-        params_sql = (f"%{search_query}%",)
+        q_sql = "SELECT * FROM sessions WHERE query LIKE ? ORDER BY id DESC"
+        p_sql = (f"%{search_query}%",)
         
-    try:
-        hist = run_query(query_sql, params_sql, is_select=True)
-        if hist:
-            for s in hist:
-                with st.expander(f"📦 {s[2]} | {s[1]}"):
-                    # Robust Select that gets all columns
-                    d = run_query(f"SELECT * FROM leads WHERE session_id={s[0]}", is_select=True)
-                    if d:
-                        # Fetch column names dynamically to avoid mismatch
-                        try:
-                            with sqlite3.connect(DB_NAME) as conn:
-                                cur = conn.cursor()
-                                cur.execute(f"SELECT * FROM leads WHERE session_id={s[0]}")
-                                col_names = [description[0] for description in cur.description]
-                            df_h = pd.DataFrame(d, columns=col_names)
-                            # Hide ID columns for cleaner look
-                            cols_hide = ['id', 'session_id']
-                            df_h = df_h.drop(columns=[c for c in cols_hide if c in df_h.columns])
-                            st.dataframe(df_h, use_container_width=True)
-                        except: st.error("Error displaying data.")
-                    else:
-                        st.info("No data recorded for this session (Script might have been stopped).")
-        else:
-            st.info("No matching history found.")
-    except Exception as e: st.error(f"Archive Error: {e}")
+    hist = run_query(q_sql, p_sql, is_select=True)
+    
+    if hist:
+        for s in hist:
+            with st.expander(f"📦 {s[2]} | {s[1]}"):
+                # 🔥 DYNAMIC SELECT: This fixes the "Empty Archive" issue
+                # It grabs whatever columns exist in your specific DB version
+                try:
+                    with sqlite3.connect(DB_NAME) as conn:
+                        df_raw = pd.read_sql_query(f"SELECT * FROM leads WHERE session_id={s[0]}", conn)
+                        if not df_raw.empty:
+                            # Clean up for display
+                            cols_to_hide = ['id', 'session_id']
+                            df_display = df_raw.drop(columns=[c for c in cols_to_hide if c in df_raw.columns])
+                            st.dataframe(df_display, use_container_width=True)
+                        else:
+                            st.info("No leads recorded for this session.")
+                except Exception as e:
+                    st.error(f"Error loading data: {e}")
+    else:
+        st.info("No history found.")
 
 with t3:
     st.subheader("🤖 Marketing Kit")
     if st.button("Generate Script"):
         st.code(f"Hello! I found your business in {city_in} and I can help you with...")
 
-st.markdown('<div style="text-align:center;color:#666;padding:20px;">Designed by Chatir ❤ | Elite Pro Max</div>', unsafe_allow_html=True)
+st.markdown('<div style="text-align:center;color:#666;padding:20px;">Designed by Chatir ❤ | Elite Pro Fixed</div>', unsafe_allow_html=True)
