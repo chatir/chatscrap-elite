@@ -18,7 +18,7 @@ from webdriver_manager.chrome import ChromeDriverManager
 from urllib.parse import quote
 
 # ==============================================================================
-# 1. SYSTEM CONFIGURATION
+# 1. SYSTEM SETUP
 # ==============================================================================
 st.set_page_config(page_title="ChatScrap Elite Pro", layout="wide", page_icon="💎")
 
@@ -28,13 +28,13 @@ if 'progress_val' not in st.session_state: st.session_state.progress_val = 0
 if 'status_txt' not in st.session_state: st.session_state.status_txt = "READY"
 
 # ==============================================================================
-# 2. SECURITY & AUTH
+# 2. SECURITY
 # ==============================================================================
 try:
     with open('config.yaml') as file:
         config = yaml.load(file, Loader=SafeLoader)
 except:
-    st.error("❌ config.yaml is missing!"); st.stop()
+    st.error("❌ config.yaml missing"); st.stop()
 
 authenticator = stauth.Authenticate(
     config['credentials'], config['cookie']['name'], config['cookie']['key'], config['cookie']['expiry_days']
@@ -48,7 +48,7 @@ if st.session_state["authentication_status"] is not True:
     st.warning("🔒 Login Required"); st.stop()
 
 # ==============================================================================
-# 3. DATABASE (ROBUST MIGRATION SYSTEM)
+# 3. DATABASE (SMART READER)
 # ==============================================================================
 DB_NAME = "scraper_pro_final.db"
 
@@ -63,25 +63,20 @@ def run_query(query, params=(), is_select=False):
     except: return [] if is_select else False
 
 def init_db():
-    # 1. Base Tables
+    # Basic Structure
     run_query('''CREATE TABLE IF NOT EXISTS leads (id INTEGER PRIMARY KEY AUTOINCREMENT, session_id INTEGER, keyword TEXT, city TEXT, country TEXT, name TEXT, phone TEXT, website TEXT, email TEXT, address TEXT, whatsapp TEXT)''')
     run_query('''CREATE TABLE IF NOT EXISTS user_credits (username TEXT PRIMARY KEY, balance INTEGER, status TEXT DEFAULT 'active')''')
     run_query('''CREATE TABLE IF NOT EXISTS sessions (id INTEGER PRIMARY KEY AUTOINCREMENT, query TEXT, date TEXT)''')
     
-    # 2. 🔥 FORCE COLUMN MIGRATION (The fix for "Missing Column" error)
+    # 🔥 AUTO-FIX: Add 'country' column silently if missing
     try:
         with sqlite3.connect(DB_NAME) as conn:
             cursor = conn.cursor()
             cursor.execute("PRAGMA table_info(leads)")
-            cols = [col[1] for col in cursor.fetchall()]
-            
+            cols = [c[1] for c in cursor.fetchall()]
             if 'country' not in cols:
                 cursor.execute("ALTER TABLE leads ADD COLUMN country TEXT")
-            
-            if 'whatsapp' not in cols:
-                cursor.execute("ALTER TABLE leads ADD COLUMN whatsapp TEXT")
-                
-            conn.commit()
+                conn.commit()
     except: pass
 
 init_db()
@@ -119,18 +114,17 @@ def sync_to_gsheet(df, url):
     except: return False
 
 # ==============================================================================
-# 4. BEAST ENGINE (SERVER COMPATIBLE & ROBUST)
+# 4. ENGINE
 # ==============================================================================
 def get_driver():
     opts = Options()
     opts.add_argument("--headless=new")
     opts.add_argument("--no-sandbox")
-    opts.add_argument("--disable-dev-shm-usage") # Critical for Server
+    opts.add_argument("--disable-dev-shm-usage")
     opts.add_argument("--disable-gpu")
     opts.add_argument("--window-size=1920,1080")
     opts.add_argument("--lang=en-US")
     
-    # 🔥 Locate Chromium installed via packages.txt
     chromium_path = shutil.which("chromium") or shutil.which("chromium-browser")
     if chromium_path:
         opts.binary_location = chromium_path
@@ -287,7 +281,6 @@ with t1:
         total_ops = len(kws) * len(cts)
         curr_op = 0
         
-        # Insert Session
         run_query("INSERT INTO sessions (query, date) VALUES (?, ?)", (f"{kw_in} | {city_in} | {country_in}", time.strftime("%Y-%m-%d %H:%M")))
         try: s_id = run_query("SELECT id FROM sessions ORDER BY id DESC LIMIT 1", is_select=True)[0][0]
         except: s_id = 1
@@ -368,37 +361,40 @@ with t1:
 
 with t2:
     st.subheader("📜 Search History")
-    search_query = st.text_input("🔍 Filter Archives (Keyword/City)", placeholder="Type to search...")
+    # 🔥 SEARCH BAR ADDED
+    search_query = st.text_input("🔍 Filter by Keyword or City", placeholder="Type e.g., 'cafe' or 'agadir'...")
     
     q_sql = "SELECT * FROM sessions ORDER BY id DESC LIMIT 20"
-    p_sql = ()
+    params = ()
     if search_query:
         q_sql = "SELECT * FROM sessions WHERE query LIKE ? ORDER BY id DESC"
-        p_sql = (f"%{search_query}%",)
+        params = (f"%{search_query}%",)
         
-    hist = run_query(q_sql, p_sql, is_select=True)
-    
-    if hist:
-        for s in hist:
-            with st.expander(f"📦 {s[2]} | {s[1]}"):
-                # 🔥 PANDAS UNIVERSAL READER: Reads ANY table structure
-                try:
-                    with sqlite3.connect(DB_NAME) as conn:
-                        df_raw = pd.read_sql_query(f"SELECT * FROM leads WHERE session_id={s[0]}", conn)
-                        if not df_raw.empty:
-                            # Drop technical columns for cleaner display
-                            cols_drop = [c for c in ['id', 'session_id'] if c in df_raw.columns]
-                            df_final = df_raw.drop(columns=cols_drop)
-                            st.dataframe(df_final, use_container_width=True)
-                        else:
-                            st.info("Empty session (likely stopped or crashed before saving).")
-                except Exception as e: st.error(f"Data Read Error: {e}")
-    else:
-        st.info("No history found.")
+    try:
+        hist = run_query(q_sql, params, is_select=True)
+        if hist:
+            for s in hist:
+                with st.expander(f"📦 {s[2]} | {s[1]}"):
+                    # 🔥 SMART SELECT: Reads whatever exists without crashing
+                    try:
+                        with sqlite3.connect(DB_NAME) as conn:
+                            # Use Pandas to handle column mismatch automatically
+                            df_raw = pd.read_sql_query(f"SELECT * FROM leads WHERE session_id={s[0]}", conn)
+                            if not df_raw.empty:
+                                # Clean up ID columns
+                                cols_to_hide = ['id', 'session_id']
+                                df_display = df_raw.drop(columns=[c for c in cols_to_hide if c in df_raw.columns])
+                                st.dataframe(df_display, use_container_width=True)
+                            else:
+                                st.warning("No data found (Session might have been interrupted).")
+                    except Exception as e: st.error(f"Error reading data: {e}")
+        else:
+            st.info("No matching history found.")
+    except: st.info("No archives found.")
 
 with t3:
     st.subheader("🤖 Marketing Kit")
     if st.button("Generate Script"):
         st.code(f"Hello! I found your business in {city_in} and I can help you with...")
 
-st.markdown('<div style="text-align:center;color:#666;padding:20px;">Designed by Chatir ❤ | Elite Pro Max</div>', unsafe_allow_html=True)
+st.markdown('<div style="text-align:center;color:#666;padding:20px;">Designed by Chatir ❤ | Elite Pro Fixed</div>', unsafe_allow_html=True)
