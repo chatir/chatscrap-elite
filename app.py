@@ -31,7 +31,7 @@ if 'status_msg' not in st.session_state: st.session_state.status_msg = "READY"
 if 'current_sid' not in st.session_state: st.session_state.current_sid = None
 
 # ==============================================================================
-# 2. DESIGN SYSTEM (GREEN CONTINUE & RESTORED ICONS)
+# 2. DESIGN SYSTEM (GREEN CONTINUE & RESTORED ICONS FROM APP 9)
 # ==============================================================================
 st.markdown("""
 <style>
@@ -230,7 +230,7 @@ with st.container():
 
     st.divider()
     f1, f2, f3, f4, f5 = st.columns([1, 1, 1, 1, 1.5])
-    w_phone = f1.checkbox("Phone", True)
+    w_phone = f1.checkbox("Phone Only", True)
     w_web = f2.checkbox("Website", False)
     w_email = f3.checkbox("Deep Email", False)
     w_nosite = f4.checkbox("No Site Only", False)
@@ -323,10 +323,10 @@ with tab_live:
 
     if st.session_state.results_list:
         df_live = pd.DataFrame(st.session_state.results_list)
-        # Using st.dataframe restores the Toolbar (Search, Fullscreen)
+        # Using st.dataframe as requested in App 9 style
         table_ui.dataframe(df_live, use_container_width=True)
         
-        # 🔥 DOWNLOAD BUTTON ADDED
+        # 🔥 DOWNLOAD BUTTON
         csv = convert_df(df_live)
         download_ui.download_button(
             label="⬇️ Download Results CSV",
@@ -426,12 +426,13 @@ with tab_live:
                                     key=f'live_download_{len(st.session_state.results_list)}'
                                 )
                                 processed += 1
-                            except: continue
+                            # 🔥 FIX: 'except Exception:' prevents STOPPING when Admin panel triggers rerun
+                            except Exception: continue
                     
                     if not st.session_state.paused and st.session_state.running:
                         st.session_state.task_index += 1
 
-                if not st.session_state.paused and st.session_state.running:
+                if not st.session_state.paused and st.session_state.running and st.session_state.task_index >= len(all_tasks):
                     st.success("🏁 Extraction Finished!")
                     st.session_state.running = False
             finally:
@@ -467,4 +468,4 @@ with tab_archive:
                     )
                 else: st.warning("Empty results.")
 
-st.markdown('<div style="text-align:center;color:#666;padding:30px;">Designed by Chatir Elite Pro - Architect Edition V44</div>', unsafe_allow_html=True)
+st.markdown('<div style="text-align:center;color:#666;padding:30px;">Designed by Chatir Elite Pro - Architect Edition</div>', unsafe_allow_html=True)
