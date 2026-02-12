@@ -17,11 +17,10 @@ from webdriver_manager.chrome import ChromeDriverManager
 from urllib.parse import quote
 
 # ==============================================================================
-# 1. GLOBAL CONFIGURATION & STATE
+# 1. GLOBAL CONFIGURATION
 # ==============================================================================
 st.set_page_config(page_title="ChatScrap Elite Pro", layout="wide", page_icon="💎")
 
-# State Management
 if 'results_list' not in st.session_state: st.session_state.results_list = []
 if 'running' not in st.session_state: st.session_state.running = False
 if 'paused' not in st.session_state: st.session_state.paused = False
@@ -31,7 +30,7 @@ if 'status_msg' not in st.session_state: st.session_state.status_msg = "READY"
 if 'current_sid' not in st.session_state: st.session_state.current_sid = None
 
 # ==============================================================================
-# 2. DESIGN SYSTEM (ORANGE/RED THEME - FIXED CSS)
+# 2. DESIGN SYSTEM (CLEAN CSS - NO COMMENTS TO PREVENT ERRORS)
 # ==============================================================================
 orange_grad = "linear-gradient(135deg, #FF8C00 0%, #FF4500 100%)"
 red_grad = "linear-gradient(135deg, #DC3545 0%, #C82333 100%)"
@@ -42,11 +41,9 @@ st.markdown(f"""
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap');
     html, body, [data-testid="stAppViewContainer"] {{ font-family: 'Inter', sans-serif !important; background-color: #0e1117; }}
 
-    /* Center Logo */
     .centered-logo {{ text-align: center; padding: 20px 0 40px 0; }}
     .logo-img {{ width: 280px; filter: drop-shadow(0 0 15px rgba(255,140,0,0.3)); }}
 
-    /* 🔥 Apply spacing logic ONLY to the button row */
     div[data-testid="stHorizontalBlock"]:has(button) {{
         gap: 5px !important;
     }}
@@ -64,13 +61,11 @@ st.markdown(f"""
         color: white !important;
     }}
     
-    /* 1. START BUTTON (Orange) */
     div[data-testid="column"]:nth-child(1) div.stButton > button {{
         background: {orange_grad} !important;
         box-shadow: 0 4px 15px rgba(255,69,0,0.3) !important;
     }}
     
-    /* 2 & 3. PAUSE/CONTINUE (Dark Elegant) */
     div[data-testid="column"]:nth-child(2) div.stButton > button,
     div[data-testid="column"]:nth-child(3) div.stButton > button {{
         background-color: #1c212d !important;
@@ -78,20 +73,17 @@ st.markdown(f"""
         border: 1px solid #31333f !important;
     }}
 
-    /* 4. STOP BUTTON (Red) */
     div[data-testid="column"]:nth-child(4) div.stButton > button {{
         background: {red_grad} !important;
         box-shadow: 0 4px 15px rgba(220,53,69,0.3) !important;
     }}
 
-    /* Disabled State */
     .stButton > button:disabled {{
         opacity: 0.4 !important;
         cursor: not-allowed;
         filter: grayscale(0.8);
     }}
 
-    /* 🔥 PROGRESS BAR */
     .prog-container {{ width: 100%; background: #1c212d; border-radius: 50px; padding: 4px; border: 1px solid #31333f; margin: 30px 0; }}
     .prog-bar-fill {{ 
         height: 16px; 
@@ -208,7 +200,6 @@ if os.path.exists("chatscrape.png"):
 # 7. INPUTS & 4-BUTTON ROW
 # ==============================================================================
 with st.container():
-    # Regular columns for inputs (Streamlit default spacing restored)
     c1, c2, c3, c4 = st.columns([3, 3, 2, 1.5])
     kw_in = c1.text_input("Keywords", placeholder="e.g. hotel, cafe")
     city_in = c2.text_input("Cities", placeholder="e.g. Agadir, Casa")
@@ -225,7 +216,6 @@ with st.container():
 
     st.write("")
     
-    # 🔥 4 BUTTONS (CLOSELY SPACED)
     b_start, b_pause, b_cont, b_stop = st.columns([1.2, 1, 1, 1.2]) 
     
     with b_start:
@@ -235,7 +225,7 @@ with st.container():
                 st.session_state.paused = False
                 st.session_state.results_list = []
                 st.session_state.progress = 0
-                st.session_state.task_index = 0 # RESET
+                st.session_state.task_index = 0 
                 with sqlite3.connect(DB_NAME) as conn:
                     cur = conn.cursor()
                     cur.execute("INSERT INTO sessions (query, date) VALUES (?, ?)", (f"{kw_in} | {city_in}", time.strftime("%Y-%m-%d %H:%M")))
@@ -260,7 +250,7 @@ with st.container():
             st.rerun()
 
 # ==============================================================================
-# 8. ENGINE & LOGIC (PAUSE/RESUME PRESERVED)
+# 8. ENGINE
 # ==============================================================================
 def get_driver():
     opts = Options()
@@ -302,7 +292,6 @@ with tab_live:
     status_ui = st.empty()
     table_ui = st.empty()
     
-    # 🔥 DYNAMIC PROGRESS BAR
     prog_spot.markdown(f'<div class="prog-container"><div class="prog-bar-fill" style="width: {st.session_state.progress}%;"></div></div>', unsafe_allow_html=True)
 
     if st.session_state.results_list:
@@ -320,7 +309,6 @@ with tab_live:
                 all_tasks = [(c, k) for c in cts for k in kws]
                 total_ops = len(all_tasks)
                 
-                # Resume Logic
                 for i, (city, kw) in enumerate(all_tasks):
                     if i < st.session_state.task_index: continue
                     
@@ -414,4 +402,4 @@ with tab_archive:
                     st.write(df_l.drop(columns=['id', 'session_id']).to_html(escape=False, index=False), unsafe_allow_html=True)
                 else: st.warning("Empty results.")
 
-st.markdown('<div style="text-align:center;color:#666;padding:30px;">Designed by Chatir Elite Pro - Architect Edition V38</div>', unsafe_allow_html=True)
+st.markdown('<div style="text-align:center;color:#666;padding:30px;">Designed by Chatir Elite Pro - Architect Edition V39</div>', unsafe_allow_html=True)
