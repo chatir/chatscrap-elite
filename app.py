@@ -19,7 +19,7 @@ from urllib.parse import quote
 # ==============================================================================
 # 1. GLOBAL CONFIGURATION
 # ==============================================================================
-st.set_page_config(page_title="ChatScrap Elite Pro", layout="wide", page_icon="💎")
+st.set_page_config(page_title="ChatScrap Elite Pro Supreme", layout="wide", page_icon="💎")
 
 if 'results_list' not in st.session_state: st.session_state.results_list = []
 if 'running' not in st.session_state: st.session_state.running = False
@@ -28,7 +28,7 @@ if 'status_msg' not in st.session_state: st.session_state.status_msg = "READY"
 if 'current_sid' not in st.session_state: st.session_state.current_sid = None
 
 # ==============================================================================
-# 2. DESIGN SYSTEM (STRICT ORANGE SUPREME - NO LEAKS)
+# 2. DESIGN SYSTEM (70/30 PRECISION - NO LEAKS)
 # ==============================================================================
 orange_grad = "linear-gradient(135deg, #FF8C00 0%, #FF4500 100%)"
 
@@ -65,7 +65,7 @@ st.markdown(f"""
         text-align: center !important;
     }}
     
-    /* START BUTTON - FULL COLOR STRETCH (70%) */
+    /* START BUTTON - 70% FULL STRETCH */
     div.stButton > button[kind="primary"] {{
         background: {orange_grad} !important;
         color: white !important;
@@ -73,7 +73,7 @@ st.markdown(f"""
         box-shadow: 0 4px 15px rgba(255,69,0,0.3) !important;
     }}
     
-    /* STOP BUTTON (30%) */
+    /* STOP BUTTON - 30% */
     div.stButton > button[kind="secondary"] {{
         background-color: #1c212d !important;
         color: #ff4b4b !important;
@@ -81,25 +81,25 @@ st.markdown(f"""
         border-radius: 0 12px 12px 0 !important;
     }}
 
+    /* PROGRESS BAR */
     .prog-container {{ width: 100%; background: #1c212d; border-radius: 50px; padding: 4px; border: 1px solid #31333f; margin: 30px 0; }}
     .prog-bar-fill {{ 
         height: 14px; 
         background: repeating-linear-gradient(45deg, #FF8C00, #FF8C00 12px, #FF4500 12px, #FF4500 24px); 
+        background-size: 48px 48px;
         border-radius: 20px; 
         transition: width 0.8s ease-in-out; 
         animation: stripes 1.5s linear infinite; 
     }}
-    @keyframes stripes {{ 0% {{background-position: 0 0;}} 100% {{background-position: 48px 48px;}} }}
+    @keyframes stripes {{ 0% {{background-position: 0 0;}} 100% {{background-position: 48px 0;}} }}
 
     [data-testid="stMetricValue"] {{ color: #FF8C00 !important; font-weight: 800; }}
     section[data-testid="stSidebar"] {{ background-color: #161922 !important; border-right: 1px solid #31333F; }}
-    
-    .wa-link {{ color: #25D366 !important; text-decoration: none !important; font-weight: bold; }}
     </style>
 """, unsafe_allow_html=True)
 
 # ==============================================================================
-# 3. DATABASE ENGINE (v9 STABLE)
+# 3. DATABASE ENGINE (v9 PERSISTENCE)
 # ==============================================================================
 DB_NAME = "chatscrap_elite_pro_v9.db"
 
@@ -129,7 +129,7 @@ def get_user_data(username):
 # ==============================================================================
 try:
     with open('config.yaml') as file: config = yaml.load(file, Loader=SafeLoader)
-except: st.error("config.yaml missing"); st.stop()
+except: st.error("❌ config.yaml required"); st.stop()
 
 authenticator = stauth.Authenticate(config['credentials'], config['cookie']['name'], config['cookie']['key'], config['cookie']['expiry_days'])
 
@@ -137,7 +137,7 @@ if st.session_state.get("authentication_status") is not True:
     try: authenticator.login()
     except: pass
     if st.session_state["authentication_status"] is not True:
-        st.warning("🔒 Restricted Access"); st.stop()
+        st.warning("🔒 Login Required"); st.stop()
 
 # ==============================================================================
 # 5. SIDEBAR & ADMIN PANEL (ACTIVATED)
@@ -158,15 +158,15 @@ with st.sidebar:
             col_a, col_b, col_c = st.columns(3)
             
             if col_a.button("💰 +100"): 
-                sqlite3.connect(DB_NAME).execute("UPDATE user_credits SET balance = balance + 100 WHERE username=?", (target,))
+                conn.execute("UPDATE user_credits SET balance = balance + 100 WHERE username=?", (target,))
                 conn.commit(); st.rerun()
             if col_b.button("🚫 Status"):
-                curr_s = sqlite3.connect(DB_NAME).execute("SELECT status FROM user_credits WHERE username=?", (target,)).fetchone()[0]
+                curr_s = conn.execute("SELECT status FROM user_credits WHERE username=?", (target,)).fetchone()[0]
                 new_s = 'suspended' if curr_s == 'active' else 'active'
-                sqlite3.connect(DB_NAME).execute("UPDATE user_credits SET status=? WHERE username=?", (new_s, target))
+                conn.execute("UPDATE user_credits SET status=? WHERE username=?", (new_s, target))
                 conn.commit(); st.rerun()
             if col_c.button("🗑️ Del"):
-                sqlite3.connect(DB_NAME).execute("DELETE FROM user_credits WHERE username=?", (target,))
+                conn.execute("DELETE FROM user_credits WHERE username=?", (target,))
                 conn.commit(); st.rerun()
             
             st.divider()
@@ -182,7 +182,8 @@ with st.sidebar:
                     get_user_data(nu); st.success(f"User {nu} Created!"); st.rerun()
 
     st.divider()
-    if st.button("Logout"): authenticator.logout('Logout', 'main'); st.session_state.clear(); st.rerun()
+    if st.button("Logout"):
+        authenticator.logout('Logout', 'main'); st.session_state.clear(); st.rerun()
 
 # ==============================================================================
 # 6. HEADER LOGO
@@ -195,23 +196,23 @@ if os.path.exists("chatscrape.png"):
 # 7. INPUTS & THE "SOLID" 70/30 BAR
 # ==============================================================================
 with st.container():
-    c1, c2, c3, c4 = st.columns([3, 3, 2, 1.5])
-    kw_in = c1.text_input("Keywords", placeholder="e.g. hotel, cafe")
+    c1, c2, c3, c4 = st.columns([3, 3, 2, 1.5]) 
+    kw_in = c1.text_input("Keywords", placeholder="e.g. cafe, snak")
     city_in = c2.text_input("Cities", placeholder="e.g. Agadir, Casa")
     country_in = c3.selectbox("Country", ["Morocco", "France", "USA", "Spain", "UAE", "UK"])
-    limit_in = c4.number_input("Limit/City", 1, 1000, 20)
+    limit_in = c4.number_input("Limit/City", 1, 1000, 3)
 
     st.divider()
-    f1, f2, f3, f4, f5 = st.columns([1, 1, 1, 1, 1.5])
+    f1, f2, f3, f4, f5 = st.columns([1, 1, 1.2, 1, 1.5])
     w_phone = f1.checkbox("Phone", True)
     w_web = f2.checkbox("Website", False)
-    w_email = f3.checkbox("Deep Email", False)
+    w_email = f3.checkbox("Deep Email Scan", False)
     w_nosite = f4.checkbox("No Site Only", False)
-    depth_in = f5.slider("Scroll Depth", 1, 100, 10)
+    depth_in = f5.slider("Scroll Depth", 1, 100, 5)
 
     st.write("")
-    # 🔥 THE TRULY ATTACHED 70/30 BAR
-    btn_col1, btn_col2 = st.columns([7, 3])
+    # 🔥 THE TRULY ATTACHED 70/30 BAR (PRECISION)
+    btn_col1, btn_col2 = st.columns([7, 3]) 
     with btn_col1:
         if st.button("Start Extraction", type="primary"):
             if kw_in and city_in:
@@ -286,7 +287,7 @@ with tab_live:
                     for item in items:
                         if processed >= limit_in or not st.session_state.running: break
                         try:
-                            driver.execute_script("arguments[0].click();", item); time.sleep(2)
+                            driver.execute_script("arguments[0].click();", item); time.sleep(2.1)
                             name = driver.find_element(By.CSS_SELECTOR, "h1.DUwDvf").text
                             phone = "N/A"
                             try: phone = driver.find_element(By.XPATH, '//*[contains(@data-item-id, "phone:tel")]').get_attribute("aria-label").replace("Phone: ", "")
@@ -302,7 +303,7 @@ with tab_live:
                             wa_link = "N/A"
                             cp = re.sub(r'\D', '', phone)
                             if any(cp.startswith(x) for x in ['2126','2127','06','07']) and not (cp.startswith('2125') or cp.startswith('05')):
-                                wa_link = f'<a href="https://wa.me/{cp}" target="_blank" style="color:#25D366; text-decoration:none;"><i class="fab fa-whatsapp"></i> Chat Now</a>'
+                                wa_link = f'<a href="https://wa.me/{cp}" target="_blank" class="wa-link"><i class="fab fa-whatsapp"></i> Chat Now</a>'
 
                             row = {"Keyword":kw, "City":city, "Name":name, "Phone":phone, "WhatsApp":wa_link, "Website":web}
                             
@@ -338,4 +339,4 @@ with tab_archive:
                     st.write(df_l.drop(columns=['id', 'session_id']).to_html(escape=False, index=False), unsafe_allow_html=True)
                 else: st.warning("Empty results.")
 
-st.markdown('<div style="text-align:center;color:#666;padding:30px;">Designed by Chatir Elite Pro - Architect Supreme V31</div>', unsafe_allow_html=True)
+st.markdown('<div style="text-align:center;color:#666;padding:30px;">Designed by Chatir Elite Pro - Architect Supreme V32</div>', unsafe_allow_html=True)
