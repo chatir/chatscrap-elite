@@ -31,10 +31,9 @@ if 'status_msg' not in st.session_state: st.session_state.status_msg = "READY"
 if 'current_sid' not in st.session_state: st.session_state.current_sid = None
 
 # ==============================================================================
-# 2. DESIGN SYSTEM (FROM APP 9 - CLEANED)
+# 2. DESIGN SYSTEM (EXACT COPY FROM APP 9 - NO F-STRINGS)
 # ==============================================================================
 st.markdown("""
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap');
 
@@ -235,11 +234,11 @@ if os.path.exists("chatscrape.png"):
 # ==============================================================================
 with st.container():
     c1, c2, c3, c4 = st.columns([3, 3, 2, 1.5])
-    # 🔥 FIX 1: ADDED 'key' to inputs so they don't empty on Rerun/Admin actions
-    kw_in = c1.text_input("Keywords", placeholder="e.g. hotel, cafe", key="kw_input")
-    city_in = c2.text_input("Cities", placeholder="e.g. Agadir, Casa", key="city_input")
-    country_in = c3.selectbox("Country", ["Morocco", "France", "USA", "Spain", "UAE", "UK"])
-    limit_in = c4.number_input("Limit/City", 1, 1000, 20)
+    # 🔥 KEY FIX: Added keys to prevent resetting during Admin actions
+    kw_in = c1.text_input("Keywords", placeholder="e.g. hotel, cafe", key="kw_in_key")
+    city_in = c2.text_input("Cities", placeholder="e.g. Agadir, Casa", key="city_in_key")
+    country_in = c3.selectbox("Country", ["Morocco", "France", "USA", "Spain", "UAE", "UK"], key="country_in_key")
+    limit_in = c4.number_input("Limit/City", 1, 1000, 20, key="limit_in_key")
 
     st.divider()
     f1, f2, f3, f4, f5 = st.columns([1, 1, 1, 1, 1.5])
@@ -320,6 +319,7 @@ def fetch_email_deep(driver, url):
             driver.switch_to.window(driver.window_handles[0])
         return "N/A"
 
+# CSV CONVERTER
 def convert_df(df):
     return df.to_csv(index=False).encode('utf-8')
 
@@ -329,22 +329,23 @@ with tab_live:
     prog_spot = st.empty()
     status_ui = st.empty()
     table_ui = st.empty()
-    download_btn_spot = st.empty()
+    download_ui = st.empty() # Placeholder for download button
     
     prog_spot.markdown(f'<div class="prog-container"><div class="prog-bar-fill" style="width: {st.session_state.progress}%;"></div></div>', unsafe_allow_html=True)
 
     if st.session_state.results_list:
         df_live = pd.DataFrame(st.session_state.results_list)
-        # HTML Table for Icons support
-        table_ui.markdown(df_live.to_html(escape=False, index=False), unsafe_allow_html=True)
+        # Using dataframe here ensures icons like Search/Fullscreen appear (App 9 style)
+        table_ui.dataframe(df_live, use_container_width=True)
         
+        # 🔥 DOWNLOAD BUTTON (APP 9 Style)
         csv = convert_df(df_live)
-        download_btn_spot.download_button(
-            label="⬇️ Download CSV",
+        download_ui.download_button(
+            label="⬇️ Download Results CSV",
             data=csv,
             file_name="extraction_results.csv",
             mime="text/csv",
-            key='live_dl'
+            key='live_download'
         )
 
     if st.session_state.running:
@@ -353,17 +354,16 @@ with tab_live:
         else:
             driver = get_driver()
             try:
-                # 🔥 FIX 2: Filter empty strings to avoid blank search tasks
+                # 🔥 KEY FIX: Ensure inputs are not empty strings before processing
                 kws = [k.strip() for k in kw_in.split(',') if k.strip()]
                 cts = [c.strip() for c in city_in.split(',') if c.strip()]
                 all_tasks = [(c, k) for c in cts for k in kws]
-                total_estimated = len(all_tasks) * limit_in
+                total_estimated = len(all_tasks) * limit_in 
                 
-                # Check if tasks exist
                 if all_tasks:
                     for i, (city, kw) in enumerate(all_tasks):
-                        # 🔥 FIX 3: Double Check if empty (Should be caught by filter, but safety first)
-                        if not city or not kw: continue 
+                        # Extra Safety Check
+                        if not city or not kw: continue
 
                         if i < st.session_state.task_index: continue
                         
@@ -431,18 +431,17 @@ with tab_live:
                                     st.session_state.results_list.append(row)
                                     
                                     df_live = pd.DataFrame(st.session_state.results_list)
-                                    table_ui.markdown(df_live.to_html(escape=False, index=False), unsafe_allow_html=True)
-                                    
+                                    table_ui.dataframe(df_live, use_container_width=True)
                                     csv = convert_df(df_live)
-                                    download_btn_spot.download_button(
-                                        label="⬇️ Download CSV",
+                                    download_ui.download_button(
+                                        label="⬇️ Download Results CSV",
                                         data=csv,
                                         file_name="extraction_results.csv",
                                         mime="text/csv",
-                                        key=f'live_dl_{len(st.session_state.results_list)}'
+                                        key=f'live_download_{len(st.session_state.results_list)}'
                                     )
                                     processed += 1
-                                # 🔥 FIX 4: Catch Exceptions to prevent crash on Rerun signal
+                                # Catch exceptions to prevent stop on Rerun
                                 except Exception: continue
                         
                         if not st.session_state.paused and st.session_state.running:
@@ -452,7 +451,7 @@ with tab_live:
                         st.success("🏁 Extraction Finished!")
                         st.session_state.running = False
                 else:
-                    st.warning("⚠️ No tasks found. Please check your keywords and cities.")
+                    st.warning("⚠️ No tasks found.")
                     st.session_state.running = False
             finally:
                 driver.quit()
@@ -473,7 +472,7 @@ with tab_archive:
                 with sqlite3.connect(DB_NAME) as conn:
                     df_l = pd.read_sql(f"SELECT * FROM leads WHERE session_id={sess['id']}", conn)
                 if not df_l.empty:
-                    st.write(df_l.drop(columns=['id', 'session_id']).to_html(escape=False, index=False), unsafe_allow_html=True)
+                    st.dataframe(df_l.drop(columns=['id', 'session_id']), use_container_width=True)
                     
                     csv_arch = convert_df(df_l)
                     st.download_button(
@@ -485,4 +484,4 @@ with tab_archive:
                     )
                 else: st.warning("Empty results.")
 
-st.markdown('<div style="text-align:center;color:#666;padding:30px;">Designed by Chatir Elite Pro - Architect Edition V50</div>', unsafe_allow_html=True)
+st.markdown('<div style="text-align:center;color:#666;padding:30px;">Designed by Chatir Elite Pro - Architect Edition V51</div>', unsafe_allow_html=True)
