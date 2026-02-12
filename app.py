@@ -6,8 +6,6 @@ import re
 import base64
 import os
 import yaml
-import gspread
-from google.oauth2.service_account import Credentials
 import streamlit_authenticator as stauth
 from yaml.loader import SafeLoader
 from selenium import webdriver
@@ -18,46 +16,38 @@ from webdriver_manager.chrome import ChromeDriverManager
 from urllib.parse import quote
 
 # ==============================================================================
-# 1. SYSTEM SETUP & STATE MANAGEMENT
+# 1. SETUP & PERSISTENCE (THE BRAIN)
 # ==============================================================================
-st.set_page_config(page_title="ChatScrap Elite Master", layout="wide", page_icon="🕷️")
+st.set_page_config(page_title="ChatScrap Elite Ultimate", layout="wide", page_icon="🕷️")
 
-# Initialize Session State (Persistence is Key)
+# Initialize Session State
 defaults = {
     'results_df': None, 'running': False, 'progress_val': 0, 'status_txt': "READY",
-    'p_kw': "", 'p_city': "", 'p_limit': 20, 'p_depth': 10,
-    'logs': []
+    'p_kw': "", 'p_city': "", 'p_limit': 20, 'p_depth': 10
 }
 for k, v in defaults.items():
     if k not in st.session_state: st.session_state[k] = v
 
 # ==============================================================================
-# 2. AUTHENTICATION & SECURITY
+# 2. AUTHENTICATION
 # ==============================================================================
 try:
-    with open('config.yaml') as file:
-        config = yaml.load(file, Loader=SafeLoader)
-except FileNotFoundError:
-    st.error("❌ Critical: 'config.yaml' not found!"); st.stop()
+    with open('config.yaml') as file: config = yaml.load(file, Loader=SafeLoader)
+except: st.error("❌ config.yaml missing!"); st.stop()
 
 authenticator = stauth.Authenticate(
-    config['credentials'],
-    config['cookie']['name'],
-    config['cookie']['key'],
-    config['cookie']['expiry_days']
+    config['credentials'], config['cookie']['name'], config['cookie']['key'], config['cookie']['expiry_days']
 )
 
 if st.session_state.get("authentication_status") is not True:
     try: authenticator.login()
     except: pass
 
-if st.session_state["authentication_status"] is False:
-    st.error('❌ Login Failed'); st.stop()
-elif st.session_state["authentication_status"] is None:
-    st.warning('🔒 System Locked: Please Login'); st.stop()
+if st.session_state["authentication_status"] is False: st.error('❌ Login Failed'); st.stop()
+elif st.session_state["authentication_status"] is None: st.warning('🔒 Login Required'); st.stop()
 
 # ==============================================================================
-# 3. DATABASE & GOOGLE SYNC
+# 3. DATABASE
 # ==============================================================================
 def run_query(query, params=(), is_select=False):
     try:
@@ -81,51 +71,35 @@ def init_db():
 
 init_db()
 
-def get_user_data(username):
-    res = run_query("SELECT balance, status FROM user_credits WHERE username=?", (username,), is_select=True)
-    if res: return res[0]
-    run_query("INSERT INTO user_credits VALUES (?, 10, 'active')", (username,))
+def get_user_data(u):
+    r = run_query("SELECT balance, status FROM user_credits WHERE username=?", (u,), True)
+    if r: return r[0]
+    run_query("INSERT INTO user_credits VALUES (?, 10, 'active')", (u,))
     return (10, 'active')
 
-def deduct_credit(username):
-    if username != "admin": 
-        run_query("UPDATE user_credits SET balance = balance - 1 WHERE username=?", (username,))
+def deduct(u):
+    if u != "admin": run_query("UPDATE user_credits SET balance=balance-1 WHERE username=?", (u,))
 
-def add_credits(username, amount):
-    run_query("UPDATE user_credits SET balance = balance + ? WHERE username=?", (amount, username))
-
-def sync_to_gsheet(df, url):
-    if "gcp_service_account" not in st.secrets:
-        st.toast("⚠️ Secrets missing for Google Sheets", icon="❌")
-        return False
-    try:
-        scope = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
-        creds = Credentials.from_service_account_info(st.secrets["gcp_service_account"], scopes=scope)
-        client = gspread.authorize(creds)
-        sh = client.open_by_url(url)
-        ws = sh.get_worksheet(0)
-        ws.clear()
-        ws.update([df.columns.values.tolist()] + df.fillna("").values.tolist())
-        return True
-    except Exception as e:
-        st.error(f"Sync Error: {e}")
-        return False
+def add_credits(u, amt):
+    run_query("UPDATE user_credits SET balance=balance+? WHERE username=?", (amt, u))
 
 # ==============================================================================
-# 4. ADVANCED SCRAPING ENGINE
+# 4. SCRAPING ENGINE (XPATH + SMART SCROLL)
 # ==============================================================================
-def get_driver_beast():
+def get_driver():
     opts = Options()
+    # 🔥 New Headless Mode (Better for Maps)
     opts.add_argument("--headless=new")
     opts.add_argument("--no-sandbox")
     opts.add_argument("--disable-dev-shm-usage")
     opts.add_argument("--disable-gpu")
     opts.add_argument("--window-size=1920,1080")
+    opts.add_argument("--disable-blink-features=AutomationControlled")
     opts.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
     try: return webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=opts)
     except: return webdriver.Chrome(options=opts)
 
-def fetch_email_deep(driver, url):
+def fetch_email(driver, url):
     if not url or "google" in url or url == "N/A": return "N/A"
     try:
         driver.execute_script("window.open('');"); driver.switch_to.window(driver.window_handles[-1])
@@ -140,69 +114,69 @@ def fetch_email_deep(driver, url):
         return "N/A"
 
 # ==============================================================================
-# 5. UI & CSS (ORANGE THEME & MOBILE FIXES)
+# 5. UI STYLING (ORANGE ELITE)
 # ==============================================================================
 orange_c = "#FF8C00"
 st.markdown(f"""
     <style>
     .stApp {{ background-color: #0f111a; }}
-    .stApp p, .stApp label, h1, h2, h3 {{ color: #FFFFFF !important; font-family: 'Segoe UI'; }}
+    .stApp p, .stApp label, h1, h2, h3, div {{ color: #FFFFFF !important; font-family: 'Segoe UI'; }}
     
-    /* 🔥 MOBILE FLOATING POPUP */
+    /* 🔥 MOBILE POPUP (Visible only on small screens) */
     .mobile-popup {{
         display: none; position: fixed; top: 10px; left: 5%; width: 90%;
         background: rgba(20, 20, 30, 0.95); border: 2px solid {orange_c};
         border-radius: 12px; padding: 10px; text-align: center;
-        z-index: 999999; box-shadow: 0 10px 30px rgba(255, 140, 0, 0.3);
+        z-index: 999999; box-shadow: 0 10px 30px rgba(0,0,0,0.5);
     }}
     @media (max-width: 768px) {{
         .mobile-popup {{ display: block; }}
-        /* Filters 2x2 Grid */
         [data-testid="stHorizontalBlock"] > div {{ flex: 1 1 45% !important; min-width: 45% !important; }}
     }}
     
-    /* Animations */
-    @keyframes stripes {{ 0% {{background-position: 0 0;}} 100% {{background-position: 50px 50px;}} }}
+    .logo-img {{ width: 280px; filter: drop-shadow(0 0 15px rgba(255,140,0,0.5)) saturate(180%); margin-bottom: 25px; }}
+    
+    /* Animated Progress Bar */
+    .prog-box {{ width: 100%; background: rgba(255, 140, 0, 0.1); border-radius: 50px; padding: 4px; border: 1px solid {orange_c}; }}
     .prog-fill {{ 
         height: 14px; background: repeating-linear-gradient(45deg, {orange_c}, {orange_c} 10px, #FF4500 10px, #FF4500 20px);
         border-radius: 20px; transition: width 0.4s ease; animation: stripes 1s linear infinite;
     }}
+    @keyframes stripes {{ 0% {{background-position: 0 0;}} 100% {{background-position: 50px 50px;}} }}
     
-    .logo-img {{ width: 280px; filter: drop-shadow(0 0 15px rgba(255,140,0,0.5)) saturate(180%); margin-bottom: 25px; }}
-    .prog-box {{ width: 100%; background: rgba(255, 140, 0, 0.1); border-radius: 50px; padding: 4px; border: 1px solid {orange_c}; }}
-    div.stButton > button[kind="primary"] {{ background: linear-gradient(135deg, {orange_c} 0%, #FF4500 100%) !important; border: none; color: white !important; font-weight: 900; }}
+    div.stButton > button[kind="primary"] {{ background: linear-gradient(135deg, {orange_c} 0%, #FF4500 100%) !important; border: none; font-weight: bold; }}
     </style>
 """, unsafe_allow_html=True)
 
 # ==============================================================================
 # 6. APP LOGIC
 # ==============================================================================
-current_user = st.session_state["username"]
-user_bal, user_st = get_user_data(current_user)
-is_admin = current_user == "admin"
+user = st.session_state["username"]
+bal, status = get_user_data(user)
+is_admin = user == "admin"
 
-if user_st == 'suspended' and not is_admin: st.error("🚫 SUSPENDED"); st.stop()
+if status == 'suspended' and not is_admin: st.error("🚫 SUSPENDED"); st.stop()
 
 # --- SIDEBAR ---
 with st.sidebar:
     st.title("👤 User Profile")
     if is_admin: st.success("💎 Credits: **Unlimited ♾️**")
-    else: st.warning(f"💎 Credits: **{user_bal}**")
+    else: st.warning(f"💎 Credits: **{bal}**")
     
     st.divider()
     
-    # ADMIN EXPANDER (SAFE FROM RESET)
+    # ADMIN PANEL (EXPANDER)
     if is_admin:
         with st.expander("🛠️ ADMIN PANEL"):
-            u_data = run_query("SELECT username, balance, status FROM user_credits", is_select=True)
-            st.dataframe(pd.DataFrame(u_data, columns=["User", "Bal", "Sts"]), hide_index=True)
+            data = run_query("SELECT username, balance, status FROM user_credits", is_select=True)
+            st.dataframe(pd.DataFrame(data, columns=["User", "Bal", "Sts"]), hide_index=True)
             
-            tgt = st.selectbox("Target", [u[0] for u in u_data if u[0]!='admin'])
+            tgt = st.selectbox("Target", [u[0] for u in data if u[0]!='admin'])
             if st.button("💰 +100"): 
                 add_credits(tgt, 100); st.rerun()
             
             st.divider()
-            new_u = st.text_input("User")
+            new_u = st.text_input("New User")
             new_p = st.text_input("Pass", type="password")
             if st.button("Add"):
                 try: hp = stauth.Hasher.hash(new_p)
@@ -216,41 +190,43 @@ with st.sidebar:
     if st.button("Logout", type="secondary"):
         authenticator.logout('Logout', 'main'); st.session_state.clear(); st.rerun()
 
-# --- HEADER & PLACEHOLDERS ---
+# --- HEADER ---
 cm = st.columns([1, 6, 1])[1]
 with cm:
     if os.path.exists("chatscrape.png"):
         with open("chatscrape.png", "rb") as f: b64 = base64.b64encode(f.read()).decode()
         st.markdown(f'<div style="text-align:center;"><img src="data:image/png;base64,{b64}" class="logo-img"></div>', unsafe_allow_html=True)
     
-    # Placeholders for Dynamic UI updates (Crucial for avoiding Rerun loop)
+    # Placeholders for live updates
     p_holder = st.empty()
     m_holder = st.empty()
 
 def update_ui(prog, txt):
+    st.session_state.progress_val = prog
+    st.session_state.status_txt = txt
+    
     # Desktop
     p_holder.markdown(f"""
         <div class="prog-box"><div class="prog-fill" style="width:{prog}%;"></div></div>
         <div style='color:{orange_c};text-align:center;font-weight:bold;margin-top:5px;'>{txt} {prog}%</div>
     """, unsafe_allow_html=True)
+    
     # Mobile
-    m_holder.markdown(f"""
-        <div class="mobile-popup">
-            <span style="color:{orange_c};font-weight:bold;">🚀 {txt}</span><br>
-            <div style="background:#333;height:6px;border-radius:3px;margin-top:5px;">
-                <div style="background:{orange_c};width:{prog}%;height:100%;border-radius:3px;"></div>
+    if st.session_state.running:
+        m_holder.markdown(f"""
+            <div class="mobile-popup">
+                <span style="color:{orange_c};font-weight:bold;">🚀 {txt}</span><br>
+                <div style="background:#333;height:6px;border-radius:3px;margin-top:5px;">
+                    <div style="background:{orange_c};width:{prog}%;height:100%;border-radius:3px;"></div>
+                </div>
+                <small>{prog}%</small>
             </div>
-            <small>{prog}%</small>
-        </div>
-    """, unsafe_allow_html=True)
+        """, unsafe_allow_html=True)
 
-# Restore previous state to UI
-if st.session_state.running:
-    update_ui(st.session_state.progress_val, st.session_state.status_txt)
-else:
-    update_ui(0, "READY")
+# Restore previous state visually
+update_ui(st.session_state.progress_val, st.session_state.status_txt)
 
-# --- INPUTS ---
+# INPUTS
 with st.container():
     c1, c2, c3, c4 = st.columns([3, 3, 1.5, 1.5])
     st.session_state.p_kw = c1.text_input("🔍 Keywords (Multi)", st.session_state.p_kw, placeholder="Ex: cafe, hotel")
@@ -272,76 +248,77 @@ with st.container():
     with cb:
         st.write("")
         b1, b2 = st.columns(2)
-        if b1.button("START ENGINE", type="primary", use_container_width=True):
+        if b1.button("START ENGINE", type="primary"):
             if st.session_state.p_kw and st.session_state.p_city:
                 st.session_state.running = True; st.session_state.results_df = None; st.rerun()
-            else: st.error("Enter Keyword & City!")
+            else: st.error("Missing Data!")
         
-        if b2.button("STOP", type="secondary", use_container_width=True):
+        if b2.button("STOP", type="secondary"):
             st.session_state.running = False; st.rerun()
 
-# --- TABS ---
+# TABS
 t1, t2, t3 = st.tabs(["⚡ RESULTS", "📜 ARCHIVE", "🤖 MARKETING"])
 
 with t1:
     spot = st.empty()
     if st.session_state.results_df is not None:
-        st.divider()
-        col_e1, col_e2 = st.columns([3, 1])
-        gs_url = col_e1.text_input("Google Sheet URL")
-        if col_e2.button("🚀 Sync"):
-            if sync_to_gsheet(st.session_state.results_df, gs_url): st.success("Synced!")
-            
         st.download_button("📥 CSV", st.session_state.results_df.to_csv(index=False).encode('utf-8-sig'), "leads.csv")
         spot.dataframe(st.session_state.results_df, use_container_width=True, column_config={"WhatsApp": st.column_config.LinkColumn("Chat", display_text="💬")})
 
-    # 🔥 ENGINE CORE (NO RERUN IN LOOP)
+    # 🔥 ENGINE CORE (FIXED SCROLL & LOOP)
     if st.session_state.running:
         all_res = []
         kw_list = [k.strip() for k in st.session_state.p_kw.split(',') if k.strip()]
         ct_list = [c.strip() for c in st.session_state.p_city.split(',') if c.strip()]
-        total_tasks = len(kw_list) * len(ct_list)
-        current_task = 0
+        total = len(kw_list) * len(ct_list)
+        curr = 0
         
-        run_query("INSERT INTO sessions (query, date) VALUES (?, ?)", (f"{st.session_state.p_kw}", time.strftime("%Y-%m-%d %H:%M")))
+        run_query("INSERT INTO sessions (query, date) VALUES (?, ?)", (f"{st.session_state.p_kw}...", time.strftime("%Y-%m-%d %H:%M")))
         try: s_id = run_query("SELECT id FROM sessions ORDER BY id DESC LIMIT 1", is_select=True)[0][0]
         except: s_id = 1
 
-        driver = get_driver_beast()
+        driver = get_driver()
         if driver:
             try:
                 for city in ct_list:
                     for kw in kw_list:
                         if not st.session_state.running: break
-                        current_task += 1
+                        curr += 1
                         
-                        # Dynamic Update via Placeholder
-                        update_ui(int(((current_task-1)/total_tasks)*100), f"SCAN: {kw} in {city}")
+                        update_ui(int(((curr-1)/total)*100), f"SCANNING: {kw} in {city}...")
 
+                        # 1. Navigate
                         url = f"https://www.google.com/maps/search/{quote(kw)}+in+{quote(city)}"
-                        driver.get(url); time.sleep(4)
+                        driver.get(url); time.sleep(5)
 
-                        # Scrolling
-                        try:
-                            try: feed = driver.find_element(By.CSS_SELECTOR, 'div[role="feed"]')
-                            except: feed = driver.find_element(By.TAG_NAME, 'body')
-                            
+                        # 2. 🔥 SMART SCROLL (Fixes 0% issue)
+                        # Try to find the feed. If generic feed not found, look for specific role
+                        feed = None
+                        try: feed = driver.find_element(By.CSS_SELECTOR, 'div[role="feed"]')
+                        except: 
+                            try: feed = driver.find_element(By.CSS_SELECTOR, 'div[aria-label^="Results"]')
+                            except: pass # Will fallback to body later if needed, or XPATH will catch top items
+                        
+                        if feed:
                             for i in range(st.session_state.p_depth):
                                 if not st.session_state.running: break
                                 driver.execute_script("arguments[0].scrollTop = arguments[0].scrollHeight", feed)
-                                time.sleep(1)
-                        except: pass
+                                time.sleep(1.5)
                         
-                        # Parsing
+                        # 3. 🔥 ROBUST EXTRACTION (XPATH)
+                        # Finds ALL link elements that look like places
                         elements = driver.find_elements(By.XPATH, '//a[contains(@href, "/maps/place/")]')
                         seen = set(); unique = []
                         for e in elements:
                             h = e.get_attribute("href")
                             if h and h not in seen: seen.add(h); unique.append(e)
                         
-                        for idx, el in enumerate(unique[:st.session_state.p_limit]):
+                        # Limit to target
+                        targets = unique[:st.session_state.p_limit]
+
+                        for idx, el in enumerate(targets):
                             if not st.session_state.running: break
-                            if not is_admin and get_user_data(current_user)[0] <= 0: break
+                            if not is_admin and get_user_data(user)[0] <= 0: break
                             
                             try:
                                 link = el.get_attribute("href")
@@ -361,7 +338,7 @@ with t1:
                                 if w_nosite and web != "N/A": continue
                                 
                                 email = "N/A"
-                                if w_email and web != "N/A": email = fetch_email_deep(driver, web)
+                                if w_email and web != "N/A": email = fetch_email(driver, web)
                                 
                                 phone = "N/A"; wa_link = None
                                 try:
@@ -376,9 +353,11 @@ with t1:
                                 row = {"Keyword": kw, "City": city, "Name": name, "Phone": phone, "WhatsApp": wa_link, "Website": web, "Email": email, "Address": addr}
                                 all_res.append(row)
                                 
-                                if not is_admin: deduct_credit(current_user)
+                                # Live Update without Rerun
                                 st.session_state.results_df = pd.DataFrame(all_res)
                                 spot.dataframe(st.session_state.results_df, use_container_width=True, column_config={"WhatsApp": st.column_config.LinkColumn("Chat", display_text="💬")})
+                                
+                                if not is_admin: deduct(user)
                                 run_query("INSERT INTO leads (session_id, name, phone, website, address, whatsapp, email) VALUES (?, ?, ?, ?, ?, ?, ?)", (s_id, name, phone, web, addr, wa_link, email))
                             except: continue
                 
