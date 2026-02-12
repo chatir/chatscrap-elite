@@ -29,14 +29,14 @@ if 'task_index' not in st.session_state: st.session_state.task_index = 0
 if 'progress' not in st.session_state: st.session_state.progress = 0
 if 'status_msg' not in st.session_state: st.session_state.status_msg = "READY"
 if 'current_sid' not in st.session_state: st.session_state.current_sid = None
-# 🔥 NEW: SNAPSHOT VARIABLES TO SURVIVE RERUNS
 if 'active_kw' not in st.session_state: st.session_state.active_kw = ""
 if 'active_city' not in st.session_state: st.session_state.active_city = ""
 
 # ==============================================================================
-# 2. DESIGN SYSTEM (CLEAN V51 - NO F-STRINGS)
+# 2. DESIGN SYSTEM (EXACT COPY FROM APP 10)
 # ==============================================================================
 st.markdown("""
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap');
 
@@ -123,7 +123,7 @@ div[data-testid="column"]:nth-of-type(4) .stButton > button {
 [data-testid="stMetricValue"] { color: #FF8C00 !important; font-weight: 800; }
 section[data-testid="stSidebar"] { background-color: #161922 !important; border-right: 1px solid #31333F; }
 
-/* WHATSAPP LINK STYLE */
+/* 🔥 WHATSAPP LINK STYLE FOR HTML RENDER */
 .wa-link {
     color: #25D366 !important;
     text-decoration: none !important;
@@ -132,7 +132,6 @@ section[data-testid="stSidebar"] { background-color: #161922 !important; border-
     align-items: center;
     gap: 5px;
 }
-.wa-link i { font-size: 16px; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -237,7 +236,6 @@ if os.path.exists("chatscrape.png"):
 # ==============================================================================
 with st.container():
     c1, c2, c3, c4 = st.columns([3, 3, 2, 1.5])
-    # Keys allow widgets to survive reruns, but we ALSO use snapshots
     kw_in = c1.text_input("Keywords", placeholder="e.g. hotel, cafe", key="kw_in_key")
     city_in = c2.text_input("Cities", placeholder="e.g. Agadir, Casa", key="city_in_key")
     country_in = c3.selectbox("Country", ["Morocco", "France", "USA", "Spain", "UAE", "UK"], key="country_in_key")
@@ -258,10 +256,8 @@ with st.container():
     
     with b_start:
         if st.button("Start Search", disabled=st.session_state.running):
-            # 🔥 SNAPSHOT FIX: Save inputs to persistent state immediately
             st.session_state.active_kw = kw_in
             st.session_state.active_city = city_in
-            
             if kw_in and city_in:
                 st.session_state.running = True
                 st.session_state.paused = False
@@ -326,7 +322,6 @@ def fetch_email_deep(driver, url):
             driver.switch_to.window(driver.window_handles[0])
         return "N/A"
 
-# CSV CONVERTER
 def convert_df(df):
     return df.to_csv(index=False).encode('utf-8')
 
@@ -336,23 +331,17 @@ with tab_live:
     prog_spot = st.empty()
     status_ui = st.empty()
     table_ui = st.empty()
-    download_btn_spot = st.empty()
+    download_ui = st.empty()
     
     prog_spot.markdown(f'<div class="prog-container"><div class="prog-bar-fill" style="width: {st.session_state.progress}%;"></div></div>', unsafe_allow_html=True)
 
     if st.session_state.results_list:
         df_live = pd.DataFrame(st.session_state.results_list)
-        # HTML Render for Icons
+        # 🔥 USE HTML TO RENDER WHATSAPP ICON
         table_ui.markdown(df_live.to_html(escape=False, index=False), unsafe_allow_html=True)
         
         csv = convert_df(df_live)
-        download_btn_spot.download_button(
-            label="⬇️ Download CSV",
-            data=csv,
-            file_name="extraction_results.csv",
-            mime="text/csv",
-            key='live_dl'
-        )
+        download_ui.download_button(label="⬇️ Download Results CSV", data=csv, file_name="extraction_results.csv", mime="text/csv", key='live_download')
 
     if st.session_state.running:
         if st.session_state.paused:
@@ -360,10 +349,8 @@ with tab_live:
         else:
             driver = get_driver()
             try:
-                # 🔥 KEY FIX: READ FROM SAVED SNAPSHOTS, NOT LIVE WIDGETS
                 safe_kws = st.session_state.active_kw
                 safe_cts = st.session_state.active_city
-                
                 kws = [k.strip() for k in safe_kws.split(',') if k.strip()]
                 cts = [c.strip() for c in safe_cts.split(',') if c.strip()]
                 all_tasks = [(c, k) for c in cts for k in kws]
@@ -372,15 +359,11 @@ with tab_live:
                 if all_tasks:
                     for i, (city, kw) in enumerate(all_tasks):
                         if i < st.session_state.task_index: continue
-                        
                         if not st.session_state.running: break
-                        if st.session_state.paused: 
-                            status_ui.warning("⏸️ Paused...")
-                            break 
+                        if st.session_state.paused: status_ui.warning("⏸️ Paused..."); break 
                         
                         base_progress = i * limit_in
                         status_ui.markdown(f"**Scanning:** `{kw}` in `{city}`... ({i+1}/{len(all_tasks)})")
-                        
                         gl = {"Morocco":"ma", "France":"fr", "USA":"us"}.get(country_in, "ma")
                         driver.get(f"https://www.google.com/maps/search/{quote(kw)}+in+{quote(city)}?hl=en&gl={gl}")
                         time.sleep(4)
@@ -399,7 +382,6 @@ with tab_live:
                                 if processed >= limit_in or not st.session_state.running or st.session_state.paused: break
                                 try:
                                     driver.execute_script("arguments[0].click();", item); time.sleep(2)
-                                    
                                     current_real = base_progress + processed + 1
                                     st.session_state.progress = min(int((current_real / total_estimated) * 100), 100)
                                     prog_spot.markdown(f'<div class="prog-container"><div class="prog-bar-fill" style="width: {st.session_state.progress}%;"></div></div>', unsafe_allow_html=True)
@@ -408,24 +390,19 @@ with tab_live:
                                     phone = "N/A"
                                     try: phone = driver.find_element(By.XPATH, '//*[contains(@data-item-id, "phone:tel")]').get_attribute("aria-label").replace("Phone: ", "")
                                     except: pass
-                                    
-                                    raw_web = "N/A"
-                                    try: raw_web = driver.find_element(By.CSS_SELECTOR, 'a[data-item-id="authority"]').get_attribute("href")
-                                    except: pass
+                                    raw_web = driver.find_element(By.CSS_SELECTOR, 'a[data-item-id="authority"]').get_attribute("href") if driver.find_elements(By.CSS_SELECTOR, 'a[data-item-id="authority"]') else "N/A"
                                     display_web = raw_web if w_web else "N/A"
 
                                     if w_phone and (phone == "N/A" or not phone): continue
                                     if w_nosite and raw_web != "N/A": continue
 
+                                    # 🔥 WHATSAPP ICON LOGIC (fa-whatsapp)
                                     wa_link = "N/A"
                                     cp = re.sub(r'\D', '', phone)
                                     if any(cp.startswith(x) for x in ['2126','2127','06','07']) and not (cp.startswith('2125') or cp.startswith('05')):
                                         wa_link = f'<a href="https://wa.me/{cp}" target="_blank" class="wa-link"><i class="fab fa-whatsapp"></i> Chat Now</a>'
                                     
-                                    email_found = "N/A"
-                                    if w_email and raw_web != "N/A":
-                                        email_found = fetch_email_deep(driver, raw_web)
-
+                                    email_found = fetch_email_deep(driver, raw_web) if w_email and raw_web != "N/A" else "N/A"
                                     row = {"Keyword":kw, "City":city, "Name":name, "Phone":phone, "WhatsApp":wa_link, "Website":display_web, "Email":email_found}
                                     
                                     with sqlite3.connect(DB_NAME) as conn:
@@ -435,31 +412,14 @@ with tab_live:
                                         conn.commit()
                                     
                                     st.session_state.results_list.append(row)
-                                    
                                     df_live = pd.DataFrame(st.session_state.results_list)
                                     table_ui.markdown(df_live.to_html(escape=False, index=False), unsafe_allow_html=True)
-                                    
-                                    csv = convert_df(df_live)
-                                    download_btn_spot.download_button(
-                                        label="⬇️ Download CSV",
-                                        data=csv,
-                                        file_name="extraction_results.csv",
-                                        mime="text/csv",
-                                        key=f'live_dl_{len(st.session_state.results_list)}'
-                                    )
                                     processed += 1
-                                # Catch Exceptions to handle Rerun Interrupt gracefully
                                 except Exception: continue
-                        
-                        if not st.session_state.paused and st.session_state.running:
-                            st.session_state.task_index += 1
-
+                        if not st.session_state.paused and st.session_state.running: st.session_state.task_index += 1
                     if not st.session_state.paused and st.session_state.running and st.session_state.task_index >= len(all_tasks):
                         st.success("🏁 Extraction Finished!")
                         st.session_state.running = False
-                else:
-                    st.warning("⚠️ No tasks found. Please ensure keywords are entered.")
-                    st.session_state.running = False
             finally:
                 if 'driver' in locals(): driver.quit()
 
@@ -469,27 +429,17 @@ with tab_live:
 with tab_archive:
     st.subheader("Persistent History")
     search_f = st.text_input("Filter History", placeholder="🔍 Search e.g. 'lawyer' or 'tiznit'...")
-    
     with sqlite3.connect(DB_NAME) as conn:
         df_s = pd.read_sql("SELECT * FROM sessions WHERE query LIKE ? ORDER BY id DESC LIMIT 30", conn, params=(f"%{search_f}%",))
-    
     if not df_s.empty:
         for _, sess in df_s.iterrows():
             with st.expander(f"📦 {sess['date']} | {sess['query']}"):
                 with sqlite3.connect(DB_NAME) as conn:
                     df_l = pd.read_sql(f"SELECT * FROM leads WHERE session_id={sess['id']}", conn)
                 if not df_l.empty:
-                    # Archives use HTML render for icons
                     st.write(df_l.drop(columns=['id', 'session_id']).to_html(escape=False, index=False), unsafe_allow_html=True)
-                    
                     csv_arch = convert_df(df_l)
-                    st.download_button(
-                        label="⬇️ Download Archive CSV",
-                        data=csv_arch,
-                        file_name=f"archive_{sess['id']}.csv",
-                        mime="text/csv",
-                        key=f"btn_arch_{sess['id']}"
-                    )
+                    st.download_button(label="⬇️ Download Archive CSV", data=csv_arch, file_name=f"archive_{sess['id']}.csv", mime="text/csv", key=f"btn_arch_{sess['id']}")
                 else: st.warning("Empty results.")
 
-st.markdown('<div style="text-align:center;color:#666;padding:30px;">Designed by Chatir Elite Pro - Architect Edition V52</div>', unsafe_allow_html=True)
+st.markdown('<div style="text-align:center;color:#666;padding:30px;">Designed by Chatir Elite Pro - Architect Edition V53</div>', unsafe_allow_html=True)
