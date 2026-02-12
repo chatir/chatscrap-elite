@@ -18,23 +18,24 @@ from webdriver_manager.chrome import ChromeDriverManager
 from urllib.parse import quote
 
 # ==============================================================================
-# 1. SYSTEM CONFIGURATION
+# 1. PROFESSIONAL SYSTEM SETUP
 # ==============================================================================
-st.set_page_config(page_title="ChatScrap Elite Beast", layout="wide", page_icon="🕷️")
+st.set_page_config(page_title="ChatScrap Elite Pro", layout="wide", page_icon="💎")
 
+# Initialize State
 if 'results_df' not in st.session_state: st.session_state.results_df = None
 if 'running' not in st.session_state: st.session_state.running = False
 if 'progress_val' not in st.session_state: st.session_state.progress_val = 0
-if 'status_txt' not in st.session_state: st.session_state.status_txt = "SYSTEM READY"
+if 'status_txt' not in st.session_state: st.session_state.status_txt = "READY TO START"
 
 # ==============================================================================
-# 2. SECURITY & AUTH
+# 2. AUTHENTICATION & SECURITY
 # ==============================================================================
 try:
     with open('config.yaml') as file:
         config = yaml.load(file, Loader=SafeLoader)
 except:
-    st.error("❌ config.yaml is missing!"); st.stop()
+    st.error("❌ Configuration file missing."); st.stop()
 
 authenticator = stauth.Authenticate(
     config['credentials'], config['cookie']['name'], config['cookie']['key'], config['cookie']['expiry_days']
@@ -45,10 +46,10 @@ if st.session_state.get("authentication_status") is not True:
     except: pass
 
 if st.session_state["authentication_status"] is not True:
-    st.warning("🔒 Please Login"); st.stop()
+    st.warning("🔒 Restricted Access. Please Login."); st.stop()
 
 # ==============================================================================
-# 3. DATABASE (RESTORED & MIGRATED)
+# 3. DATABASE MANAGEMENT (Original DB Restored)
 # ==============================================================================
 DB_NAME = "scraper_pro_final.db"
 
@@ -67,13 +68,13 @@ def init_db():
     run_query('''CREATE TABLE IF NOT EXISTS user_credits (username TEXT PRIMARY KEY, balance INTEGER, status TEXT DEFAULT 'active')''')
     run_query('''CREATE TABLE IF NOT EXISTS sessions (id INTEGER PRIMARY KEY AUTOINCREMENT, query TEXT, date TEXT)''')
     
-    # Auto-migration for 'country' column
+    # Auto-Migrate for Country Column
     try:
         with sqlite3.connect(DB_NAME) as conn:
             cursor = conn.cursor()
             cursor.execute("PRAGMA table_info(leads)")
-            cols = [i[1] for i in cursor.fetchall()]
-            if 'country' not in cols:
+            columns = [c[1] for c in cursor.fetchall()]
+            if 'country' not in columns:
                 cursor.execute("ALTER TABLE leads ADD COLUMN country TEXT")
                 conn.commit()
     except: pass
@@ -100,7 +101,7 @@ def manage_user(action, username, amount=0):
         run_query("UPDATE user_credits SET status=? WHERE username=?", (new_s, username))
 
 # ==============================================================================
-# 4. BEAST ENGINE (SERVER-SAFE FIX)
+# 4. HIGH-PERFORMANCE ENGINE (Server Compatible)
 # ==============================================================================
 def get_driver():
     opts = Options()
@@ -110,22 +111,18 @@ def get_driver():
     opts.add_argument("--disable-gpu")
     opts.add_argument("--window-size=1920,1080")
     opts.add_argument("--lang=en-US")
+    opts.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
     
-    # 🔥 CRITICAL FIX FOR STREAMLIT CLOUD
-    # Try to find chromium installed via packages.txt
-    chromium_path = shutil.which("chromium")
+    # 🔥 Detect Chromium from packages.txt
+    chromium_path = shutil.which("chromium") or shutil.which("chromium-browser")
     if chromium_path:
         opts.binary_location = chromium_path
-        
+    
     try:
         return webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=opts)
-    except Exception as e:
-        # Fallback if driver manager fails
-        try:
-            return webdriver.Chrome(options=opts)
-        except:
-            st.error("❌ Critical: Browser not found. Please create 'packages.txt' with 'chromium' inside.")
-            return None
+    except:
+        # Fallback for system driver
+        return webdriver.Chrome(options=opts)
 
 def fetch_email_deep(driver, url):
     if not url or "google.com" in url or url == "N/A": return "N/A"
@@ -141,14 +138,15 @@ def fetch_email_deep(driver, url):
     except: return "N/A"
 
 # ==============================================================================
-# 5. UI STYLING
+# 5. ELITE UI STYLING
 # ==============================================================================
 orange_c = "#FF8C00"
 st.markdown(f"""
     <style>
-    @import url('https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;600;800&display=swap');
-    html, body, .stApp {{ font-family: 'Open Sans', sans-serif !important; background-color: #0f111a; }}
+    @import url('https://fonts.googleapis.com/css2?family=Segoe+UI&display=swap');
+    html, body, .stApp {{ font-family: 'Segoe UI', sans-serif !important; background-color: #0e1117; }}
     .stApp p, .stApp label, h1, h2, h3, div, span {{ color: #FFFFFF !important; }}
+    
     .mobile-popup {{
         display: none; position: fixed; top: 10px; left: 5%; width: 90%;
         background: rgba(20, 20, 30, 0.95); border: 2px solid {orange_c};
@@ -156,6 +154,7 @@ st.markdown(f"""
         z-index: 999999; box-shadow: 0 10px 40px rgba(0,0,0,0.4);
     }}
     @media (max-width: 768px) {{ .mobile-popup {{ display: block; }} }}
+    
     .logo-img {{ width: 280px; filter: drop-shadow(0 0 15px rgba(255,140,0,0.5)) saturate(180%); margin-bottom: 25px; }}
     .prog-box {{ width: 100%; background: rgba(255, 140, 0, 0.1); border-radius: 50px; padding: 4px; border: 1px solid {orange_c}; }}
     .prog-fill {{ 
@@ -163,7 +162,11 @@ st.markdown(f"""
         border-radius: 20px; transition: width 0.4s ease; animation: stripes 1s linear infinite; 
     }}
     @keyframes stripes {{ 0% {{background-position: 0 0;}} 100% {{background-position: 50px 50px;}} }}
-    div.stButton > button[kind="primary"] {{ background: linear-gradient(135deg, {orange_c} 0%, #FF4500 100%) !important; border: none; font-weight: 800; }}
+    
+    div.stButton > button[kind="primary"] {{ 
+        background: linear-gradient(135deg, {orange_c} 0%, #FF4500 100%) !important; 
+        border: none; font-weight: 700; border-radius: 8px;
+    }}
     </style>
 """, unsafe_allow_html=True)
 
@@ -172,41 +175,41 @@ current_user = st.session_state["username"]
 user_bal, user_st = get_user_data(current_user)
 is_admin = current_user == "admin"
 
-if user_st == 'suspended' and not is_admin: st.error("🚫 SUSPENDED"); st.stop()
+if user_st == 'suspended' and not is_admin: st.error("🚫 ACCESS DENIED"); st.stop()
 
 with st.sidebar:
-    st.title("👤 Profile")
-    st.write(f"Logged: **{st.session_state['name']}**")
-    if is_admin: st.success("💎 Credits: Unlimited")
-    else: st.warning(f"💎 Credits: {user_bal}")
+    st.title("👤 User Profile")
+    st.write(f"Account: **{st.session_state['name']}**")
+    if is_admin: st.success("💎 Plan: **Unlimited**")
+    else: st.warning(f"💎 Credits: **{user_bal}**")
     
     if is_admin:
-        with st.expander("🛠️ ADMIN PANEL"):
+        with st.expander("⚙️ SYSTEM ADMIN"):
             users = run_query("SELECT username, balance, status FROM user_credits", is_select=True)
             df_u = pd.DataFrame(users, columns=["User", "Bal", "Sts"])
             st.dataframe(df_u, hide_index=True)
             
-            tgt = st.selectbox("Target", [u[0] for u in users if u[0]!='admin'])
+            tgt = st.selectbox("Manage User", [u[0] for u in users if u[0]!='admin'])
             c1, c2, c3 = st.columns(3)
-            if c1.button("💰 +100"): manage_user("add", tgt, 100); st.success("Added!"); st.rerun()
-            if c2.button("🚫 Status"): manage_user("toggle", tgt); st.success("Changed!"); st.rerun()
-            if c3.button("🗑️ Del"): manage_user("delete", tgt); st.warning("Deleted!"); st.rerun()
+            if c1.button("💰 +100"): manage_user("add", tgt, 100); st.success("Done"); st.rerun()
+            if c2.button("🔒 Toggle"): manage_user("toggle", tgt); st.info("Updated"); st.rerun()
+            if c3.button("🗑️ Delete"): manage_user("delete", tgt); st.warning("Deleted"); st.rerun()
             
-            st.divider()
-            nu = st.text_input("New User")
-            np = st.text_input("Pass", type="password")
-            if st.button("Create"):
+            st.markdown("---")
+            nu = st.text_input("Username")
+            np = st.text_input("Password", type="password")
+            if st.button("Create Account"):
                 try: hp = stauth.Hasher.hash(np)
                 except: hp = stauth.Hasher([np]).generate()[0]
                 config['credentials']['usernames'][nu] = {'name': nu, 'password': hp, 'email': 'x'}
                 with open('config.yaml', 'w') as f: yaml.dump(config, f)
                 run_query("INSERT INTO user_credits VALUES (?, 100, 'active')", (nu,))
-                st.success("User Created!"); st.rerun()
+                st.success("User Created"); st.rerun()
 
-    st.divider()
-    if st.button("Logout"): authenticator.logout('Logout', 'main'); st.session_state.clear(); st.rerun()
+    st.markdown("---")
+    if st.button("Sign Out"): authenticator.logout('Logout', 'main'); st.session_state.clear(); st.rerun()
 
-# --- HEADER (SAFE IMAGE) ---
+# --- MAIN CONTENT ---
 cm = st.columns([1, 6, 1])[1]
 with cm:
     if os.path.exists("chatscrape.png"):
@@ -226,34 +229,34 @@ def update_ui(prog, txt):
 
 if not st.session_state.running: update_ui(0, "SYSTEM READY")
 
-# --- INPUTS ---
+# --- CONTROL PANEL ---
 with st.container():
     c1, c2, c3, c4 = st.columns([3, 3, 1.5, 1.5])
-    kw_in = c1.text_input("🔍 Keywords", placeholder="cafe, snack")
-    city_in = c2.text_input("🌍 Cities", placeholder="Agadir, Casa")
-    country_in = c3.selectbox("🏳️ Country", ["Morocco", "France", "USA", "Spain", "Germany", "UAE"])
-    limit_in = c4.number_input("Limit", 1, 5000, 20)
+    kw_in = c1.text_input("🔍 Keywords (Multi)", placeholder="cafe, restaurant")
+    city_in = c2.text_input("🌍 Cities (Multi)", placeholder="Agadir, Casablanca")
+    country_in = c3.selectbox("🏳️ Country", ["Morocco", "France", "USA", "Spain", "Germany", "UAE", "UK"])
+    limit_in = c4.number_input("Target", 1, 5000, 20)
 
     st.divider()
     co, cb = st.columns([5, 3])
     with co:
-        st.caption("⚙️ **STRICT FILTERS:**")
+        st.caption("⚙️ **ADVANCED FILTERS:**")
         f = st.columns(4)
         w_phone = f[0].checkbox("Must Have Phone", True)
         w_web = f[1].checkbox("Must Have Website", False)
-        w_email = f[2].checkbox("Extract Email", False)
+        w_email = f[2].checkbox("Deep Email Scan", False)
         w_nosite = f[3].checkbox("No Website Only", False)
-        scroll_depth = st.number_input("Scroll Depth", 1, 500, 10)
 
     with cb:
         st.write("")
         b1, b2 = st.columns(2)
-        if b1.button("START ENGINE", type="primary"):
+        if b1.button("START ENGINE", type="primary", use_container_width=True):
             if kw_in and city_in: st.session_state.running = True; st.session_state.results_df = None; st.rerun()
-        if b2.button("STOP", type="secondary"): st.session_state.running = False; st.rerun()
+        if b2.button("STOP", type="secondary", use_container_width=True):
+            st.session_state.running = False; st.rerun()
 
-# --- TABS ---
-t1, t2, t3 = st.tabs(["⚡ LIVE RESULTS", "📜 ARCHIVES", "🤖 MARKETING"])
+# --- WORKSPACE ---
+t1, t2, t3 = st.tabs(["⚡ LIVE DATA", "📜 ARCHIVES", "🤖 MARKETING KIT"])
 
 with t1:
     spot = st.empty()
@@ -263,7 +266,7 @@ with t1:
 
     if st.session_state.results_df is not None:
         final_df = st.session_state.results_df[cols] if not st.session_state.results_df.empty else pd.DataFrame(columns=cols)
-        st.download_button("📥 CSV", final_df.to_csv(index=False).encode('utf-8-sig'), "leads.csv")
+        st.download_button("📥 Download CSV", final_df.to_csv(index=False).encode('utf-8-sig'), "leads_pro.csv", use_container_width=True)
         spot.dataframe(final_df, use_container_width=True, column_config={"WhatsApp": st.column_config.LinkColumn("WhatsApp", display_text="🟢 Chat Now")})
 
     if st.session_state.running:
@@ -284,9 +287,10 @@ with t1:
                     for kw in kws:
                         if not st.session_state.running: break
                         curr_op += 1
-                        update_ui(int(((curr_op-1)/total_ops)*100), f"SCANNING: {kw} in {city}, {country_in}")
+                        update_ui(int(((curr_op-1)/total_ops)*100), f"SCANNING: {kw} in {city}")
 
-                        gl_map = {"Morocco": "ma", "France": "fr", "USA": "us", "Spain": "es", "Germany": "de", "UAE": "ae"}
+                        # Smart Geo-Targeting
+                        gl_map = {"Morocco": "ma", "France": "fr", "USA": "us", "Spain": "es", "Germany": "de", "UAE": "ae", "UK": "gb"}
                         gl_code = gl_map.get(country_in, "ma")
                         
                         url = f"https://www.google.com/maps/search/{quote(kw)}+in+{quote(city)}+{quote(country_in)}?hl=en&gl={gl_code}"
@@ -295,9 +299,10 @@ with t1:
                         try: driver.find_element(By.XPATH, "//button[contains(., 'Accept all')]").click(); time.sleep(2)
                         except: pass
 
+                        # Robust Scroll
                         try:
                             feed = driver.find_element(By.CSS_SELECTOR, 'div[role="feed"]')
-                            for _ in range(scroll_depth):
+                            for _ in range(12):
                                 if not st.session_state.running: break
                                 driver.execute_script("arguments[0].scrollTop = arguments[0].scrollHeight", feed)
                                 time.sleep(1.5)
@@ -326,13 +331,16 @@ with t1:
                                 try: web = driver.find_element(By.CSS_SELECTOR, 'a[data-item-id="authority"]').get_attribute("href")
                                 except: pass
 
-                                # WhatsApp Logic
+                                # 🔥 SMART WHATSAPP LOGIC (06/07 ONLY)
                                 wa_link = None
                                 wa_num = re.sub(r'[^\d]', '', phone)
+                                is_mobile = any(wa_num.startswith(p) for p in ['2126', '2127', '06', '07'])
                                 is_fixe = wa_num.startswith('2125') or (wa_num.startswith('05') and len(wa_num) <= 10)
-                                if (wa_num.startswith('2126') or wa_num.startswith('2127') or wa_num.startswith('06') or wa_num.startswith('07')) and not is_fixe:
+                                
+                                if is_mobile and not is_fixe:
                                     wa_link = f"https://wa.me/{wa_num}"
 
+                                # 🔥 STRICT FILTERING
                                 if w_phone and (phone == "N/A" or phone == ""): continue
                                 if w_web and (web == "N/A" or web == ""): continue
                                 if w_nosite and web != "N/A": continue
@@ -352,7 +360,7 @@ with t1:
             finally: driver.quit(); st.session_state.running = False; st.rerun()
 
 with t2:
-    st.subheader("📜 Archives")
+    st.subheader("📜 Search History")
     try:
         hist = run_query("SELECT * FROM sessions ORDER BY id DESC LIMIT 20", is_select=True)
         if hist:
@@ -362,11 +370,11 @@ with t2:
                     if d:
                         df_h = pd.DataFrame(d, columns=["KW", "City", "Country", "Name", "Phone", "WA", "Web", "Email"])
                         st.dataframe(df_h, use_container_width=True)
-    except: st.info("No archives found.")
+    except: st.info("No history found.")
 
 with t3:
     st.subheader("🤖 Marketing Kit")
     if st.button("Generate Script"):
-        st.code(f"Hi! Found your business in {city_in}...")
+        st.code(f"Hello! I found your business in {city_in} and I can help you with...")
 
-st.markdown('<div style="text-align:center;color:#666;padding:20px;">Designed by Chatir ❤ | Elite Final Beast</div>', unsafe_allow_html=True)
+st.markdown('<div style="text-align:center;color:#666;padding:20px;">Designed by Chatir ❤ | Elite Pro Edition</div>', unsafe_allow_html=True)
