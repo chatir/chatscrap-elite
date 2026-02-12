@@ -18,7 +18,7 @@ from webdriver_manager.chrome import ChromeDriverManager
 from urllib.parse import quote
 
 # ==============================================================================
-# 1. SYSTEM SETUP
+# 1. SYSTEM CONFIGURATION
 # ==============================================================================
 st.set_page_config(page_title="ChatScrap Elite Pro", layout="wide", page_icon="💎")
 
@@ -48,7 +48,7 @@ if st.session_state["authentication_status"] is not True:
     st.warning("🔒 Login Required"); st.stop()
 
 # ==============================================================================
-# 3. DATABASE (SMART FIX FOR ARCHIVE)
+# 3. DATABASE ENGINE
 # ==============================================================================
 DB_NAME = "scraper_pro_final.db"
 
@@ -63,18 +63,18 @@ def run_query(query, params=(), is_select=False):
     except: return [] if is_select else False
 
 def init_db():
-    # Basic Tables
+    # Ensure tables exist
     run_query('''CREATE TABLE IF NOT EXISTS leads (id INTEGER PRIMARY KEY AUTOINCREMENT, session_id INTEGER, keyword TEXT, city TEXT, country TEXT, name TEXT, phone TEXT, website TEXT, email TEXT, address TEXT, whatsapp TEXT)''')
     run_query('''CREATE TABLE IF NOT EXISTS user_credits (username TEXT PRIMARY KEY, balance INTEGER, status TEXT DEFAULT 'active')''')
     run_query('''CREATE TABLE IF NOT EXISTS sessions (id INTEGER PRIMARY KEY AUTOINCREMENT, query TEXT, date TEXT)''')
     
-    # 🔥 AUTO-FIX: Add 'country' column if it's missing in old DB (Fixes Archive)
+    # Auto-Migration: Add country if missing from old DB
     try:
         with sqlite3.connect(DB_NAME) as conn:
             cursor = conn.cursor()
             cursor.execute("PRAGMA table_info(leads)")
-            columns = [c[1] for c in cursor.fetchall()]
-            if 'country' not in columns:
+            cols = [c[1] for c in cursor.fetchall()]
+            if 'country' not in cols:
                 cursor.execute("ALTER TABLE leads ADD COLUMN country TEXT")
                 conn.commit()
     except: pass
@@ -100,8 +100,21 @@ def manage_user(action, username, amount=0):
         new_s = 'suspended' if curr == 'active' else 'active'
         run_query("UPDATE user_credits SET status=? WHERE username=?", (new_s, username))
 
+def sync_to_gsheet(df, url):
+    if "gcp_service_account" not in st.secrets: return False
+    try:
+        scope = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
+        creds = Credentials.from_service_account_info(st.secrets["gcp_service_account"], scopes=scope)
+        client = gspread.authorize(creds)
+        sh = client.open_by_url(url)
+        ws = sh.get_worksheet(0)
+        ws.clear()
+        ws.update([df.columns.values.tolist()] + df.fillna("").values.tolist())
+        return True
+    except: return False
+
 # ==============================================================================
-# 4. ENGINE (SERVER COMPATIBLE)
+# 4. ENGINE (SERVER OPTIMIZED)
 # ==============================================================================
 def get_driver():
     opts = Options()
@@ -237,17 +250,17 @@ with st.container():
         w_web = f[1].checkbox("Must Have Website", False)
         w_email = f[2].checkbox("Deep Email Scan", False)
         w_nosite = f[3].checkbox("No Website Only", False)
-        # 🔥 SCROLL DEPTH RESTORED
         depth_in = st.number_input("Scroll Depth (Pages)", 1, 200, 10)
 
     with cb:
         st.write("")
         b1, b2 = st.columns(2)
-        if b1.button("START ENGINE", type="primary"):
+        if b1.button("START ENGINE", type="primary", use_container_width=True):
             if kw_in and city_in: st.session_state.running = True; st.session_state.results_df = None; st.rerun()
-        if b2.button("STOP", type="secondary"): st.session_state.running = False; st.rerun()
+        if b2.button("STOP", type="secondary", use_container_width=True):
+            st.session_state.running = False; st.rerun()
 
-# --- RESULTS ---
+# --- TABS ---
 t1, t2, t3 = st.tabs(["⚡ LIVE DATA", "📜 ARCHIVES", "🤖 MARKETING"])
 
 with t1:
@@ -258,7 +271,7 @@ with t1:
 
     if st.session_state.results_df is not None:
         final_df = st.session_state.results_df[cols] if not st.session_state.results_df.empty else pd.DataFrame(columns=cols)
-        st.download_button("📥 Download CSV", final_df.to_csv(index=False).encode('utf-8-sig'), "leads_pro.csv")
+        st.download_button("📥 Download CSV", final_df.to_csv(index=False).encode('utf-8-sig'), "leads_pro.csv", use_container_width=True)
         spot.dataframe(final_df, use_container_width=True, column_config={"WhatsApp": st.column_config.LinkColumn("WhatsApp", display_text="🟢 Chat Now")})
 
     if st.session_state.running:
@@ -290,10 +303,9 @@ with t1:
                         try: driver.find_element(By.XPATH, "//button[contains(., 'Accept all')]").click(); time.sleep(2)
                         except: pass
 
-                        # 🔥 SCROLL LOGIC USING INPUT
                         try:
                             feed = driver.find_element(By.CSS_SELECTOR, 'div[role="feed"]')
-                            for _ in range(depth_in): # Using depth_in
+                            for _ in range(depth_in):
                                 if not st.session_state.running: break
                                 driver.execute_script("arguments[0].scrollTop = arguments[0].scrollHeight", feed)
                                 time.sleep(1.5)
@@ -324,8 +336,9 @@ with t1:
 
                                 wa_link = None
                                 wa_num = re.sub(r'[^\d]', '', phone)
+                                is_mobile = any(wa_num.startswith(p) for p in ['2126', '2127', '06', '07'])
                                 is_fixe = wa_num.startswith('2125') or (wa_num.startswith('05') and len(wa_num) <= 10)
-                                if (wa_num.startswith('2126') or wa_num.startswith('2127') or wa_num.startswith('06') or wa_num.startswith('07')) and not is_fixe:
+                                if is_mobile and not is_fixe:
                                     wa_link = f"https://wa.me/{wa_num}"
 
                                 if w_phone and (phone == "N/A" or phone == ""): continue
@@ -341,32 +354,52 @@ with t1:
                                 if not is_admin: deduct_credit(current_user)
                                 st.session_state.results_df = pd.DataFrame(all_res)
                                 spot.dataframe(st.session_state.results_df[cols], use_container_width=True, column_config={"WhatsApp": st.column_config.LinkColumn("WhatsApp", display_text="🟢 Chat Now")})
-                                
-                                # Save to DB (Fixed Columns)
-                                run_query("INSERT INTO leads (session_id, keyword, city, country, name, phone, website, email, address, whatsapp) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", (s_id, kw, city, country_in, name, phone, web, email, addr, wa_link))
+                                run_query("INSERT INTO leads (session_id, keyword, city, country, name, phone, website, email, address, whatsapp) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", (s_id, kw, city, country_in, name, phone, web, email, addr, wa_link))
                             except: continue
                 update_ui(100, "COMPLETED ✅")
             finally: driver.quit(); st.session_state.running = False; st.rerun()
 
 with t2:
-    st.subheader("📜 Archives")
+    st.subheader("📜 Search History")
+    # 🔥 ADDED SEARCH BAR IN ARCHIVES
+    search_query = st.text_input("🔍 Filter History (City or Keyword)", placeholder="Type to search...")
+    
+    query_sql = "SELECT * FROM sessions ORDER BY id DESC LIMIT 20"
+    params_sql = ()
+    
+    if search_query:
+        query_sql = "SELECT * FROM sessions WHERE query LIKE ? ORDER BY id DESC"
+        params_sql = (f"%{search_query}%",)
+        
     try:
-        hist = run_query("SELECT * FROM sessions ORDER BY id DESC LIMIT 20", is_select=True)
+        hist = run_query(query_sql, params_sql, is_select=True)
         if hist:
             for s in hist:
                 with st.expander(f"📦 {s[2]} | {s[1]}"):
-                    # 🔥 FIXED SELECT QUERY FOR ARCHIVE
-                    d = run_query(f"SELECT keyword, city, country, name, phone, whatsapp, website, email, address FROM leads WHERE session_id={s[0]}", is_select=True)
+                    # Robust Select that gets all columns
+                    d = run_query(f"SELECT * FROM leads WHERE session_id={s[0]}", is_select=True)
                     if d:
-                        df_h = pd.DataFrame(d, columns=["Keyword", "City", "Country", "Name", "Phone", "WA", "Web", "Email", "Address"])
-                        st.dataframe(df_h, use_container_width=True)
+                        # Fetch column names dynamically to avoid mismatch
+                        try:
+                            with sqlite3.connect(DB_NAME) as conn:
+                                cur = conn.cursor()
+                                cur.execute(f"SELECT * FROM leads WHERE session_id={s[0]}")
+                                col_names = [description[0] for description in cur.description]
+                            df_h = pd.DataFrame(d, columns=col_names)
+                            # Hide ID columns for cleaner look
+                            cols_hide = ['id', 'session_id']
+                            df_h = df_h.drop(columns=[c for c in cols_hide if c in df_h.columns])
+                            st.dataframe(df_h, use_container_width=True)
+                        except: st.error("Error displaying data.")
                     else:
-                        st.warning("No data recorded for this session.")
-    except: st.info("No archives found.")
+                        st.info("No data recorded for this session (Script might have been stopped).")
+        else:
+            st.info("No matching history found.")
+    except Exception as e: st.error(f"Archive Error: {e}")
 
 with t3:
     st.subheader("🤖 Marketing Kit")
     if st.button("Generate Script"):
         st.code(f"Hello! I found your business in {city_in} and I can help you with...")
 
-st.markdown('<div style="text-align:center;color:#666;padding:20px;">Designed by Chatir ❤ | Elite Pro Fixed</div>', unsafe_allow_html=True)
+st.markdown('<div style="text-align:center;color:#666;padding:20px;">Designed by Chatir ❤ | Elite Pro Max</div>', unsafe_allow_html=True)
