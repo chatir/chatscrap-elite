@@ -297,7 +297,7 @@ with t1:
 
                     try:
                         feed = driver.find_element(By.CSS_SELECTOR, 'div[role="feed"]')
-                        for _ in range(15): # Deep Scroll
+                        for _ in range(10): # Fixed depth to ensure scroll
                             if not st.session_state.running: break
                             driver.execute_script("arguments[0].scrollTop = arguments[0].scrollHeight", feed)
                             time.sleep(1.5)
@@ -346,12 +346,10 @@ with t1:
                             
                             if not is_admin: deduct_credit(current_user)
                             st.session_state.results_df = pd.DataFrame(all_res)
-                            
-                            # Live Update with Dynamic Columns
                             spot.dataframe(st.session_state.results_df[cols_to_show], use_container_width=True, column_config={"WhatsApp": st.column_config.LinkColumn("WhatsApp", display_text="🟢 Chat Now")})
                             
                             # 🔥 FIXED ARCHIVE INSERT
-                            run_query("INSERT INTO leads (session_id, keyword, city, country, name, phone, website, email, address, whatsapp) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", (s_id, kw, city, country_in, name, phone, web, email, addr, wa_link))
+                            run_query("INSERT INTO leads (session_id, keyword, city, country, name, phone, website, email, address, whatsapp) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", (s_id, kw, f"{city}, {country_in}", country_in, name, phone, web, email, addr, wa_link))
                             
                         except: continue
             update_ui(100, "COMPLETED ✅")
