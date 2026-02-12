@@ -20,12 +20,13 @@ from urllib.parse import quote
 # ==============================================================================
 # 1. SYSTEM SETUP
 # ==============================================================================
-st.set_page_config(page_title="ChatScrap Elite Pro", layout="wide", page_icon="💎")
+st.set_page_config(page_title="ChatScrap Elite Ultimate", layout="wide", page_icon="💎")
 
 if 'results_df' not in st.session_state: st.session_state.results_df = None
 if 'running' not in st.session_state: st.session_state.running = False
 if 'progress_val' not in st.session_state: st.session_state.progress_val = 0
 if 'status_txt' not in st.session_state: st.session_state.status_txt = "READY"
+if 'current_session_id' not in st.session_state: st.session_state.current_session_id = None
 
 # ==============================================================================
 # 2. SECURITY
@@ -48,82 +49,95 @@ if st.session_state["authentication_status"] is not True:
     st.warning("🔒 Login Required"); st.stop()
 
 # ==============================================================================
-# 3. DATABASE (THE FIX FOR EMPTY ARCHIVES)
+# 3. DATABASE (ATOMIC SAVE SYSTEM)
 # ==============================================================================
 DB_NAME = "scraper_pro_final.db"
 
+def run_query(query, params=(), is_select=False):
+    try:
+        with sqlite3.connect(DB_NAME, check_same_thread=False) as conn:
+            curr = conn.cursor()
+            curr.execute(query, params)
+            if is_select: return curr.fetchall()
+            conn.commit()
+            return True
+    except: return [] if is_select else False
+
 def init_db():
+    run_query('''CREATE TABLE IF NOT EXISTS leads (id INTEGER PRIMARY KEY AUTOINCREMENT, session_id INTEGER, keyword TEXT, city TEXT, country TEXT, name TEXT, phone TEXT, website TEXT, email TEXT, address TEXT, whatsapp TEXT)''')
+    run_query('''CREATE TABLE IF NOT EXISTS user_credits (username TEXT PRIMARY KEY, balance INTEGER, status TEXT DEFAULT 'active')''')
+    run_query('''CREATE TABLE IF NOT EXISTS sessions (id INTEGER PRIMARY KEY AUTOINCREMENT, query TEXT, date TEXT)''')
+    
+    # Auto-Repair Columns
     try:
         with sqlite3.connect(DB_NAME) as conn:
             cursor = conn.cursor()
-            # Tables
-            cursor.execute('''CREATE TABLE IF NOT EXISTS sessions (id INTEGER PRIMARY KEY AUTOINCREMENT, query TEXT, date TEXT)''')
-            cursor.execute('''CREATE TABLE IF NOT EXISTS leads (id INTEGER PRIMARY KEY AUTOINCREMENT, session_id INTEGER, keyword TEXT, city TEXT, country TEXT, name TEXT, phone TEXT, website TEXT, email TEXT, address TEXT, whatsapp TEXT)''')
-            cursor.execute('''CREATE TABLE IF NOT EXISTS user_credits (username TEXT PRIMARY KEY, balance INTEGER, status TEXT DEFAULT 'active')''')
-            
-            # Migration: Ensure columns exist
             cursor.execute("PRAGMA table_info(leads)")
-            columns = [c[1] for c in cursor.fetchall()]
-            if 'country' not in columns:
-                cursor.execute("ALTER TABLE leads ADD COLUMN country TEXT")
-            if 'whatsapp' not in columns:
-                cursor.execute("ALTER TABLE leads ADD COLUMN whatsapp TEXT")
+            cols = [c[1] for c in cursor.fetchall()]
+            if 'country' not in cols: cursor.execute("ALTER TABLE leads ADD COLUMN country TEXT")
+            if 'whatsapp' not in cols: cursor.execute("ALTER TABLE leads ADD COLUMN whatsapp TEXT")
             conn.commit()
-    except Exception as e: st.error(f"DB Init Error: {e}")
+    except: pass
 
 init_db()
 
-# Function to Create Session and GET ID SAFELY
-def create_session(query_text):
+# 🔥 CRITICAL FIX: Get ID reliably
+def start_new_session(query_text):
     try:
         with sqlite3.connect(DB_NAME) as conn:
-            cursor = conn.cursor()
-            cursor.execute("INSERT INTO sessions (query, date) VALUES (?, ?)", (query_text, time.strftime("%Y-%m-%d %H:%M")))
-            session_id = cursor.lastrowid # 🔥 THIS IS THE KEY FIX
+            cur = conn.cursor()
+            cur.execute("INSERT INTO sessions (query, date) VALUES (?, ?)", (query_text, time.strftime("%Y-%m-%d %H:%M")))
             conn.commit()
-            return session_id
-    except: return None
+            # Force fetch the max ID to ensure synchronization
+            cur.execute("SELECT MAX(id) FROM sessions")
+            sess_id = cur.fetchone()[0]
+            return sess_id
+    except Exception as e:
+        st.error(f"Session Create Error: {e}")
+        return None
 
-# Function to Save Lead Linked to Session
-def save_lead(session_id, data):
+def save_lead_atomic(session_id, d):
+    """Saves a single lead immediately to the DB"""
     try:
         with sqlite3.connect(DB_NAME) as conn:
-            cursor = conn.cursor()
-            cursor.execute("""
+            cur = conn.cursor()
+            cur.execute("""
                 INSERT INTO leads (session_id, keyword, city, country, name, phone, website, email, address, whatsapp) 
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (session_id, data['Keyword'], data['City'], data['Country'], data['Name'], data['Phone'], data['Website'], data['Email'], data['Address'], data['WhatsApp']))
+            """, (session_id, d['Keyword'], d['City'], d['Country'], d['Name'], d['Phone'], d['Website'], d['Email'], d['Address'], d['WhatsApp']))
             conn.commit()
-    except Exception as e: print(f"Save Error: {e}")
+            return True
+    except: return False
 
 def get_user_data(username):
-    try:
-        with sqlite3.connect(DB_NAME) as conn:
-            cursor = conn.cursor()
-            cursor.execute("SELECT balance, status FROM user_credits WHERE username=?", (username,))
-            res = cursor.fetchone()
-            if res: return res
-            cursor.execute("INSERT INTO user_credits VALUES (?, 100, 'active')", (username,))
-            conn.commit()
-            return (100, 'active')
-    except: return (0, 'suspended')
+    res = run_query("SELECT balance, status FROM user_credits WHERE username=?", (username,), is_select=True)
+    if res: return res[0]
+    run_query("INSERT INTO user_credits VALUES (?, 100, 'active')", (username,))
+    return (100, 'active')
 
 def deduct_credit(username):
-    if username != "admin":
-        with sqlite3.connect(DB_NAME) as conn:
-            conn.cursor().execute("UPDATE user_credits SET balance = balance - 1 WHERE username=?", (username,))
-            conn.commit()
+    if username != "admin": run_query("UPDATE user_credits SET balance = balance - 1 WHERE username=?", (username,))
 
 def manage_user(action, username, amount=0):
-    with sqlite3.connect(DB_NAME) as conn:
-        cursor = conn.cursor()
-        if action == "add": cursor.execute("UPDATE user_credits SET balance = balance + ? WHERE username=?", (amount, username))
-        elif action == "delete": cursor.execute("DELETE FROM user_credits WHERE username=?", (username,))
-        elif action == "toggle":
-            curr = cursor.execute("SELECT status FROM user_credits WHERE username=?", (username,)).fetchone()[0]
-            new_s = 'suspended' if curr == 'active' else 'active'
-            cursor.execute("UPDATE user_credits SET status=? WHERE username=?", (new_s, username))
-        conn.commit()
+    if action == "add": run_query("UPDATE user_credits SET balance = balance + ? WHERE username=?", (amount, username))
+    elif action == "delete": run_query("DELETE FROM user_credits WHERE username=?", (username,))
+    elif action == "toggle":
+        curr = run_query("SELECT status FROM user_credits WHERE username=?", (username,), True)[0][0]
+        new_s = 'suspended' if curr == 'active' else 'active'
+        run_query("UPDATE user_credits SET status=? WHERE username=?", (new_s, username))
+
+def sync_to_gsheet(df, url):
+    if "gcp_service_account" not in st.secrets: return False
+    try:
+        scope = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
+        creds = Credentials.from_service_account_info(st.secrets["gcp_service_account"], scopes=scope)
+        client = gspread.authorize(creds)
+        sh = client.open_by_url(url)
+        ws = sh.get_worksheet(0)
+        ws.clear()
+        ws.update([df.columns.values.tolist()] + df.fillna("").values.tolist())
+        return True
+    except: return False
 
 # ==============================================================================
 # 4. ENGINE
@@ -274,13 +288,13 @@ t1, t2, t3 = st.tabs(["⚡ LIVE DATA", "📜 ARCHIVES", "🤖 MARKETING"])
 
 with t1:
     spot = st.empty()
-    cols = ["Keyword", "City", "Country", "Name", "Phone", "WhatsApp", "Address"]
+    cols = ["Status", "Keyword", "City", "Country", "Name", "Phone", "WhatsApp", "Address"] # Added Status
     if w_web: cols.append("Website")
     if w_email: cols.append("Email")
 
     if st.session_state.results_df is not None:
         final_df = st.session_state.results_df[cols] if not st.session_state.results_df.empty else pd.DataFrame(columns=cols)
-        st.download_button("📥 Download CSV", final_df.to_csv(index=False).encode('utf-8-sig'), "leads_pro.csv", use_container_width=True)
+        st.download_button("📥 Download CSV", final_df.to_csv(index=False).encode('utf-8-sig'), "leads_ultimate.csv", use_container_width=True)
         spot.dataframe(final_df, use_container_width=True, column_config={"WhatsApp": st.column_config.LinkColumn("WhatsApp", display_text="🟢 Chat Now")})
 
     if st.session_state.running:
@@ -290,106 +304,112 @@ with t1:
         total_ops = len(kws) * len(cts)
         curr_op = 0
         
-        # 🔥 SAFE SESSION CREATION
-        s_id = create_session(f"{kw_in} | {city_in} | {country_in}")
-        
-        if s_id:
-            driver = get_driver()
-            if driver:
-                try:
-                    for city in cts:
-                        for kw in kws:
-                            if not st.session_state.running: break
-                            curr_op += 1
-                            update_ui(int(((curr_op-1)/total_ops)*100), f"SCANNING: {kw} in {city}")
+        # 🔥 START SESSION & GET ID
+        s_id = start_new_session(f"{kw_in} | {city_in} | {country_in}")
+        st.toast(f"Session Started! ID: {s_id}", icon="🚀")
 
-                            gl_map = {"Morocco": "ma", "France": "fr", "USA": "us", "Spain": "es", "Germany": "de", "UAE": "ae", "UK": "gb"}
-                            gl_code = gl_map.get(country_in, "ma")
-                            
-                            url = f"https://www.google.com/maps/search/{quote(kw)}+in+{quote(city)}+{quote(country_in)}?hl=en&gl={gl_code}"
-                            
-                            driver.get(url); time.sleep(5)
-                            try: driver.find_element(By.XPATH, "//button[contains(., 'Accept all')]").click(); time.sleep(2)
-                            except: pass
+        driver = get_driver()
+        if driver and s_id:
+            try:
+                for city in cts:
+                    for kw in kws:
+                        if not st.session_state.running: break
+                        curr_op += 1
+                        update_ui(int(((curr_op-1)/total_ops)*100), f"SCANNING: {kw} in {city}")
 
+                        gl_map = {"Morocco": "ma", "France": "fr", "USA": "us", "Spain": "es", "Germany": "de", "UAE": "ae", "UK": "gb"}
+                        gl_code = gl_map.get(country_in, "ma")
+                        
+                        url = f"https://www.google.com/maps/search/{quote(kw)}+in+{quote(city)}+{quote(country_in)}?hl=en&gl={gl_code}"
+                        
+                        driver.get(url); time.sleep(5)
+                        try: driver.find_element(By.XPATH, "//button[contains(., 'Accept all')]").click(); time.sleep(2)
+                        except: pass
+
+                        try:
+                            feed = driver.find_element(By.CSS_SELECTOR, 'div[role="feed"]')
+                            for _ in range(depth_in):
+                                if not st.session_state.running: break
+                                driver.execute_script("arguments[0].scrollTop = arguments[0].scrollHeight", feed)
+                                time.sleep(1.5)
+                        except: pass
+                        
+                        elements = driver.find_elements(By.XPATH, '//a[contains(@href, "/maps/place/")]')
+                        seen = set(); unique = []
+                        for e in elements:
+                            h = e.get_attribute("href")
+                            if h and h not in seen: seen.add(h); unique.append(e)
+                        
+                        valid_cnt = 0
+                        for el in unique:
+                            if not st.session_state.running or valid_cnt >= limit_in: break
+                            if not is_admin and get_user_data(current_user)[0] <= 0: break
+                            
                             try:
-                                feed = driver.find_element(By.CSS_SELECTOR, 'div[role="feed"]')
-                                for _ in range(depth_in):
-                                    if not st.session_state.running: break
-                                    driver.execute_script("arguments[0].scrollTop = arguments[0].scrollHeight", feed)
-                                    time.sleep(1.5)
-                            except: pass
-                            
-                            elements = driver.find_elements(By.XPATH, '//a[contains(@href, "/maps/place/")]')
-                            seen = set(); unique = []
-                            for e in elements:
-                                h = e.get_attribute("href")
-                                if h and h not in seen: seen.add(h); unique.append(e)
-                            
-                            valid_cnt = 0
-                            for el in unique:
-                                if not st.session_state.running or valid_cnt >= limit_in: break
-                                if not is_admin and get_user_data(current_user)[0] <= 0: break
+                                driver.execute_script("arguments[0].click();", el); time.sleep(1.5)
+                                name = "N/A"; phone = "N/A"; web = "N/A"; addr = "N/A"
+                                try: name = driver.find_element(By.CSS_SELECTOR, "h1.DUwDvf").text
+                                except: pass
+                                try: addr = driver.find_element(By.CSS_SELECTOR, 'div.Io6YTe.fontBodyMedium').text
+                                except: pass
+                                try: phone = driver.find_element(By.XPATH, '//*[contains(@data-item-id, "phone:tel")]').get_attribute("aria-label").replace("Phone:", "").strip()
+                                except: pass
+                                try: web = driver.find_element(By.CSS_SELECTOR, 'a[data-item-id="authority"]').get_attribute("href")
+                                except: pass
+
+                                wa_link = None
+                                wa_num = re.sub(r'[^\d]', '', phone)
+                                is_mobile = any(wa_num.startswith(p) for p in ['2126', '2127', '06', '07'])
+                                is_fixe = wa_num.startswith('2125') or (wa_num.startswith('05') and len(wa_num) <= 10)
+                                if is_mobile and not is_fixe:
+                                    wa_link = f"https://wa.me/{wa_num}"
+
+                                if w_phone and (phone == "N/A" or phone == ""): continue
+                                if w_web and (web == "N/A" or web == ""): continue
+                                if w_nosite and web != "N/A": continue
                                 
-                                try:
-                                    driver.execute_script("arguments[0].click();", el); time.sleep(1.5)
-                                    name = "N/A"; phone = "N/A"; web = "N/A"; addr = "N/A"
-                                    try: name = driver.find_element(By.CSS_SELECTOR, "h1.DUwDvf").text
-                                    except: pass
-                                    try: addr = driver.find_element(By.CSS_SELECTOR, 'div.Io6YTe.fontBodyMedium').text
-                                    except: pass
-                                    try: phone = driver.find_element(By.XPATH, '//*[contains(@data-item-id, "phone:tel")]').get_attribute("aria-label").replace("Phone:", "").strip()
-                                    except: pass
-                                    try: web = driver.find_element(By.CSS_SELECTOR, 'a[data-item-id="authority"]').get_attribute("href")
-                                    except: pass
+                                email = "N/A"
+                                if w_email and web != "N/A": email = fetch_email_deep(driver, web)
 
-                                    wa_link = None
-                                    wa_num = re.sub(r'[^\d]', '', phone)
-                                    is_mobile = any(wa_num.startswith(p) for p in ['2126', '2127', '06', '07'])
-                                    is_fixe = wa_num.startswith('2125') or (wa_num.startswith('05') and len(wa_num) <= 10)
-                                    if is_mobile and not is_fixe:
-                                        wa_link = f"https://wa.me/{wa_num}"
-
-                                    if w_phone and (phone == "N/A" or phone == ""): continue
-                                    if w_web and (web == "N/A" or web == ""): continue
-                                    if w_nosite and web != "N/A": continue
-                                    
-                                    email = "N/A"
-                                    if w_email and web != "N/A": email = fetch_email_deep(driver, web)
-
-                                    row = {"Keyword": kw, "City": city, "Country": country_in, "Name": name, "Phone": phone, "WhatsApp": wa_link, "Website": web, "Email": email, "Address": addr}
-                                    all_res.append(row); valid_cnt += 1
-                                    
-                                    if not is_admin: deduct_credit(current_user)
-                                    st.session_state.results_df = pd.DataFrame(all_res)
-                                    spot.dataframe(st.session_state.results_df[cols], use_container_width=True, column_config={"WhatsApp": st.column_config.LinkColumn("WhatsApp", display_text="🟢 Chat Now")})
-                                    
-                                    # 🔥 SAVE USING SAFE FUNCTION
-                                    save_lead(s_id, row)
-                                except: continue
-                    update_ui(100, "COMPLETED ✅")
-                finally: driver.quit(); st.session_state.running = False; st.rerun()
-        else: st.error("Database Session Failed!")
+                                row = {"Status": "💾 Saved", "Keyword": kw, "City": city, "Country": country_in, "Name": name, "Phone": phone, "WhatsApp": wa_link, "Website": web, "Email": email, "Address": addr}
+                                all_res.append(row); valid_cnt += 1
+                                
+                                if not is_admin: deduct_credit(current_user)
+                                st.session_state.results_df = pd.DataFrame(all_res)
+                                spot.dataframe(st.session_state.results_df[cols], use_container_width=True, column_config={"WhatsApp": st.column_config.LinkColumn("WhatsApp", display_text="🟢 Chat Now")})
+                                
+                                # 🔥 ATOMIC SAVE FOR EVERY ROW
+                                saved = save_lead_atomic(s_id, row)
+                                
+                            except: continue
+                update_ui(100, "COMPLETED ✅")
+            finally: driver.quit(); st.session_state.running = False; st.rerun()
 
 with t2:
     st.subheader("📜 Search History")
+    search_query = st.text_input("🔍 Filter Archives", placeholder="Type keyword...")
     
-    with sqlite3.connect(DB_NAME) as conn:
-        sessions = pd.read_sql("SELECT * FROM sessions ORDER BY id DESC LIMIT 20", conn)
+    q_sql = "SELECT * FROM sessions ORDER BY id DESC LIMIT 20"
+    p_sql = ()
+    if search_query:
+        q_sql = "SELECT * FROM sessions WHERE query LIKE ? ORDER BY id DESC"
+        p_sql = (f"%{search_query}%",)
+        
+    hist = run_query(q_sql, p_sql, is_select=True)
     
-    if not sessions.empty:
-        for index, row in sessions.iterrows():
-            with st.expander(f"📦 {row['date']} | {row['query']}"):
-                with sqlite3.connect(DB_NAME) as conn:
-                    # 🔥 UNIVERSAL SELECT: Works with old and new DB schemas
-                    leads = pd.read_sql(f"SELECT * FROM leads WHERE session_id={row['id']}", conn)
-                
-                if not leads.empty:
-                    # Remove technical columns
-                    disp = leads.drop(columns=[c for c in ['id', 'session_id'] if c in leads.columns])
-                    st.dataframe(disp, use_container_width=True)
-                else:
-                    st.warning("No data found.")
+    if hist:
+        for s in hist:
+            with st.expander(f"📦 {s[2]} | {s[1]}"):
+                try:
+                    with sqlite3.connect(DB_NAME) as conn:
+                        df_raw = pd.read_sql_query(f"SELECT * FROM leads WHERE session_id={s[0]}", conn)
+                        if not df_raw.empty:
+                            cols_drop = [c for c in ['id', 'session_id'] if c in df_raw.columns]
+                            df_final = df_raw.drop(columns=cols_drop)
+                            st.dataframe(df_final, use_container_width=True)
+                        else:
+                            st.info("No data found (Session interrupted before saving).")
+                except Exception as e: st.error(f"Read Error: {e}")
     else:
         st.info("No history found.")
 
@@ -398,4 +418,4 @@ with t3:
     if st.button("Generate Script"):
         st.code(f"Hello! I found your business in {city_in} and I can help you with...")
 
-st.markdown('<div style="text-align:center;color:#666;padding:20px;">Designed by Chatir ❤ | Elite Pro Max</div>', unsafe_allow_html=True)
+st.markdown('<div style="text-align:center;color:#666;padding:20px;">Designed by Chatir ❤ | Elite Ultimate</div>', unsafe_allow_html=True)
