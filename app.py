@@ -134,7 +134,7 @@ if st.session_state.get("authentication_status") is not True:
         st.warning("🔒 Restricted Access"); st.stop()
 
 # ==============================================================================
-# 5. SIDEBAR & ADMIN PANEL
+# 5. SIDEBAR & ADMIN PANEL (EDITED FOR ACTIVATION)
 # ==============================================================================
 with st.sidebar:
     st.title("Profile Settings")
@@ -151,21 +151,29 @@ with st.sidebar:
             
             target = st.selectbox("Manage User", u_df['username'])
             col_admin_a, col_admin_b, col_admin_c = st.columns(3)
+            
+            # 🔥 TOP-UP ACTIVATED
             if col_admin_a.button("💰 +100"): 
-                sqlite3.connect(DB_NAME).execute("UPDATE user_credits SET balance = balance + 100 WHERE username=?", (target,))
+                conn.execute("UPDATE user_credits SET balance = balance + 100 WHERE username=?", (target,))
+                conn.commit()
                 st.rerun()
             
+            # 🔥 SUSPEND STATUS ACTIVATED
             if col_admin_b.button("🚫 Status"):
-                curr_s = sqlite3.connect(DB_NAME).execute("SELECT status FROM user_credits WHERE username=?", (target,)).fetchone()[0]
+                curr_s = conn.execute("SELECT status FROM user_credits WHERE username=?", (target,)).fetchone()[0]
                 new_s = 'suspended' if curr_s == 'active' else 'active'
-                sqlite3.connect(DB_NAME).execute("UPDATE user_credits SET status=? WHERE username=?", (new_s, target))
+                conn.execute("UPDATE user_credits SET status=? WHERE username=?", (new_s, target))
+                conn.commit()
                 st.rerun()
 
+            # 🔥 DELETE ACTIVATED
             if col_admin_c.button("🗑️ Del"):
-                sqlite3.connect(DB_NAME).execute("DELETE FROM user_credits WHERE username=?", (target,))
+                conn.execute("DELETE FROM user_credits WHERE username=?", (target,))
+                conn.commit()
                 st.rerun()
             
             st.divider()
+            # 🔥 ADD NEW USER ACTIVATED
             st.write("Add New User:")
             nu = st.text_input("New Username", key="new_u")
             np = st.text_input("New Password", type="password", key="new_p")
