@@ -28,7 +28,7 @@ if 'status_msg' not in st.session_state: st.session_state.status_msg = "READY"
 if 'current_sid' not in st.session_state: st.session_state.current_sid = None
 
 # ==============================================================================
-# 2. DESIGNER SUPREME CSS (ZERO GAPS / FA ICONS)
+# 2. DESIGN SYSTEM (ZERO GAPS / FA ICONS)
 # ==============================================================================
 orange_grad = "linear-gradient(135deg, #FF8C00 0%, #FF4500 100%)"
 
@@ -149,14 +149,44 @@ with st.sidebar:
     
     if me == 'admin':
         with st.expander("🛠️ Admin Panel"):
-            u_df = pd.read_sql("SELECT * FROM user_credits", sqlite3.connect(DB_NAME))
+            # Fetch current users
+            conn = sqlite3.connect(DB_NAME)
+            u_df = pd.read_sql("SELECT * FROM user_credits", conn)
             st.dataframe(u_df, hide_index=True)
+            
             target = st.selectbox("Manage User", u_df['username'])
-            col_admin_a, col_admin_b = st.columns(2)
-            if col_admin_a.button("💰 +100 Credits"): 
-                sqlite3.connect(DB_NAME).execute("UPDATE user_credits SET balance = balance + 100 WHERE username=?", (target,)); st.rerun()
-            if col_admin_b.button("🗑️ Delete"):
-                sqlite3.connect(DB_NAME).execute("DELETE FROM user_credits WHERE username=?", (target,)); st.rerun()
+            
+            # 🔥 SUSPEND & CREDIT & DELETE (V25 FIX)
+            col_admin_a, col_admin_b, col_admin_c = st.columns(3)
+            
+            if col_admin_a.button("💰 +100"): 
+                sqlite3.connect(DB_NAME).execute("UPDATE user_credits SET balance = balance + 100 WHERE username=?", (target,))
+                st.rerun()
+                
+            if col_admin_b.button("🚫 Status"):
+                current_s = sqlite3.connect(DB_NAME).execute("SELECT status FROM user_credits WHERE username=?", (target,)).fetchone()[0]
+                new_s = 'suspended' if current_s == 'active' else 'active'
+                sqlite3.connect(DB_NAME).execute("UPDATE user_credits SET status=? WHERE username=?", (new_s, target))
+                st.rerun()
+                
+            if col_admin_c.button("🗑️ Del"):
+                sqlite3.connect(DB_NAME).execute("DELETE FROM user_credits WHERE username=?", (target,))
+                st.rerun()
+            
+            st.divider()
+            # 🔥 ADD NEW USER SECTION
+            st.write("Add New User:")
+            nu = st.text_input("New UN", key="nu")
+            np = st.text_input("New PW", type="password", key="np")
+            if st.button("Create Account"):
+                if nu and np:
+                    try: hashed_pw = stauth.Hasher.hash(np)
+                    except: hashed_pw = stauth.Hasher([np]).generate()[0]
+                    config['credentials']['usernames'][nu] = {'name': nu, 'password': hashed_pw, 'email': 'x'}
+                    with open('config.yaml', 'w') as f: yaml.dump(config, f)
+                    get_user_data(nu) # Initialize in DB
+                    st.success(f"User {nu} Created!")
+                    st.rerun()
 
     st.divider()
     if st.button("Logout"): authenticator.logout('Logout', 'main'); st.session_state.clear(); st.rerun()
