@@ -21,23 +21,23 @@ from urllib.parse import quote
 # ==============================================================================
 st.set_page_config(page_title="ChatScrap Elite Pro", layout="wide", page_icon="💎")
 
-# State Management for Pause/Resume
+# State Management
 if 'results_list' not in st.session_state: st.session_state.results_list = []
 if 'running' not in st.session_state: st.session_state.running = False
 if 'paused' not in st.session_state: st.session_state.paused = False
-if 'task_index' not in st.session_state: st.session_state.task_index = 0 # Memory for Resume
+if 'task_index' not in st.session_state: st.session_state.task_index = 0
 if 'progress' not in st.session_state: st.session_state.progress = 0
 if 'status_msg' not in st.session_state: st.session_state.status_msg = "READY"
 if 'current_sid' not in st.session_state: st.session_state.current_sid = None
 
 # ==============================================================================
-# 2. DESIGN SYSTEM (ORIGINAL ORANGE THEME - 4 BUTTON ADAPTATION)
+# 2. DESIGN SYSTEM (ORANGE/RED THEME - SPACED INPUTS)
 # ==============================================================================
 orange_grad = "linear-gradient(135deg, #FF8C00 0%, #FF4500 100%)"
+red_grad = "linear-gradient(135deg, #DC3545 0%, #C82333 100%)" # Red for Stop
 
 st.markdown(f"""
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap');
     html, body, [data-testid="stAppViewContainer"] {{ font-family: 'Inter', sans-serif !important; background-color: #0e1117; }}
@@ -46,71 +46,65 @@ st.markdown(f"""
     .centered-logo {{ text-align: center; padding: 20px 0 40px 0; }}
     .logo-img {{ width: 280px; filter: drop-shadow(0 0 15px rgba(255,140,0,0.3)); }}
 
-    /* 🔥 ATTACHED BUTTONS CONTAINER */
+    /* 🔥 RESTORED INPUT SPACING (Removed Zero Gap Global Rule) */
+    /* Only apply Zero Gap to the Button Row specifically */
     div[data-testid="stHorizontalBlock"]:has(button) {{
-        gap: 0 !important;
+        gap: 5px !important; /* Small gap between buttons as requested */
     }}
-    div[data-testid="stHorizontalBlock"]:has(button) div[data-testid="column"] {{
-        padding: 0 !important;
-        margin: 0 !important;
-    }}
-
+    
     .stButton > button {{
         width: 100% !important;
-        height: 60px !important;
+        height: 55px !important;
         font-weight: 800 !important;
-        font-size: 15px !important; /* Slightly smaller to fit 4 */
+        font-size: 14px !important;
         border: none !important;
         text-transform: uppercase;
         letter-spacing: 1px;
         transition: 0.3s all ease-in-out;
-        border-radius: 0 !important; /* Default square for middle buttons */
+        border-radius: 8px !important; /* Slight rounding for better look */
+        color: white !important;
     }}
     
-    /* 1. START BUTTON (Orange - Left Rounded) */
+    /* 1. START BUTTON (Orange) */
     div[data-testid="column"]:nth-child(1) div.stButton > button {{
         background: {orange_grad} !important;
-        color: white !important;
-        border-radius: 12px 0 0 12px !important;
+        box-shadow: 0 4px 15px rgba(255,69,0,0.3) !important;
     }}
     
-    /* 2 & 3. MIDDLE BUTTONS (Dark - Square) */
+    /* 2 & 3. PAUSE/CONTINUE (Dark Elegant) */
     div[data-testid="column"]:nth-child(2) div.stButton > button,
     div[data-testid="column"]:nth-child(3) div.stButton > button {{
         background-color: #1c212d !important;
-        color: #ff4b4b !important;
+        color: #e0e0e0 !important;
         border: 1px solid #31333f !important;
-        border-left: none !important;
     }}
 
-    /* 4. STOP BUTTON (Dark - Right Rounded) */
+    /* 4. STOP BUTTON (Red) */
     div[data-testid="column"]:nth-child(4) div.stButton > button {{
-        background-color: #1c212d !important;
-        color: #ff4b4b !important;
-        border: 1px solid #31333f !important;
-        border-radius: 0 12px 12px 0 !important;
-        border-left: none !important;
+        background: {red_grad} !important;
+        box-shadow: 0 4px 15px rgba(220,53,69,0.3) !important;
     }}
 
-    /* Disabled State styling */
+    /* Disabled State - Dimmed */
     .stButton > button:disabled {{
-        opacity: 0.5 !important;
+        opacity: 0.4 !important;
         cursor: not-allowed;
+        filter: grayscale(0.8);
     }}
 
-    /* PROGRESS BAR (UNCHANGED) */
+    /* 🔥 PROGRESS BAR (YOUR FAVORITE DESIGN) */
     .prog-container {{ width: 100%; background: #1c212d; border-radius: 50px; padding: 4px; border: 1px solid #31333f; margin: 30px 0; }}
     .prog-bar-fill {{ 
-        height: 14px; 
+        height: 16px; 
         background: repeating-linear-gradient(45deg, #FF8C00, #FF8C00 12px, #FF4500 12px, #FF4500 24px); 
         border-radius: 20px; 
-        transition: width 0.8s ease-in-out; 
+        transition: width 0.5s ease-in-out; 
         animation: stripes 1.5s linear infinite; 
     }}
     @keyframes stripes {{ 0% {{background-position: 0 0;}} 100% {{background-position: 48px 48px;}} }}
 
     [data-testid="stMetricValue"] {{ color: #FF8C00 !important; font-weight: 800; }}
-    section[data-testid="stSidebar"] {{ background-color: #161922 !important; }}
+    section[data-testid="stSidebar"] {{ background-color: #161922 !important; border-right: 1px solid #31333F; }}
     .wa-link {{ color: #25D366 !important; text-decoration: none !important; font-weight: bold; }}
     </style>
 """, unsafe_allow_html=True)
@@ -212,9 +206,10 @@ if os.path.exists("chatscrape.png"):
     st.markdown(f'<div class="centered-logo"><img src="data:image/png;base64,{b64}" class="logo-img"></div>', unsafe_allow_html=True)
 
 # ==============================================================================
-# 7. INPUTS & 4-BUTTON BAR (SAME THEME)
+# 7. INPUTS (SPACED) & 4-BUTTON ROW
 # ==============================================================================
 with st.container():
+    # Regular columns for inputs (Streamlit default spacing restored)
     c1, c2, c3, c4 = st.columns([3, 3, 2, 1.5])
     kw_in = c1.text_input("Keywords", placeholder="e.g. hotel, cafe")
     city_in = c2.text_input("Cities", placeholder="e.g. Agadir, Casa")
@@ -231,8 +226,8 @@ with st.container():
 
     st.write("")
     
-    # 🔥 4 BUTTONS IN ONE ROW (ATTACHED)
-    b_start, b_pause, b_cont, b_stop = st.columns([1.5, 1, 1, 1]) # Start slightly bigger
+    # 🔥 4 BUTTONS (CLOSELY SPACED)
+    b_start, b_pause, b_cont, b_stop = st.columns([1.2, 1, 1, 1.2]) # Balanced sizing
     
     with b_start:
         if st.button("Start Search", disabled=st.session_state.running):
@@ -241,7 +236,7 @@ with st.container():
                 st.session_state.paused = False
                 st.session_state.results_list = []
                 st.session_state.progress = 0
-                st.session_state.task_index = 0 # RESET TASK INDEX
+                st.session_state.task_index = 0 # RESET
                 with sqlite3.connect(DB_NAME) as conn:
                     cur = conn.cursor()
                     cur.execute("INSERT INTO sessions (query, date) VALUES (?, ?)", (f"{kw_in} | {city_in}", time.strftime("%Y-%m-%d %H:%M")))
@@ -266,7 +261,7 @@ with st.container():
             st.rerun()
 
 # ==============================================================================
-# 8. ENGINE & LOGIC (WITH PAUSE/RESUME)
+# 8. ENGINE & LOGIC (PAUSE/RESUME PRESERVED)
 # ==============================================================================
 def get_driver():
     opts = Options()
@@ -308,7 +303,7 @@ with tab_live:
     status_ui = st.empty()
     table_ui = st.empty()
     
-    # Show progress bar (Style Preserved)
+    # 🔥 DYNAMIC PROGRESS BAR
     prog_spot.markdown(f'<div class="prog-container"><div class="prog-bar-fill" style="width: {st.session_state.progress}%;"></div></div>', unsafe_allow_html=True)
 
     if st.session_state.results_list:
@@ -317,25 +312,25 @@ with tab_live:
 
     if st.session_state.running:
         if st.session_state.paused:
-            status_ui.warning("⏸️ SEARCH PAUSED. You can use Admin Panel. Click 'Continue' to resume.")
+            status_ui.warning("⏸️ SEARCH PAUSED. Click 'Continue' to resume.")
         else:
             driver = get_driver()
             try:
-                # 🔥 BACKGROUND PERSISTENCE LOGIC
                 kws = [k.strip() for k in kw_in.split(',')]
                 cts = [c.strip() for c in city_in.split(',')]
                 all_tasks = [(c, k) for c in cts for k in kws]
                 total_ops = len(all_tasks)
                 
-                # Loop using task_index to allow resuming
+                # Resume Logic
                 for i, (city, kw) in enumerate(all_tasks):
-                    if i < st.session_state.task_index: continue # Skip finished tasks
+                    if i < st.session_state.task_index: continue
                     
                     if not st.session_state.running: break
                     if st.session_state.paused: 
                         status_ui.warning("⏸️ Paused...")
                         break 
                     
+                    # Update Progress Real-time
                     st.session_state.progress = int(((i + 1) / total_ops) * 100)
                     prog_spot.markdown(f'<div class="prog-container"><div class="prog-bar-fill" style="width: {st.session_state.progress}%;"></div></div>', unsafe_allow_html=True)
                     status_ui.markdown(f"**Scanning:** `{kw}` in `{city}`... ({i+1}/{total_ops})")
@@ -393,7 +388,6 @@ with tab_live:
                                 processed += 1
                             except: continue
                     
-                    # 🔥 MARK TASK AS DONE IF NOT PAUSED
                     if not st.session_state.paused and st.session_state.running:
                         st.session_state.task_index += 1
 
@@ -422,4 +416,4 @@ with tab_archive:
                     st.write(df_l.drop(columns=['id', 'session_id']).to_html(escape=False, index=False), unsafe_allow_html=True)
                 else: st.warning("Empty results.")
 
-st.markdown('<div style="text-align:center;color:#666;padding:30px;">Designed by Chatir Elite Pro - Controller V36</div>', unsafe_allow_html=True)
+st.markdown('<div style="text-align:center;color:#666;padding:30px;">Designed by Chatir Elite Pro - Architect Edition V37</div>', unsafe_allow_html=True)
