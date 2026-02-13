@@ -19,7 +19,7 @@ from urllib.parse import quote
 # ==============================================================================
 # 1. GLOBAL CONFIGURATION & STATE (FROM APP 11)
 # ==============================================================================
-st.set_page_config(page_title="ChatScrap Elite Pro", layout="wide", page_icon="💎")
+st.set_page_config(page_title="ChatScrap Elite Pro", layout="wide", page_icon="💎") #
 
 if 'results_list' not in st.session_state: st.session_state.results_list = [] #
 if 'running' not in st.session_state: st.session_state.running = False #
@@ -28,11 +28,13 @@ if 'task_index' not in st.session_state: st.session_state.task_index = 0 #
 if 'progress' not in st.session_state: st.session_state.progress = 0 #
 if 'status_msg' not in st.session_state: st.session_state.status_msg = "READY" #
 if 'current_sid' not in st.session_state: st.session_state.current_sid = None #
+
+# PERSISTENCE STORAGE: Saves inputs to survive Admin Panel reruns
 if 'active_kw' not in st.session_state: st.session_state.active_kw = ""
 if 'active_city' not in st.session_state: st.session_state.active_city = ""
 
 # ==============================================================================
-# 2. DESIGN SYSTEM (EXACT COPY FROM APP 11 + WHATSAPP ICON)
+# 2. DESIGN SYSTEM (EXACT COPY FROM APP 11 + WHATSAPP ENHANCEMENT)
 # ==============================================================================
 st.markdown('<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">', unsafe_allow_html=True)
 
@@ -40,21 +42,22 @@ st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap');
 html, body, [data-testid="stAppViewContainer"] { font-family: 'Inter', sans-serif !important; background-color: #0e1117; }
-.centered-logo { text-align: center; padding: 20px 0 40px 0; } #
-.logo-img { width: 280px; filter: drop-shadow(0 0 15px rgba(255,140,0,0.3)); } #
-div[data-testid="stHorizontalBlock"]:has(button) { gap: 5px !important; } #
-div[data-testid="stHorizontalBlock"]:has(button) div[data-testid="column"] { padding: 0 !important; margin: 0 !important; } #
-.stButton > button { width: 100% !important; height: 50px !important; font-weight: 700 !important; font-size: 14px !important; border: none !important; text-transform: uppercase; letter-spacing: 1px; transition: all 0.3s ease-in-out; border-radius: 8px !important; color: white !important; } #
-div[data-testid="column"]:nth-of-type(1) .stButton > button { background: linear-gradient(135deg, #FF8C00 0%, #FF4500 100%) !important; box-shadow: 0 4px 15px rgba(255,69,0,0.3) !important; } #
-div[data-testid="column"]:nth-of-type(2) .stButton > button { background-color: #1F2937 !important; border: 1px solid #374151 !important; color: #E5E7EB !important; } #
-div[data-testid="column"]:nth-of-type(3) .stButton > button { background: linear-gradient(135deg, #28a745 0%, #218838 100%) !important; color: white !important; box-shadow: 0 4px 15px rgba(40, 167, 69, 0.3) !important; } #
-div[data-testid="column"]:nth-of-type(4) .stButton > button { background: linear-gradient(135deg, #DC2626 0%, #991B1B 100%) !important; color: white !important; box-shadow: 0 4px 15px rgba(220, 38, 38, 0.4) !important; } #
-.stButton > button:disabled { opacity: 0.5 !important; cursor: not-allowed; filter: grayscale(1); box-shadow: none !important; } #
-.prog-container { width: 100%; background: #111827; border-radius: 50px; padding: 4px; border: 1px solid #374151; margin: 25px 0; } #
-.prog-bar-fill { height: 16px; background: repeating-linear-gradient(45deg, #FF8C00, #FF8C00 12px, #FF4500 12px, #FF4500 24px); border-radius: 20px; transition: width 0.3s ease-in-out; animation: stripes 1s linear infinite; } #
-@keyframes stripes { 0% {background-position: 0 0;} 100% {background-position: 48px 48px;} } #
-[data-testid="stMetricValue"] { color: #FF8C00 !important; font-weight: 800; } #
-section[data-testid="stSidebar"] { background-color: #161922 !important; border-right: 1px solid #31333F; } #
+.centered-logo { text-align: center; padding: 20px 0 40px 0; }
+.logo-img { width: 280px; filter: drop-shadow(0 0 15px rgba(255,140,0,0.3)); }
+div[data-testid="stHorizontalBlock"]:has(button) { gap: 5px !important; }
+div[data-testid="stHorizontalBlock"]:has(button) div[data-testid="column"] { padding: 0 !important; margin: 0 !important; }
+.stButton > button { width: 100% !important; height: 50px !important; font-weight: 700 !important; font-size: 14px !important; border: none !important; text-transform: uppercase; letter-spacing: 1px; transition: all 0.3s ease-in-out; border-radius: 8px !important; color: white !important; }
+div[data-testid="column"]:nth-of-type(1) .stButton > button { background: linear-gradient(135deg, #FF8C00 0%, #FF4500 100%) !important; box-shadow: 0 4px 15px rgba(255,69,0,0.3) !important; }
+div[data-testid="column"]:nth-of-type(2) .stButton > button { background-color: #1F2937 !important; border: 1px solid #374151 !important; color: #E5E7EB !important; }
+div[data-testid="column"]:nth-of-type(3) .stButton > button { background: linear-gradient(135deg, #28a745 0%, #218838 100%) !important; color: white !important; box-shadow: 0 4px 15px rgba(40, 167, 69, 0.3) !important; }
+div[data-testid="column"]:nth-of-type(4) .stButton > button { background: linear-gradient(135deg, #DC2626 0%, #991B1B 100%) !important; box-shadow: 0 4px 15px rgba(220, 38, 38, 0.4) !important; }
+.stButton > button:disabled { opacity: 0.5 !important; cursor: not-allowed; filter: grayscale(1); box-shadow: none !important; }
+.prog-container { width: 100%; background: #111827; border-radius: 50px; padding: 4px; border: 1px solid #374151; margin: 25px 0; }
+.prog-bar-fill { height: 16px; background: repeating-linear-gradient(45deg, #FF8C00, #FF8C00 12px, #FF4500 12px, #FF4500 24px); border-radius: 20px; transition: width 0.3s ease-in-out; animation: stripes 1s linear infinite; }
+@keyframes stripes { 0% {background-position: 0 0;} 100% {background-position: 48px 48px;} }
+[data-testid="stMetricValue"] { color: #FF8C00 !important; font-weight: 800; }
+section[data-testid="stSidebar"] { background-color: #161922 !important; border-right: 1px solid #31333F; }
+/* 🔥 WHATSAPP LINK GREEN STYLE */
 .wa-link { color: #25D366 !important; text-decoration: none !important; font-weight: bold; display: inline-flex; align-items: center; gap: 5px; }
 .wa-link:hover { text-decoration: underline !important; }
 </style>
@@ -116,19 +119,24 @@ with st.sidebar:
             conn = sqlite3.connect(DB_NAME)
             u_df = pd.read_sql("SELECT * FROM user_credits", conn) #
             st.dataframe(u_df, hide_index=True) #
+            
             target = st.selectbox("Manage User", u_df['username']) #
             c1, c2, c3 = st.columns(3) #
+            
             if c1.button("💰 +100"): 
                 conn.execute("UPDATE user_credits SET balance = balance + 100 WHERE username=?", (target,)) #
                 conn.commit(); st.rerun() #
+            
             if c2.button("🚫 Status"):
                 curr = conn.execute("SELECT status FROM user_credits WHERE username=?", (target,)).fetchone()[0] #
                 new_s = 'suspended' if curr == 'active' else 'active' #
                 conn.execute("UPDATE user_credits SET status=? WHERE username=?", (new_s, target)) #
                 conn.commit(); st.rerun() #
+
             if c3.button("🗑️ Del"):
                 conn.execute("DELETE FROM user_credits WHERE username=?", (target,)) #
                 conn.commit(); st.rerun() #
+            
             st.divider() #
             st.write("Add New User:") #
             nu = st.text_input("New Username", key="new_u") #
@@ -176,8 +184,10 @@ with st.container():
     with b_start:
         if st.button("Start Search", disabled=st.session_state.running): #
             if kw_in and city_in:
+                # 🔥 SNAPSHOT FIX: Capture inputs to survive Admin Reruns
                 st.session_state.active_kw = kw_in
                 st.session_state.active_city = city_in
+                
                 st.session_state.running = True #
                 st.session_state.paused = False #
                 st.session_state.results_list = [] #
@@ -207,7 +217,7 @@ with st.container():
             st.rerun() #
 
 # ==============================================================================
-# 8. ENGINE & LOGIC (FROM APP 11 + DUPLICATE GUARD)
+# 8. ENGINE & LOGIC (FROM APP 11 + PERSISTENCE & DUPLICATE GUARD)
 # ==============================================================================
 def get_driver():
     opts = Options()
@@ -254,15 +264,16 @@ with tab_live:
 
     if st.session_state.results_list:
         df_live = pd.DataFrame(st.session_state.results_list) #
+        # 🔥 SWITCHED TO HTML FOR ICON SUPPORT
         table_ui.write(df_live.to_html(escape=False, index=False), unsafe_allow_html=True)
         csv = convert_df(df_live) #
-        download_ui.download_button(label="⬇️ Download CSV", data=csv, file_name="leads.csv", mime="text/csv", key='live_dl') #
+        download_ui.download_button(label="⬇️ Download Results CSV", data=csv, file_name="extraction_results.csv", mime="text/csv", key='live_dl') #
 
     if st.session_state.running and not st.session_state.paused:
-        # Load tasks from persistent state
-        akws = [k.strip() for k in st.session_state.active_kw.split(',') if k.strip()]
-        acts = [c.strip() for c in st.session_state.active_city.split(',') if c.strip()]
-        all_tasks = [(c, k) for c in acts for k in akws]
+        # 🔥 READ FROM PERSISTENT SNAPSHOT
+        active_kws = [k.strip() for k in st.session_state.active_kw.split(',') if k.strip()]
+        active_cts = [c.strip() for c in st.session_state.active_city.split(',') if c.strip()]
+        all_tasks = [(c, k) for c in active_cts for k in active_kws]
         
         if all_tasks:
             driver = get_driver() #
@@ -295,9 +306,9 @@ with tab_live:
                             try: phone = driver.find_element(By.XPATH, '//*[contains(@data-item-id, "phone:tel")]').get_attribute("aria-label").replace("Phone: ", "") #
                             except: pass #
 
-                            # 🔥 DUPLICATE GUARD: Check if lead already exists in session results
-                            is_duplicate = any(res['Name'] == name and res['Phone'] == phone for res in st.session_state.results_list)
-                            if is_duplicate: continue
+                            # 🔥 DUPLICATE GUARD: Skip if already extracted
+                            if any(res['Name'] == name and res['Phone'] == phone for res in st.session_state.results_list):
+                                continue
 
                             st.session_state.progress = min(int(((base_progress + processed + 1) / total_estimated) * 100), 100) #
                             prog_spot.markdown(f'<div class="prog-container"><div class="prog-bar-fill" style="width: {st.session_state.progress}%;"></div></div>', unsafe_allow_html=True) #
@@ -307,6 +318,7 @@ with tab_live:
                             if w_phone and (phone == "N/A" or not phone): continue #
                             if w_nosite and raw_web != "N/A": continue #
 
+                            # 🔥 WHATSAPP ICON + GREEN COLOR
                             wa_link = "N/A" #
                             cp = re.sub(r'\D', '', phone) #
                             if any(cp.startswith(x) for x in ['2126','2127','06','07']) and not (cp.startswith('2125') or cp.startswith('05')): #
@@ -345,7 +357,8 @@ with tab_archive:
                 with sqlite3.connect(DB_NAME) as conn:
                     df_l = pd.read_sql(f"SELECT * FROM leads WHERE session_id={sess['id']}", conn) #
                 if not df_l.empty:
-                    st.write(df_l.drop(columns=['id', 'session_id']).to_html(escape=False, index=False), unsafe_allow_html=True) #
+                    # 🔥 SHOW HTML TABLE IN ARCHIVES TOO FOR ICONS
+                    st.write(df_l.drop(columns=['id', 'session_id']).to_html(escape=False, index=False), unsafe_allow_html=True)
                     csv_arch = convert_df(df_l) #
                     st.download_button(label="⬇️ Download Archive CSV", data=csv_arch, file_name=f"archive_{sess['id']}.csv", mime="text/csv", key=f"btn_arch_{sess['id']}") #
                 else: st.warning("Empty results.") #
@@ -357,4 +370,4 @@ with tab_tools:
     st.subheader("🤖 Marketing Automation") #
     st.info("Marketing tools coming soon in the next update!") #
 
-st.markdown('<div style="text-align:center;color:#666;padding:30px;">Designed by Chatir Elite Pro - Architect Edition V63</div>', unsafe_allow_html=True) #
+st.markdown('<div style="text-align:center;color:#666;padding:30px;">Designed by Chatir Elite Pro - Architect Edition V64</div>', unsafe_allow_html=True) #
