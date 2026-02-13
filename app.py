@@ -17,7 +17,7 @@ from webdriver_manager.chrome import ChromeDriverManager
 from urllib.parse import quote
 
 # ==============================================================================
-# 1. GLOBAL CONFIGURATION & STATE (FROM APP 11 + PERSISTENCE FIX)
+# 1. GLOBAL CONFIGURATION & STATE (FROM APP 11)
 # ==============================================================================
 st.set_page_config(page_title="ChatScrap Elite Pro", layout="wide", page_icon="💎")
 
@@ -28,13 +28,11 @@ if 'task_index' not in st.session_state: st.session_state.task_index = 0 #
 if 'progress' not in st.session_state: st.session_state.progress = 0 #
 if 'status_msg' not in st.session_state: st.session_state.status_msg = "READY" #
 if 'current_sid' not in st.session_state: st.session_state.current_sid = None #
-
-# 🔥 PERSISTENCE STORAGE: Saves inputs to survive Admin Panel reruns
-if 'stored_kws' not in st.session_state: st.session_state.stored_kws = ""
-if 'stored_cities' not in st.session_state: st.session_state.stored_cities = ""
+if 'active_kw' not in st.session_state: st.session_state.active_kw = ""
+if 'active_city' not in st.session_state: st.session_state.active_city = ""
 
 # ==============================================================================
-# 2. DESIGN SYSTEM (SAFE CSS INJECTION)
+# 2. DESIGN SYSTEM (EXACT COPY FROM APP 11 + WHATSAPP ICON)
 # ==============================================================================
 st.markdown('<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">', unsafe_allow_html=True)
 
@@ -42,26 +40,25 @@ st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap');
 html, body, [data-testid="stAppViewContainer"] { font-family: 'Inter', sans-serif !important; background-color: #0e1117; }
-.centered-logo { text-align: center; padding: 20px 0 40px 0; }
-.logo-img { width: 280px; filter: drop-shadow(0 0 15px rgba(255,140,0,0.3)); }
-div[data-testid="stHorizontalBlock"]:has(button) { gap: 5px !important; }
-div[data-testid="stHorizontalBlock"]:has(button) div[data-testid="column"] { padding: 0 !important; margin: 0 !important; }
-.stButton > button { width: 100% !important; height: 50px !important; font-weight: 700 !important; font-size: 14px !important; border: none !important; text-transform: uppercase; letter-spacing: 1px; transition: all 0.3s ease-in-out; border-radius: 8px !important; color: white !important; }
-div[data-testid="column"]:nth-of-type(1) .stButton > button { background: linear-gradient(135deg, #FF8C00 0%, #FF4500 100%) !important; box-shadow: 0 4px 15px rgba(255,69,0,0.3) !important; }
-div[data-testid="column"]:nth-of-type(2) .stButton > button { background-color: #1F2937 !important; border: 1px solid #374151 !important; color: #E5E7EB !important; }
-div[data-testid="column"]:nth-of-type(3) .stButton > button { background: linear-gradient(135deg, #28a745 0%, #218838 100%) !important; color: white !important; box-shadow: 0 4px 15px rgba(40, 167, 69, 0.3) !important; }
-div[data-testid="column"]:nth-of-type(4) .stButton > button { background: linear-gradient(135deg, #DC2626 0%, #991B1B 100%) !important; box-shadow: 0 4px 15px rgba(220, 38, 38, 0.4) !important; }
-.stButton > button:disabled { opacity: 0.5 !important; cursor: not-allowed; filter: grayscale(1); box-shadow: none !important; }
-.prog-container { width: 100%; background: #111827; border-radius: 50px; padding: 4px; border: 1px solid #374151; margin: 25px 0; }
-.prog-bar-fill { height: 16px; background: repeating-linear-gradient(45deg, #FF8C00, #FF8C00 12px, #FF4500 12px, #FF4500 24px); border-radius: 20px; transition: width 0.3s ease-in-out; animation: stripes 1s linear infinite; }
-@keyframes stripes { 0% {background-position: 0 0;} 100% {background-position: 48px 48px;} }
-[data-testid="stMetricValue"] { color: #FF8C00 !important; font-weight: 800; }
-section[data-testid="stSidebar"] { background-color: #161922 !important; border-right: 1px solid #31333F; }
-/* 🔥 WHATSAPP GREEN STYLE */
+.centered-logo { text-align: center; padding: 20px 0 40px 0; } #
+.logo-img { width: 280px; filter: drop-shadow(0 0 15px rgba(255,140,0,0.3)); } #
+div[data-testid="stHorizontalBlock"]:has(button) { gap: 5px !important; } #
+div[data-testid="stHorizontalBlock"]:has(button) div[data-testid="column"] { padding: 0 !important; margin: 0 !important; } #
+.stButton > button { width: 100% !important; height: 50px !important; font-weight: 700 !important; font-size: 14px !important; border: none !important; text-transform: uppercase; letter-spacing: 1px; transition: all 0.3s ease-in-out; border-radius: 8px !important; color: white !important; } #
+div[data-testid="column"]:nth-of-type(1) .stButton > button { background: linear-gradient(135deg, #FF8C00 0%, #FF4500 100%) !important; box-shadow: 0 4px 15px rgba(255,69,0,0.3) !important; } #
+div[data-testid="column"]:nth-of-type(2) .stButton > button { background-color: #1F2937 !important; border: 1px solid #374151 !important; color: #E5E7EB !important; } #
+div[data-testid="column"]:nth-of-type(3) .stButton > button { background: linear-gradient(135deg, #28a745 0%, #218838 100%) !important; color: white !important; box-shadow: 0 4px 15px rgba(40, 167, 69, 0.3) !important; } #
+div[data-testid="column"]:nth-of-type(4) .stButton > button { background: linear-gradient(135deg, #DC2626 0%, #991B1B 100%) !important; color: white !important; box-shadow: 0 4px 15px rgba(220, 38, 38, 0.4) !important; } #
+.stButton > button:disabled { opacity: 0.5 !important; cursor: not-allowed; filter: grayscale(1); box-shadow: none !important; } #
+.prog-container { width: 100%; background: #111827; border-radius: 50px; padding: 4px; border: 1px solid #374151; margin: 25px 0; } #
+.prog-bar-fill { height: 16px; background: repeating-linear-gradient(45deg, #FF8C00, #FF8C00 12px, #FF4500 12px, #FF4500 24px); border-radius: 20px; transition: width 0.3s ease-in-out; animation: stripes 1s linear infinite; } #
+@keyframes stripes { 0% {background-position: 0 0;} 100% {background-position: 48px 48px;} } #
+[data-testid="stMetricValue"] { color: #FF8C00 !important; font-weight: 800; } #
+section[data-testid="stSidebar"] { background-color: #161922 !important; border-right: 1px solid #31333F; } #
 .wa-link { color: #25D366 !important; text-decoration: none !important; font-weight: bold; display: inline-flex; align-items: center; gap: 5px; }
 .wa-link:hover { text-decoration: underline !important; }
 </style>
-""", unsafe_allow_html=True)
+""", unsafe_allow_html=True) #
 
 # ==============================================================================
 # 3. DATABASE (FROM APP 11)
@@ -179,10 +176,8 @@ with st.container():
     with b_start:
         if st.button("Start Search", disabled=st.session_state.running): #
             if kw_in and city_in:
-                # 🔥 SNAPSHOT FIX: Store keywords/cities permanently to survive Admin Panel Reruns
-                st.session_state.stored_kws = kw_in
-                st.session_state.stored_cities = city_in
-                
+                st.session_state.active_kw = kw_in
+                st.session_state.active_city = city_in
                 st.session_state.running = True #
                 st.session_state.paused = False #
                 st.session_state.results_list = [] #
@@ -212,7 +207,7 @@ with st.container():
             st.rerun() #
 
 # ==============================================================================
-# 8. ENGINE & LOGIC (FROM APP 11 + PERSISTENCE & WHATSAPP FIX)
+# 8. ENGINE & LOGIC (FROM APP 11 + DUPLICATE GUARD)
 # ==============================================================================
 def get_driver():
     opts = Options()
@@ -259,16 +254,15 @@ with tab_live:
 
     if st.session_state.results_list:
         df_live = pd.DataFrame(st.session_state.results_list) #
-        # 🔥 SWITCHED TO HTML FOR ICON SUPPORT
         table_ui.write(df_live.to_html(escape=False, index=False), unsafe_allow_html=True)
         csv = convert_df(df_live) #
         download_ui.download_button(label="⬇️ Download CSV", data=csv, file_name="leads.csv", mime="text/csv", key='live_dl') #
 
     if st.session_state.running and not st.session_state.paused:
-        # 🔥 READ FROM STORED SNAPSHOT INSTEAD OF WIDGETS
-        active_kws = [k.strip() for k in st.session_state.stored_kws.split(',') if k.strip()]
-        active_cts = [c.strip() for c in st.session_state.stored_cities.split(',') if c.strip()]
-        all_tasks = [(c, k) for c in active_cts for k in active_kws]
+        # Load tasks from persistent state
+        akws = [k.strip() for k in st.session_state.active_kw.split(',') if k.strip()]
+        acts = [c.strip() for c in st.session_state.active_city.split(',') if c.strip()]
+        all_tasks = [(c, k) for c in acts for k in akws]
         
         if all_tasks:
             driver = get_driver() #
@@ -296,19 +290,23 @@ with tab_live:
                         if processed >= limit_in or not st.session_state.running: break #
                         try:
                             driver.execute_script("arguments[0].click();", item); time.sleep(2) #
-                            st.session_state.progress = min(int(((base_progress + processed + 1) / total_estimated) * 100), 100) #
-                            prog_spot.markdown(f'<div class="prog-container"><div class="prog-bar-fill" style="width: {st.session_state.progress}%;"></div></div>', unsafe_allow_html=True) #
-                            
                             name = driver.find_element(By.CSS_SELECTOR, "h1.DUwDvf").text #
                             phone = "N/A" #
                             try: phone = driver.find_element(By.XPATH, '//*[contains(@data-item-id, "phone:tel")]').get_attribute("aria-label").replace("Phone: ", "") #
                             except: pass #
+
+                            # 🔥 DUPLICATE GUARD: Check if lead already exists in session results
+                            is_duplicate = any(res['Name'] == name and res['Phone'] == phone for res in st.session_state.results_list)
+                            if is_duplicate: continue
+
+                            st.session_state.progress = min(int(((base_progress + processed + 1) / total_estimated) * 100), 100) #
+                            prog_spot.markdown(f'<div class="prog-container"><div class="prog-bar-fill" style="width: {st.session_state.progress}%;"></div></div>', unsafe_allow_html=True) #
+                            
                             raw_web = driver.find_element(By.CSS_SELECTOR, 'a[data-item-id="authority"]').get_attribute("href") if driver.find_elements(By.CSS_SELECTOR, 'a[data-item-id="authority"]') else "N/A" #
                             
                             if w_phone and (phone == "N/A" or not phone): continue #
                             if w_nosite and raw_web != "N/A": continue #
 
-                            # 🔥 WHATSAPP ICON + GREEN COLOR LOGIC
                             wa_link = "N/A" #
                             cp = re.sub(r'\D', '', phone) #
                             if any(cp.startswith(x) for x in ['2126','2127','06','07']) and not (cp.startswith('2125') or cp.startswith('05')): #
@@ -359,4 +357,4 @@ with tab_tools:
     st.subheader("🤖 Marketing Automation") #
     st.info("Marketing tools coming soon in the next update!") #
 
-st.markdown('<div style="text-align:center;color:#666;padding:30px;">Designed by Chatir Elite Pro - Architect Edition V62</div>', unsafe_allow_html=True) #
+st.markdown('<div style="text-align:center;color:#666;padding:30px;">Designed by Chatir Elite Pro - Architect Edition V63</div>', unsafe_allow_html=True) #
