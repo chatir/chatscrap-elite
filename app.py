@@ -34,7 +34,7 @@ if 'active_kw' not in st.session_state: st.session_state.active_kw = "" #
 if 'active_city' not in st.session_state: st.session_state.active_city = "" #
 
 # ==============================================================================
-# 2. DESIGN SYSTEM (EXACT COPY FROM APP 15 + WORDPRESS LOGIN CSS)
+# 2. DESIGN SYSTEM (EXACT COPY FROM APP 15 + WP LOGIN STYLE)
 # ==============================================================================
 st.markdown('<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">', unsafe_allow_html=True) #
 
@@ -43,7 +43,7 @@ st.markdown("""
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap');
 html, body, [data-testid="stAppViewContainer"] { font-family: 'Inter', sans-serif !important; background-color: #0e1117; }
 
-/* 🔥 WORDPRESS STYLE LOGIN FORM (CENTERED & COMPACT) */
+/* 🔥 WORDPRESS STYLE LOGIN FORM (COMPACT & CENTERED) */
 div[data-testid="stForm"] {
     max-width: 400px !important;
     margin: 0 auto !important;
@@ -54,23 +54,29 @@ div[data-testid="stForm"] {
     box-shadow: 0 10px 25px rgba(0,0,0,0.5) !important;
 }
 
+/* MAIN UI ELEMENTS FROM APP 15 */
 .centered-logo { text-align: center; padding: 20px 0 40px 0; } #
 .logo-img { width: 280px; filter: drop-shadow(0 0 15px rgba(255,140,0,0.3)); } #
 div[data-testid="stHorizontalBlock"]:has(button) { gap: 5px !important; } #
 div[data-testid="stHorizontalBlock"]:has(button) div[data-testid="column"] { padding: 0 !important; margin: 0 !important; } #
 .stButton > button { width: 100% !important; height: 50px !important; font-weight: 700 !important; font-size: 14px !important; border: none !important; text-transform: uppercase; letter-spacing: 1px; transition: all 0.3s ease-in-out; border-radius: 8px !important; color: white !important; } #
+
+/* BUTTON COLORS FROM APP 15 */
 div[data-testid="column"]:nth-of-type(1) .stButton > button { background: linear-gradient(135deg, #FF8C00 0%, #FF4500 100%) !important; box-shadow: 0 4px 15px rgba(255,69,0,0.3) !important; } #
 div[data-testid="column"]:nth-of-type(2) .stButton > button { background-color: #1F2937 !important; border: 1px solid #374151 !important; color: #E5E7EB !important; } #
 div[data-testid="column"]:nth-of-type(3) .stButton > button { background: linear-gradient(135deg, #28a745 0%, #218838 100%) !important; color: white !important; box-shadow: 0 4px 15px rgba(40, 167, 69, 0.3) !important; } #
-div[data-testid="column"]:nth-of-type(4) .stButton > button { background: linear-gradient(135deg, #DC2626 0%, #991B1B 100%) !important; box-shadow: 0 4px 15px rgba(220, 38, 38, 0.4) !important; } #
+div[data-testid="column"]:nth-of-type(4) .stButton > button { background: linear-gradient(135deg, #DC2626 0%, #991B1B 100%) !important; color: white !important; box-shadow: 0 4px 15px rgba(220, 38, 38, 0.4) !important; } #
 .stButton > button:disabled { opacity: 0.5 !important; cursor: not-allowed; filter: grayscale(1); box-shadow: none !important; } #
+
+/* 🔥 PROGRESS BAR DESIGN FROM APP 15 */
 .prog-container { width: 100%; background: #111827; border-radius: 50px; padding: 4px; border: 1px solid #374151; margin: 25px 0; } #
 .prog-bar-fill { height: 16px; background: repeating-linear-gradient(45deg, #FF8C00, #FF8C00 12px, #FF4500 12px, #FF4500 24px); border-radius: 20px; transition: width 0.3s ease-in-out; animation: stripes 1s linear infinite; } #
 @keyframes stripes { 0% {background-position: 0 0;} 100% {background-position: 48px 48px;} } #
+
 [data-testid="stMetricValue"] { color: #FF8C00 !important; font-weight: 800; } #
 section[data-testid="stSidebar"] { background-color: #161922 !important; border-right: 1px solid #31333F; } #
 
-/* 🔥 WHATSAPP LINK GREEN STYLE */
+/* 🔥 WHATSAPP GREEN STYLE FROM APP 15 */
 .wa-link { color: #25D366 !important; text-decoration: none !important; font-weight: bold; display: inline-flex; align-items: center; gap: 5px; } #
 .wa-link:hover { text-decoration: underline !important; } #
 </style>
@@ -103,7 +109,7 @@ def get_user_data(username):
         return (100, 'active')
 
 # ==============================================================================
-# 4. AUTHENTICATION (FROM APP 15 + RAISED LOGO FOR LOGIN)
+# 4. AUTHENTICATION (FROM APP 15 + WP STYLE LOGIN SCREEN)
 # ==============================================================================
 try:
     with open('config.yaml') as file: config = yaml.load(file, Loader=SafeLoader) #
@@ -171,7 +177,7 @@ with st.sidebar:
     if st.button("Logout"): authenticator.logout('Logout', 'main'); st.session_state.clear(); st.rerun() #
 
 # ==============================================================================
-# 6. HEADER LOGO (MAIN APP)
+# 6. MAIN APP HEADER (FROM APP 15)
 # ==============================================================================
 if os.path.exists("chatscrape.png"):
     with open("chatscrape.png", "rb") as f: b64 = base64.b64encode(f.read()).decode() #
@@ -196,13 +202,12 @@ with st.container():
     depth_in = f5.slider("Scroll Depth", 1, 100, 10) #
 
     st.write("") #
-    
     b_start, b_pause, b_cont, b_stop = st.columns(4) #
     
     with b_start:
         if st.button("Start Search", disabled=st.session_state.running): #
             if kw_in and city_in:
-                # Capture snapshot to survive Reruns
+                # 🔥 Snapshot Fix from app 15
                 st.session_state.active_kw = kw_in #
                 st.session_state.active_city = city_in #
                 
@@ -235,49 +240,35 @@ with st.container():
             st.rerun() #
 
 # ==============================================================================
-# 8. ENGINE & LOGIC (FROM APP 15)
+# 8. ENGINE & LOGIC (FROM APP 15 + DUPLICATE GUARD + HTML TABLE)
 # ==============================================================================
 def get_driver():
     opts = Options()
-    opts.add_argument("--headless=new") #
-    opts.add_argument("--no-sandbox") #
-    opts.add_argument("--disable-dev-shm-usage") #
-    opts.add_argument("--window-size=1920,1080") #
-    path = shutil.which("chromium") or shutil.which("chromium-browser") #
-    if path: opts.binary_location = path #
-    try: return webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=opts) #
-    except: return webdriver.Chrome(options=opts) #
+    opts.add_argument("--headless=new"); opts.add_argument("--no-sandbox"); opts.add_argument("--disable-dev-shm-usage")
+    opts.add_argument("--window-size=1920,1080")
+    try: return webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=opts)
+    except: return webdriver.Chrome(options=opts)
 
 def fetch_email_deep(driver, url):
-    if not url or "google" in url or url == "N/A": return "N/A" #
+    if not url or "google" in url or url == "N/A": return "N/A"
     try:
-        driver.execute_script("window.open('');") #
-        driver.switch_to.window(driver.window_handles[-1]) #
+        driver.execute_script("window.open('');"); driver.switch_to.window(driver.window_handles[-1])
         try:
-            driver.set_page_load_timeout(10) #
-            driver.get(url) #
-            time.sleep(2) #
-            page_source = driver.page_source #
-            emails = re.findall(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}", page_source) #
-            result = list(set(emails))[0] if emails else "N/A" #
-        except: result = "N/A" #
-        driver.close() #
-        driver.switch_to.window(driver.window_handles[0]) #
+            driver.set_page_load_timeout(10); driver.get(url); time.sleep(2)
+            emails = re.findall(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}", driver.page_source)
+            result = list(set(emails))[0] if emails else "N/A"
+        except: result = "N/A"
+        driver.close(); driver.switch_to.window(driver.window_handles[0])
         return result
-    except:
-        if len(driver.window_handles) > 1: driver.switch_to.window(driver.window_handles[0]) #
-        return "N/A"
+    except: return "N/A"
 
 def convert_df(df): return df.to_csv(index=False).encode('utf-8') #
 
 tab_live, tab_archive, tab_tools = st.tabs(["⚡ Live Data", "📜 Archives", "🤖 Marketing"]) #
 
 with tab_live:
-    prog_spot = st.empty() #
-    status_ui = st.empty() #
-    table_ui = st.empty() #
-    download_ui = st.empty() #
-    
+    prog_spot = st.empty(); status_ui = st.empty(); table_ui = st.empty(); download_ui = st.empty()
+    # 🔥 RENDER STRIPY PROGRESS BAR UI FROM APP 15
     prog_spot.markdown(f'<div class="prog-container"><div class="prog-bar-fill" style="width: {st.session_state.progress}%;"></div></div>', unsafe_allow_html=True) #
 
     if st.session_state.results_list:
@@ -287,78 +278,73 @@ with tab_live:
         download_ui.download_button(label="⬇️ Download Results CSV", data=csv, file_name="extraction_results.csv", mime="text/csv", key='live_dl') #
 
     if st.session_state.running and not st.session_state.paused:
-        # Load tasks from snapshot to survive Admin Reruns
+        # Load from snapshot from app 15
         akws = [k.strip() for k in st.session_state.active_kw.split(',') if k.strip()] #
         acts = [c.strip() for c in st.session_state.active_city.split(',') if c.strip()] #
         all_tasks = [(c, k) for c in acts for k in akws] #
         
         if all_tasks:
-            driver = get_driver() #
+            driver = get_driver()
             try:
-                total_estimated = len(all_tasks) * limit_in #
+                total_estimated = len(all_tasks) * limit_in
                 for i, (city, kw) in enumerate(all_tasks):
-                    if i < st.session_state.task_index: continue #
-                    if not st.session_state.running: break #
+                    if i < st.session_state.task_index: continue
+                    if not st.session_state.running: break
                     
-                    base_progress = i * limit_in #
-                    status_ui.markdown(f"**Scanning:** `{kw}` in `{city}`... ({i+1}/{len(all_tasks)})") #
-                    gl = {"Morocco":"ma", "France":"fr", "USA":"us"}.get(country_in, "ma") #
-                    driver.get(f"https://www.google.com/maps/search/{quote(kw)}+in+{quote(city)}?hl=en&gl={gl}") #
-                    time.sleep(4) #
-
+                    base_progress = i * limit_in
+                    status_ui.markdown(f"**Scanning:** `{kw}` in `{city}`... ({i+1}/{len(all_tasks)})")
+                    gl = {"Morocco":"ma", "France":"fr", "USA":"us"}.get(country_in, "ma")
+                    driver.get(f"https://www.google.com/maps/search/{quote(kw)}+in+{quote(city)}?hl=en&gl={gl}")
+                    time.sleep(4)
                     try:
-                        pane = driver.find_element(By.CSS_SELECTOR, 'div[role="feed"]') #
-                        for _ in range(depth_in):
-                            driver.execute_script("arguments[0].scrollTop = arguments[0].scrollHeight", pane); time.sleep(1) #
-                    except: pass #
+                        pane = driver.find_element(By.CSS_SELECTOR, 'div[role="feed"]')
+                        for _ in range(depth_in): driver.execute_script("arguments[0].scrollTop = arguments[0].scrollHeight", pane); time.sleep(1)
+                    except: pass
 
-                    items = driver.find_elements(By.XPATH, '//a[contains(@href, "/maps/place/")]') #
-                    processed = 0 #
+                    items = driver.find_elements(By.XPATH, '//a[contains(@href, "/maps/place/")]')
+                    processed = 0
                     for item in items:
-                        if processed >= limit_in or not st.session_state.running: break #
+                        if processed >= limit_in or not st.session_state.running: break
                         try:
-                            driver.execute_script("arguments[0].click();", item); time.sleep(2) #
-                            name = driver.find_element(By.CSS_SELECTOR, "h1.DUwDvf").text #
-                            phone = "N/A" #
-                            try: phone = driver.find_element(By.XPATH, '//*[contains(@data-item-id, "phone:tel")]').get_attribute("aria-label").replace("Phone: ", "") #
-                            except: pass #
+                            driver.execute_script("arguments[0].click();", item); time.sleep(2)
+                            name = driver.find_element(By.CSS_SELECTOR, "h1.DUwDvf").text
+                            phone = "N/A"
+                            try: phone = driver.find_element(By.XPATH, '//*[contains(@data-item-id, "phone:tel")]').get_attribute("aria-label").replace("Phone: ", "")
+                            except: pass
 
-                            # 🔥 DUPLICATE GUARD
-                            if any(res['Name'] == name and res['Phone'] == phone for res in st.session_state.results_list):
-                                continue
+                            # 🔥 DUPLICATE GUARD FROM APP 15
+                            if any(res['Name'] == name and res['Phone'] == phone for res in st.session_state.results_list): continue #
 
-                            st.session_state.progress = min(int(((base_progress + processed + 1) / total_estimated) * 100), 100) #
-                            prog_spot.markdown(f'<div class="prog-container"><div class="prog-bar-fill" style="width: {st.session_state.progress}%;"></div></div>', unsafe_allow_html=True) #
+                            st.session_state.progress = min(int(((base_progress + processed + 1) / total_estimated) * 100), 100)
+                            prog_spot.markdown(f'<div class="prog-container"><div class="prog-bar-fill" style="width: {st.session_state.progress}%;"></div></div>', unsafe_allow_html=True)
                             
-                            raw_web = driver.find_element(By.CSS_SELECTOR, 'a[data-item-id="authority"]').get_attribute("href") if driver.find_elements(By.CSS_SELECTOR, 'a[data-item-id="authority"]') else "N/A" #
-                            
-                            if w_phone and (phone == "N/A" or not phone): continue #
-                            if w_nosite and raw_web != "N/A": continue #
+                            raw_web = driver.find_element(By.CSS_SELECTOR, 'a[data-item-id="authority"]').get_attribute("href") if driver.find_elements(By.CSS_SELECTOR, 'a[data-item-id="authority"]') else "N/A"
+                            if w_phone and (phone == "N/A" or not phone): continue
+                            if w_nosite and raw_web != "N/A": continue
 
-                            # 🔥 WHATSAPP ICON + GREEN COLOR
-                            wa_link = "N/A" #
-                            cp = re.sub(r'\D', '', phone) #
-                            if any(cp.startswith(x) for x in ['2126','2127','06','07']) and not (cp.startswith('2125') or cp.startswith('05')): #
+                            # 🔥 WHATSAPP GREEN ICON LOGIC FROM APP 15
+                            wa_link = "N/A"
+                            cp = re.sub(r'\D', '', phone)
+                            if any(cp.startswith(x) for x in ['2126','2127','06','07']) and not (cp.startswith('2125') or cp.startswith('05')):
                                 wa_link = f'<a href="https://wa.me/{cp}" target="_blank" class="wa-link"><i class="fab fa-whatsapp"></i> Chat Now</a>' #
                             
-                            email_found = fetch_email_deep(driver, raw_web) if w_email and raw_web != "N/A" else "N/A" #
-                            row = {"Keyword":kw, "City":city, "Name":name, "Phone":phone, "WhatsApp":wa_link, "Website":raw_web if w_web else "N/A", "Email":email_found} #
+                            email_found = fetch_email_deep(driver, raw_web) if w_email and raw_web != "N/A" else "N/A"
+                            row = {"Keyword":kw, "City":city, "Name":name, "Phone":phone, "WhatsApp":wa_link, "Website":raw_web if w_web else "N/A", "Email":email_found}
                             
                             with sqlite3.connect(DB_NAME) as conn:
                                 conn.execute("""INSERT INTO leads (session_id, keyword, city, country, name, phone, website, email, whatsapp)
-                                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""", (st.session_state.current_sid, kw, city, country_in, name, phone, row["Website"], email_found, wa_link)) #
-                                if me != 'admin': conn.execute("UPDATE user_credits SET balance = balance - 1 WHERE username=?", (me,)) #
-                                conn.commit() #
+                                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""", (st.session_state.current_sid, kw, city, country_in, name, phone, row["Website"], email_found, wa_link))
+                                if me != 'admin': conn.execute("UPDATE user_credits SET balance = balance - 1 WHERE username=?", (me,))
+                                conn.commit()
                             
-                            st.session_state.results_list.append(row) #
-                            table_ui.write(pd.DataFrame(st.session_state.results_list).to_html(escape=False, index=False), unsafe_allow_html=True) #
-                            processed += 1 #
-                        except Exception: continue #
-                    st.session_state.task_index += 1 #
+                            st.session_state.results_list.append(row)
+                            table_ui.write(pd.DataFrame(st.session_state.results_list).to_html(escape=False, index=False), unsafe_allow_html=True)
+                            processed += 1
+                        except Exception: continue
+                    st.session_state.task_index += 1
                 if st.session_state.task_index >= len(all_tasks) and st.session_state.running:
-                    st.success("🏁 Extraction Finished!"); st.session_state.running = False #
-            finally:
-                driver.quit() #
+                    st.success("🏁 Extraction Finished!"); st.session_state.running = False
+            finally: driver.quit()
 
 # ==============================================================================
 # 9. ARCHIVE & MARKETING TABS (FROM APP 15)
@@ -374,7 +360,7 @@ with tab_archive:
                 with sqlite3.connect(DB_NAME) as conn:
                     df_l = pd.read_sql(f"SELECT * FROM leads WHERE session_id={sess['id']}", conn) #
                 if not df_l.empty:
-                    # 🔥 SHOW HTML TABLE IN ARCHIVES TOO FOR ICONS
+                    # 🔥 SHOW HTML TABLE IN ARCHIVES TOO FOR ICONS FROM APP 15
                     st.write(df_l.drop(columns=['id', 'session_id']).to_html(escape=False, index=False), unsafe_allow_html=True) #
                     csv_arch = convert_df(df_l) #
                     st.download_button(label="⬇️ Download Archive CSV", data=csv_arch, file_name=f"archive_{sess['id']}.csv", mime="text/csv", key=f"btn_arch_{sess['id']}") #
@@ -384,4 +370,4 @@ with tab_tools:
     st.subheader("🤖 Marketing Automation") #
     st.info("Marketing tools coming soon in the next update!") #
 
-st.markdown('<div style="text-align:center;color:#666;padding:30px;">Designed by Chatir Elite Pro - Architect Edition V69</div>', unsafe_allow_html=True) #
+st.markdown('<div style="text-align:center;color:#666;padding:30px;">Designed by Chatir Elite Pro - Architect Edition V70</div>', unsafe_allow_html=True) #
