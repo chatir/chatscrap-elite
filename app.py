@@ -75,7 +75,7 @@ else:
     """, unsafe_allow_html=True) #
 
 # ==============================================================================
-# 3. DATABASE (V9 RESTORED + MIGRATION)
+# 3. DATABASE (V9 RESTORED + SMART MIGRATION)
 # ==============================================================================
 DB_NAME = "chatscrap_elite_pro_v9.db" #
 
@@ -89,7 +89,7 @@ def init_db():
             website TEXT, email TEXT, address TEXT, whatsapp TEXT)""") #
         cursor.execute("CREATE TABLE IF NOT EXISTS user_credits (username TEXT PRIMARY KEY, balance INTEGER, status TEXT DEFAULT 'active')") #
         
-        # SMART MIGRATION: Auto-add columns without losing users
+        # SMART MIGRATION
         cols = [c[1] for c in cursor.execute("PRAGMA table_info(leads)").fetchall()]
         for col in ["rating", "social_media"]:
             if col not in cols: cursor.execute(f"ALTER TABLE leads ADD COLUMN {col} TEXT")
@@ -116,14 +116,14 @@ authenticator = stauth.Authenticate(config['credentials'], config['cookie']['nam
 if st.session_state.get("authentication_status") is not True:
     if os.path.exists("chatscrape.png"):
         with open("chatscrape.png", "rb") as f: b64 = base64.b64encode(f.read()).decode() #
-        st.markdown(f'<div style="text-align:center; padding-top: 100px; padding-bottom: 20px;"><img src="data:image/png;base64,{b64}" style="width:320px; filter: drop-shadow(0 0 15px rgba(255,140,0,0.3));"></div>', unsafe_allow_html=True)
+        st.markdown(f'<div style="text-align:center; padding-top: 120px; padding-bottom: 20px;"><img src="data:image/png;base64,{b64}" style="width:320px; filter: drop-shadow(0 0 15px rgba(255,140,0,0.3));"></div>', unsafe_allow_html=True)
     
     col1, col2, col3 = st.columns([1, 1.2, 1]) #
     with col2:
         try: authenticator.login() #
         except: pass
-        if st.session_state["authentication_status"] is False: st.error("Login failed")
-        if st.session_state["authentication_status"] is None: st.info("🔒 Elite Pro - Restricted Access")
+        if st.session_state["authentication_status"] is False: st.error("Access Denied")
+        if st.session_state["authentication_status"] is None: st.info("🔒 Welcome to Elite Pro.")
         st.stop()
 
 # ==============================================================================
@@ -149,7 +149,7 @@ with st.sidebar:
                 conn.execute("UPDATE user_credits SET status=? WHERE username=?", ('suspended' if curr=='active' else 'active', target)); conn.commit(); st.rerun()
             if c3.button("🗑️ Del"): conn.execute("DELETE FROM user_credits WHERE username=?", (target,)); conn.commit(); st.rerun()
             st.divider()
-            nu, np = st.text_input("New User"), st.text_input("New Pwd", type="password")
+            nu, np = st.text_input("New Username"), st.text_input("New Password", type="password")
             if st.button("Create Account") and nu and np:
                 hashed_pw = stauth.Hasher([np]).generate()[0]
                 config['credentials']['usernames'][nu] = {'name': nu, 'password': hashed_pw, 'email': 'x'}
@@ -160,7 +160,7 @@ with st.sidebar:
     if st.button("Logout"): authenticator.logout('Logout', 'main'); st.session_state.clear(); st.rerun()
 
 # ==============================================================================
-# 6. MAIN APP HEADER & INPUTS
+# 6. HEADER LOGO & INPUTS
 # ==============================================================================
 if os.path.exists("chatscrape.png"):
     with open("chatscrape.png", "rb") as f: b64 = base64.b64encode(f.read()).decode() #
@@ -168,8 +168,8 @@ if os.path.exists("chatscrape.png"):
 
 with st.container():
     c1, c2, c3, c4 = st.columns([3, 3, 2, 1.5]) #
-    kw_in = c1.text_input("Keywords", placeholder="e.g. hotel, cafe", key="kw_in_key") #
-    city_in = c2.text_input("Cities", placeholder="e.g. Agadir, Casa", key="city_in_key") #
+    kw_in = c1.text_input("Keywords", placeholder="e.g. hotel, gym", key="kw_in_key") #
+    city_in = c2.text_input("Cities", placeholder="e.g. Agadir, Rabat", key="city_in_key") #
     country_in = c3.selectbox("Country", ["Morocco", "France", "USA", "Spain", "UAE", "UK"], key="country_in_key") #
     limit_in = c4.number_input("Limit/City", 1, 1000, 20, key="limit_in_key") #
 
@@ -207,7 +207,7 @@ with st.container():
         if st.button("Stop Search", disabled=not st.session_state.running): st.session_state.running, st.session_state.paused = False, False; st.rerun() #
 
 # ==============================================================================
-# 8. ENGINE & ROBUST SCRAPER LOGIC (V77 IMPROVEMENTS)
+# 8. ENGINE & ROBUST SCRAPER LOGIC (V78 ANTI-FREEZE)
 # ==============================================================================
 def get_driver():
     opts = Options(); opts.add_argument("--headless=new"); opts.add_argument("--no-sandbox"); opts.add_argument("--disable-dev-shm-usage")
@@ -243,7 +243,7 @@ with tab_live:
     if st.session_state.results_list:
         df_live = pd.DataFrame(st.session_state.results_list) #
         table_ui.write(df_live.to_html(escape=False, index=False), unsafe_allow_html=True)
-        download_ui.download_button(label="⬇️ Export Results CSV", data=df_live.to_csv(index=False).encode('utf-8'), file_name="leads.csv", mime="text/csv")
+        download_ui.download_button(label="⬇️ Export CSV", data=df_live.to_csv(index=False).encode('utf-8'), file_name="leads.csv", mime="text/csv")
 
     if st.session_state.running and not st.session_state.paused:
         akws = [k.strip() for k in st.session_state.active_kw.split(',') if k.strip()] #
@@ -282,36 +282,38 @@ with tab_live:
                                 with sqlite3.connect(DB_NAME) as conn:
                                     if conn.execute("SELECT 1 FROM leads WHERE name=? AND phone=?", (name, phone)).fetchone(): continue
 
-                            # 🔥 STATED IMPROVEMENT: Scraping Full Text for Ratings & Reviews
+                            # 🔥 ANTI-FREEZE RATING EXTRACTION
                             full_review = "N/A"
-                            rating_val = 5.0
+                            rating_val = 5.0 # Default ensures no freezing during math check
                             try:
-                                # Look for the span that contains "stars" in its aria-label
+                                # Target the element by its aria-label containing stars
                                 review_el = driver.find_element(By.XPATH, '//span[contains(@aria-label, "stars")]')
-                                full_review = review_el.get_attribute("aria-label") # e.g., "4.3 stars 126 reviews"
+                                full_review = review_el.get_attribute("aria-label") # "4.1 stars 120 reviews"
                                 if full_review:
-                                    rating_val = float(re.findall(r"(\d+\.\d+|\d+)", full_review)[0])
+                                    # Extract first number safely
+                                    found_ratings = re.findall(r"(\d+\.\d+|\d+)", full_review)
+                                    if found_ratings: rating_val = float(found_ratings[0])
                             except: pass
 
-                            # 🔥 STRICT NEGATIVE FILTER (<3.5)
+                            # 🔥 STRICT FILTER CHECK
                             if w_neg and rating_val >= 3.5: continue
 
                             st.session_state.progress = min(int(((base_progress + processed + 1) / total_est) * 100), 100)
                             prog_spot.markdown(f'<div class="prog-container"><div class="prog-bar-fill" style="width: {st.session_state.progress}%;"></div></div>', unsafe_allow_html=True)
                             
-                            raw_web = driver.find_element(By.CSS_SELECTOR, 'a[data-item-id="authority"]').get_attribute("href") if driver.find_elements(By.CSS_SELECTOR, 'a[data-item-id="authority"]') else "N/A"
+                            web = driver.find_element(By.CSS_SELECTOR, 'a[data-item-id="authority"]').get_attribute("href") if driver.find_elements(By.CSS_SELECTOR, 'a[data-item-id="authority"]') else "N/A"
                             
                             # PRO DATA SCRAPER
                             social_found, email = "N/A", "N/A"
-                            if raw_web != "N/A" and (w_social or w_email):
-                                social_found, email = fetch_data_pro(driver, raw_web, w_social, w_email)
+                            if web != "N/A" and (w_social or w_email):
+                                social_found, email = fetch_data_pro(driver, web, w_social, w_email)
 
                             wa = "N/A"; cp = re.sub(r'\D', '', phone)
                             if any(cp.startswith(x) for x in ['2126','2127','06','07']) and not (cp.startswith('2125') or cp.startswith('05')):
                                 wa = f'<a href="https://wa.me/{cp}" target="_blank" class="wa-link"><i class="fab fa-whatsapp"></i> Chat Now</a>'
                             
                             row = {"Keyword":kw, "City":city, "Name":name, "Phone":phone, "WhatsApp":wa, 
-                                   "Website": raw_web if w_web else "N/A", "Email": email if w_email else "N/A",
+                                   "Website": web if w_web else "N/A", "Email": email if w_email else "N/A",
                                    "Rating/Reviews": full_review, "Social Media": social_found if w_social else "N/A"}
                             
                             with sqlite3.connect(DB_NAME) as conn:
@@ -351,8 +353,8 @@ with tab_tools:
     if not all_leads.empty:
         sel = st.selectbox("Analyze Business", all_leads['name'])
         biz = all_leads[all_leads['name'] == sel].iloc[0]
-        msg = f"Hi {biz['name']}, I noticed you have a profile in {biz['keyword']}. Your rating is {biz['rating']}. We can help you manage your reputation!"
-        st.text_area("AI Outreach Message:", msg, height=100)
+        msg = f"Hi {biz['name']}, I noticed you have a {biz['rating']} profile on Google Maps. We can help you boost your score!"
+        st.text_area("AI Message:", msg, height=100)
     else: st.warning("No leads found. Start a search first!")
 
-st.markdown('<div style="text-align:center;color:#666;padding:30px;">Designed by Chatir Elite Pro - Architect Edition V77</div>', unsafe_allow_html=True) #
+st.markdown('<div style="text-align:center;color:#666;padding:30px;">Designed by Chatir Elite Pro - Architect Edition V78</div>', unsafe_allow_html=True) #
