@@ -12,7 +12,7 @@ import streamlit_authenticator as stauth
 from urllib.parse import quote
 
 # ==============================================================================
-# 1. GLOBAL CONFIG & STATE (FROM APP 15 & 16)
+# 1. GLOBAL CONFIGURATION & STATE (FROM APP 15 & 16)
 # ==============================================================================
 st.set_page_config(page_title="ChatScrap Elite Pro", layout="wide", page_icon="💎") #
 
@@ -23,12 +23,11 @@ if 'task_index' not in st.session_state: st.session_state.task_index = 0 #
 if 'progress' not in st.session_state: st.session_state.progress = 0 #
 if 'current_sid' not in st.session_state: st.session_state.current_sid = None #
 
-# SNAPSHOT FIX: Survives Admin Reruns
 if 'active_kw' not in st.session_state: st.session_state.active_kw = "" #
 if 'active_city' not in st.session_state: st.session_state.active_city = "" #
 
 # ==============================================================================
-# 2. DESIGN SYSTEM (WP LOGIN + STRIPY PROGRESS BAR)
+# 2. DESIGN SYSTEM (WORDPRESS LOGIN + DASHBOARD + STRIPY PROGRESS)
 # ==============================================================================
 st.markdown('<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">', unsafe_allow_html=True) #
 
@@ -39,9 +38,9 @@ if st.session_state.get("authentication_status") is not True:
     [data-testid="stAppViewContainer"] { background-color: #0e1117 !important; }
     div[data-testid="stForm"] {
         background-color: #161922 !important; padding: 40px !important; border: 1px solid #FF8C00 !important;
-        box-shadow: 0 10px 40px rgba(255,140,0,0.2) !important; border-radius: 12px !important; max-width: 420px !important; margin: auto !important;
+        box-shadow: 0 10px 40px rgba(255,140,0,0.2) !important; border-radius: 12px !important; max-width: 400px !important; margin: auto !important;
     }
-    .stButton > button { background: linear-gradient(135deg, #FF8C00 0%, #FF4500 100%) !important; color: white !important; font-weight: 800 !important; height: 50px !important; border-radius: 8px !important; width: 100% !important; }
+    .stButton > button { background: linear-gradient(135deg, #FF8C00 0%, #FF4500 100%) !important; color: white !important; font-weight: 800 !important; height: 50px !important; border-radius: 8px !important; text-transform: uppercase; width: 100% !important; }
     [data-testid="stHeader"], [data-testid="stSidebar"] { display: none; }
     </style>
     """, unsafe_allow_html=True) #
@@ -52,16 +51,19 @@ else:
     html, body, [data-testid="stAppViewContainer"] { font-family: 'Inter', sans-serif !important; background-color: #0e1117; }
     .centered-logo { text-align: center; padding: 20px 0 40px 0; }
     .logo-img { width: 280px; filter: drop-shadow(0 0 15px rgba(255,140,0,0.3)); }
-    .stButton > button { height: 50px !important; font-weight: 700 !important; border-radius: 8px !important; color: white !important; }
-    div[data-testid="column"]:nth-of-type(1) .stButton > button { background: linear-gradient(135deg, #FF8C00 0%, #FF4500 100%) !important; }
-    div[data-testid="column"]:nth-of-type(2) .stButton > button { background-color: #1F2937 !important; color: #E5E7EB !important; border: 1px solid #374151 !important; }
-    div[data-testid="column"]:nth-of-type(3) .stButton > button { background: linear-gradient(135deg, #28a745 0%, #218838 100%) !important; }
-    div[data-testid="column"]:nth-of-type(4) .stButton > button { background: linear-gradient(135deg, #DC2626 0%, #991B1B 100%) !important; }
-    /* 🔥 STRIPY PROGRESS BAR UI */
+    div[data-testid="stHorizontalBlock"]:has(button) { gap: 5px !important; }
+    .stButton > button { width: 100% !important; height: 50px !important; font-weight: 700 !important; font-size: 14px !important; border: none !important; text-transform: uppercase; letter-spacing: 1px; transition: all 0.3s ease-in-out; border-radius: 8px !important; color: white !important; }
+    div[data-testid="column"]:nth-of-type(1) .stButton > button { background: linear-gradient(135deg, #FF8C00 0%, #FF4500 100%) !important; box-shadow: 0 4px 15px rgba(255,69,0,0.3) !important; }
+    div[data-testid="column"]:nth-of-type(2) .stButton > button { background-color: #1F2937 !important; border: 1px solid #374151 !important; color: #E5E7EB !important; }
+    div[data-testid="column"]:nth-of-type(3) .stButton > button { background: linear-gradient(135deg, #28a745 0%, #218838 100%) !important; color: white !important; box-shadow: 0 4px 15px rgba(40, 167, 69, 0.3) !important; }
+    div[data-testid="column"]:nth-of-type(4) .stButton > button { background: linear-gradient(135deg, #DC2626 0%, #991B1B 100%) !important; box-shadow: 0 4px 15px rgba(220, 38, 38, 0.4) !important; }
     .prog-container { width: 100%; background: #111827; border-radius: 50px; padding: 4px; border: 1px solid #374151; margin: 25px 0; }
     .prog-bar-fill { height: 16px; background: repeating-linear-gradient(45deg, #FF8C00, #FF8C00 12px, #FF4500 12px, #FF4500 24px); border-radius: 20px; transition: width 0.3s ease-in-out; animation: stripes 1s linear infinite; }
     @keyframes stripes { 0% {background-position: 0 0;} 100% {background-position: 48px 48px;} }
+    [data-testid="stMetricValue"] { color: #FF8C00 !important; font-weight: 800; }
+    section[data-testid="stSidebar"] { background-color: #161922 !important; border-right: 1px solid #31333F; }
     .wa-link { color: #25D366 !important; text-decoration: none !important; font-weight: bold; display: inline-flex; align-items: center; gap: 5px; }
+    .wa-link:hover { text-decoration: underline !important; }
     </style>
     """, unsafe_allow_html=True) #
 
@@ -80,7 +82,6 @@ def init_db():
             website TEXT, email TEXT, address TEXT, whatsapp TEXT)""") #
         cursor.execute("CREATE TABLE IF NOT EXISTS user_credits (username TEXT PRIMARY KEY, balance INTEGER, status TEXT DEFAULT 'active')") #
         
-        # SMART MIGRATION: Auto-add columns without losing users
         cols = [c[1] for c in cursor.execute("PRAGMA table_info(leads)").fetchall()]
         for col in ["rating", "social_media"]:
             if col not in cols: cursor.execute(f"ALTER TABLE leads ADD COLUMN {col} TEXT")
@@ -113,12 +114,12 @@ if st.session_state.get("authentication_status") is not True:
     with col2:
         try: authenticator.login() #
         except: pass
-        if st.session_state["authentication_status"] is False: st.error("Wrong credentials")
-        if st.session_state["authentication_status"] is None: st.info("🔒 Welcome to Elite Pro.")
+        if st.session_state["authentication_status"] is False: st.error("Login failed")
+        if st.session_state["authentication_status"] is None: st.info("🔒 Restricted Access")
         st.stop()
 
 # ==============================================================================
-# 5. SIDEBAR & ADMIN PANEL (FROM APP 15/16)
+# 5. SIDEBAR & ADMIN PANEL
 # ==============================================================================
 with st.sidebar:
     st.title("Profile Settings") #
@@ -141,7 +142,7 @@ with st.sidebar:
             if c3.button("🗑️ Del"): conn.execute("DELETE FROM user_credits WHERE username=?", (target,)); conn.commit(); st.rerun()
             st.divider()
             nu, np = st.text_input("New User"), st.text_input("New Pwd", type="password")
-            if st.button("Create Account") and nu and np:
+            if st.button("Create") and nu and np:
                 hashed_pw = stauth.Hasher([np]).generate()[0]
                 config['credentials']['usernames'][nu] = {'name': nu, 'password': hashed_pw, 'email': 'x'}
                 with open('config.yaml', 'w') as f: yaml.dump(config, f)
@@ -151,7 +152,7 @@ with st.sidebar:
     if st.button("Logout"): authenticator.logout('Logout', 'main'); st.session_state.clear(); st.rerun()
 
 # ==============================================================================
-# 6. MAIN APP HEADER & INPUTS
+# 6. HEADER & INPUTS
 # ==============================================================================
 if os.path.exists("chatscrape.png"):
     with open("chatscrape.png", "rb") as f: b64 = base64.b64encode(f.read()).decode() #
@@ -169,7 +170,7 @@ with st.container():
     w_phone = f1.checkbox("Phone Only", True) #
     w_web = f2.checkbox("Website", False) #
     w_email = f3.checkbox("Deep Email", False) #
-    w_social = f4.checkbox("🛡️ Social Media", False)
+    w_social = f4.checkbox("📸 Social Media", False)
     w_global = f5.checkbox("🛡️ Global Dedupe", True)
     
     f6, f7, f8 = st.columns([1.5, 1.5, 2.5])
@@ -198,24 +199,23 @@ with st.container():
         if st.button("Stop Search", disabled=not st.session_state.running): st.session_state.running, st.session_state.paused = False, False; st.rerun() #
 
 # ==============================================================================
-# 8. ENGINE & PLAYWRIGHT ROBUST LOGIC (V84)
+# 8. ENGINE & PLAYWRIGHT ROBUST LOGIC (V85)
 # ==============================================================================
 def safe_calc_rating(text):
-    """ Safely parses '4.1 stars 120 reviews' to 4.1. Returns 5.0 for N/A. """
+    """ Converts text like '4.1 stars 120 reviews' to 4.1. Returns 5.0 for N/A. """
     try:
-        if not text or "stars" not in text.lower(): return 5.0
+        if not text: return 5.0
         nums = re.findall(r"(\d+\.\d+|\d+)", text)
         return float(nums[0]) if nums else 5.0
     except: return 5.0
 
-def fetch_site_data(page, url, find_socials, find_email):
+def fetch_site_data(context, url, find_socials, find_email):
     social, em = "N/A", "N/A"
     if not url or url == "N/A": return social, em
     try:
-        new_page = page.context.new_page()
-        new_page.goto(url, timeout=15000, wait_until="domcontentloaded")
-        time.sleep(3)
-        src = new_page.content().lower()
+        page = context.new_page()
+        page.goto(url, timeout=10000, wait_until="domcontentloaded")
+        time.sleep(2); src = page.content().lower()
         if find_socials:
             patterns = [r'instagram\.com/[a-zA-Z0-9_.]+', r'facebook\.com/[a-zA-Z0-9_.]+', r'linkedin\.com/company/[a-zA-Z0-9_-]+']
             for p in patterns:
@@ -224,7 +224,7 @@ def fetch_site_data(page, url, find_socials, find_email):
         if find_email:
             em_m = re.findall(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}", src)
             em = list(set(em_m))[0] if em_m else "N/A"
-        new_page.close()
+        page.close()
     except: pass
     return social, em
 
@@ -236,7 +236,7 @@ with tab_live:
 
     if st.session_state.results_list:
         df_live = pd.DataFrame(st.session_state.results_list) #
-        table_ui.write(df_live.to_html(escape=False, index=False), unsafe_allow_html=True) #
+        table_ui.write(df_live.to_html(escape=False, index=False), unsafe_allow_html=True)
         download_ui.download_button(label="⬇️ Download Leads", data=df_live.to_csv(index=False).encode('utf-8'), file_name="leads.csv", mime="text/csv")
 
     if st.session_state.running and not st.session_state.paused:
@@ -270,7 +270,7 @@ with tab_live:
                             if processed >= limit_in or not st.session_state.running: break
                             try:
                                 item.click(); time.sleep(3)
-                                # 🔥 ROBUST PLAYWRIGHT SELECTORS
+                                # 🔥 PLAYWRIGHT SCRAPING
                                 name = page.locator('h1.DUwDvf').first.inner_text()
                                 phone = "N/A"
                                 try: phone = page.locator('button[data-item-id*="phone:tel"]').first.get_attribute("aria-label").replace("Phone: ", "")
@@ -284,17 +284,16 @@ with tab_live:
                                 # 🔥 SOLVING THE REVIEW PROBLEM
                                 full_rev = "N/A"; r_val = 5.0
                                 try:
-                                    # Target elements containing rating information in aria-labels
                                     rating_el = page.locator('span[aria-label*="stars"]').first
                                     full_rev = rating_el.get_attribute("aria-label") # "4.3 stars 120 reviews"
                                     r_val = safe_calc_rating(full_rev)
                                 except: pass
 
-                                # 🔥 SOLVING THE FREEZE PROBLEM (STRICT MATH CHECK)
+                                # 🔥 SOLVING THE FREEZE PROBLEM
                                 if w_neg and r_val >= 3.5: continue
 
                                 st.session_state.progress = min(int(((base_progress + processed + 1) / total_est) * 100), 100)
-                                prog_spot.markdown(f'<div class="prog-container"><div class="prog-bar-fill" style="width: {st.session_state.progress}%;"></div></div>', unsafe_allow_html=True) #
+                                prog_spot.markdown(f'<div class="prog-container"><div class="prog-bar-fill" style="width: {st.session_state.progress}%;"></div></div>', unsafe_allow_html=True)
 
                                 maps_web = "N/A"
                                 try: maps_web = page.locator('a[data-item-id="authority"]').get_attribute("href")
@@ -302,13 +301,13 @@ with tab_live:
                                 
                                 # 🔥 SOLVING THE LINK CLASSIFIER PROBLEM
                                 final_web = maps_web; social_found = "N/A"
-                                if any(x in str(maps_web).lower() for x in ["facebook.com", "instagram.com", "linkedin.com"]):
+                                if any(x in str(maps_web).lower() for x in ["facebook.com", "instagram.com", "linkedin.com", "twitter.com"]):
                                     social_found = maps_web; final_web = "N/A"
 
                                 # Deep site crawl
                                 email = "N/A"
                                 if final_web != "N/A" and (w_social or w_email):
-                                    s_crawl, em_crawl = fetch_site_data(page, final_web, w_social, w_email)
+                                    s_crawl, em_crawl = fetch_site_data(context, final_web, w_social, w_email)
                                     if social_found == "N/A": social_found = s_crawl
                                     email = em_crawl
 
@@ -352,13 +351,12 @@ with tab_archive:
 
 with tab_tools:
     st.subheader("🤖 Marketing Automation") #
-    st.info("💡 AI outreach tools integrated with extracted leads.") #
     with sqlite3.connect(DB_NAME) as conn:
         all_leads = pd.read_sql("SELECT name, keyword, rating FROM leads ORDER BY id DESC LIMIT 50", conn)
     if not all_leads.empty:
         sel = st.selectbox("Select Business", all_leads['name'])
         biz = all_leads[all_leads['name'] == sel].iloc[0]
-        msg = f"Hi {biz['name']}, I noticed your Google profile has {biz['rating']}. Let's work together to boost it!"
-        st.text_area("Generated AI Message:", msg, height=100)
+        msg = f"Hi {biz['name']}, I noticed your Google rating is {biz['rating']}. We can help you boost your online reputation!"
+        st.text_area("Generated Outreach Message:", msg, height=100)
 
-st.markdown('<div style="text-align:center;color:#666;padding:30px;">Designed by Chatir Elite Pro - Architect Edition V84 (Playwright)</div>', unsafe_allow_html=True) #
+st.markdown('<div style="text-align:center;color:#666;padding:30px;">Designed by Chatir Elite Pro - Architect Edition V85 (Playwright)</div>', unsafe_allow_html=True) #
