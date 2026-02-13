@@ -17,7 +17,7 @@ from webdriver_manager.chrome import ChromeDriverManager
 from urllib.parse import quote
 
 # ==============================================================================
-# 1. GLOBAL CONFIGURATION & STATE (KEEPING EVERYTHING 100% SAME)
+# 1. GLOBAL CONFIGURATION & STATE (حفاظ تام على المتغيرات)
 # ==============================================================================
 st.set_page_config(page_title="ChatScrap Elite Pro", layout="wide", page_icon="💎")
 
@@ -33,106 +33,96 @@ if 'active_kw' not in st.session_state: st.session_state.active_kw = ""
 if 'active_city' not in st.session_state: st.session_state.active_city = ""
 
 # ==============================================================================
-# 2. DESIGN SYSTEM (MODERN DARK FLAT - SLATE & MATTE ORANGE)
+# 2. DESIGN SYSTEM (MODERN FLAT ORANGE & CHARCOAL)
 # ==============================================================================
 st.markdown('<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">', unsafe_allow_html=True)
 
-# CSS Conditional Styling based on Auth State
+# ألوان من عائلة البرتقالي مع خلفية سوداء فحمية (بدون أزرق)
+main_orange = "#FF8C00"
+dark_bg = "#0A0A0A"
+card_bg = "#1A1A1A"
+border_col = "#333333"
+
 if st.session_state.get("authentication_status") is not True:
-    # --- FLAT LOGIN PAGE STYLE ---
-    st.markdown("""
+    # --- FLAT LOGIN PAGE (ORANGE THEME) ---
+    st.markdown(f"""
     <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
-    [data-testid="stAppViewContainer"] { background-color: #0F172A !important; } /* Slate Dark */
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap');
+    [data-testid="stAppViewContainer"] {{ background-color: {dark_bg} !important; }}
     
-    /* Central Flat Box */
-    [data-testid="stVerticalBlock"] > div:has(div.stButton) {
-        background-color: #1E293B;
-        padding: 40px !important;
-        border: 1px solid #334155;
-        box-shadow: none !important;
+    [data-testid="stVerticalBlock"] > div:has(div.stButton) {{
+        background-color: {card_bg};
+        padding: 50px !important;
+        border: 1px solid {main_orange};
         border-radius: 8px;
-        max-width: 400px;
+        max-width: 420px;
         margin: auto;
-    }
+        box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+    }}
     
-    .stTextInput input {
-        background-color: #0F172A !important;
-        color: #F8FAFC !important;
-        border: 1px solid #334155 !important;
-        border-radius: 6px !important;
-        height: 45px;
-    }
-    
-    .stButton > button {
-        background-color: #FF6B00 !important; /* Matte Orange */
-        border: none !important;
+    .stTextInput input {{
+        background-color: #222222 !important;
         color: white !important;
-        font-weight: 600 !important;
-        height: 48px !important;
+        border: 1px solid {border_col} !important;
         border-radius: 6px !important;
-        text-transform: none !important;
-        width: 100% !important;
-        transition: background 0.2s ease;
-    }
-    .stButton > button:hover { background-color: #E65F00 !important; }
+    }}
     
-    [data-testid="stHeader"], [data-testid="stSidebar"] { display: none; }
+    .stButton > button {{
+        background-color: {main_orange} !important;
+        color: white !important;
+        font-weight: 700 !important;
+        height: 50px !important;
+        border-radius: 6px !important;
+        text-transform: uppercase;
+        border: none !important;
+    }}
+    [data-testid="stHeader"], [data-testid="stSidebar"] {{ display: none; }}
     </style>
     """, unsafe_allow_html=True)
 else:
-    # --- FLAT DASHBOARD STYLE ---
-    st.markdown("""
+    # --- FLAT DASHBOARD STYLE (ORANGE & BLACK) ---
+    st.markdown(f"""
     <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
-    html, body, [data-testid="stAppViewContainer"] { 
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap');
+    html, body, [data-testid="stAppViewContainer"] {{ 
         font-family: 'Inter', sans-serif !important; 
-        background-color: #0F172A !important; 
-    }
-    .centered-logo { text-align: center; padding: 30px 0; }
-    .logo-img { width: 240px; filter: none !important; }
+        background-color: {dark_bg} !important; 
+    }}
+    .centered-logo {{ text-align: center; padding: 20px 0 40px 0; }}
+    .logo-img {{ width: 280px; }}
     
-    /* Flat Buttons System */
-    .stButton > button { 
-        width: 100% !important; 
-        height: 45px !important; 
-        font-weight: 600 !important; 
-        border: none !important; 
-        border-radius: 6px !important; 
-        color: white !important; 
-        transition: opacity 0.2s;
-        box-shadow: none !important;
-    }
+    /* Flat Buttons */
+    .stButton > button {{ 
+        width: 100% !important; height: 48px !important; font-weight: 700 !important; 
+        border: none !important; border-radius: 4px !important; color: white !important; 
+    }}
     
-    /* Button Colors (Solid Flat) */
-    div[data-testid="column"]:nth-of-type(1) .stButton > button { background-color: #FF6B00 !important; } /* Start */
-    div[data-testid="column"]:nth-of-type(2) .stButton > button { background-color: #334155 !important; } /* Pause */
-    div[data-testid="column"]:nth-of-type(3) .stButton > button { background-color: #059669 !important; } /* Continue */
-    div[data-testid="column"]:nth-of-type(4) .stButton > button { background-color: #DC2626 !important; } /* Stop */
+    div[data-testid="column"]:nth-of-type(1) .stButton > button {{ background-color: {main_orange} !important; }} /* Start */
+    div[data-testid="column"]:nth-of-type(2) .stButton > button {{ background-color: #333333 !important; }} /* Pause */
+    div[data-testid="column"]:nth-of-type(3) .stButton > button {{ background-color: #2D5A27 !important; }} /* Continue */
+    div[data-testid="column"]:nth-of-type(4) .stButton > button {{ background-color: #A30000 !important; }} /* Stop */
     
-    .stButton > button:disabled { opacity: 0.3 !important; cursor: not-allowed; }
+    .stButton > button:disabled {{ opacity: 0.2 !important; }}
+
+    /* Fix Progress Bar (Flat Design) */
+    .prog-container {{ width: 100%; background: #222222; border-radius: 2px; padding: 0; border: 1px solid {border_col}; margin: 25px 0; height: 12px; overflow: hidden; }}
+    .prog-bar-fill {{ height: 100%; background-color: {main_orange}; transition: width 0.5s ease-in-out; }}
     
-    /* Flat Progress Bar */
-    .prog-container { width: 100%; background: #1E293B; border-radius: 4px; padding: 2px; border: 1px solid #334155; margin: 20px 0; }
-    .prog-bar-fill { height: 12px; background: #FF6B00; border-radius: 2px; transition: width 0.4s ease; animation: none !important; }
+    [data-testid="stMetricValue"] {{ color: {main_orange} !important; font-weight: 800; }}
+    section[data-testid="stSidebar"] {{ background-color: {card_bg} !important; border-right: 1px solid {border_col}; }}
     
-    [data-testid="stMetricValue"] { color: #FF6B00 !important; font-weight: 700; }
-    
-    /* Sidebar Flat */
-    section[data-testid="stSidebar"] { background-color: #1E293B !important; border-right: 1px solid #334155; }
-    
-    /* WhatsApp Link Flat */
-    .wa-link { color: #10B981 !important; text-decoration: none !important; font-weight: 600; }
+    /* WhatsApp Green */
+    .wa-link {{ color: #25D366 !important; text-decoration: none !important; font-weight: bold; }}
     
     /* Tabs Flat */
-    .stTabs [data-baseweb="tab-list"] { gap: 10px; }
-    .stTabs [data-baseweb="tab"] { background-color: #1E293B; border-radius: 4px; color: #94A3B8; border: 1px solid #334155; padding: 8px 20px; }
-    .stTabs [aria-selected="true"] { background-color: #FF6B00 !important; color: white !important; }
+    .stTabs [data-baseweb="tab-list"] {{ gap: 8px; }}
+    .stTabs [data-baseweb="tab"] {{ background-color: {card_bg}; color: #888; border: 1px solid {border_col}; padding: 10px 25px; border-radius: 4px 4px 0 0; }}
+    .stTabs [aria-selected="true"] {{ background-color: {main_orange} !important; color: white !important; border-color: {main_orange} !important; }}
     </style>
     """, unsafe_allow_html=True)
 
 # ==============================================================================
-# 3. DATABASE (ORIGINAL FUNCTIONS - NO CHANGES)
+# 3. DATABASE (FROM APP 15 - UNTOUCHED)
 # ==============================================================================
 DB_NAME = "chatscrap_elite_pro_v9.db"
 
@@ -158,7 +148,7 @@ def get_user_data(username):
         return (100, 'active')
 
 # ==============================================================================
-# 4. AUTHENTICATION (FLAT UI WRAPPER)
+# 4. AUTHENTICATION & LOGIN UI (FIXED LOGO & POSITION)
 # ==============================================================================
 try:
     with open('config.yaml') as file: config = yaml.load(file, Loader=SafeLoader)
@@ -167,22 +157,23 @@ except: st.error("config.yaml missing"); st.stop()
 authenticator = stauth.Authenticate(config['credentials'], config['cookie']['name'], config['cookie']['key'], config['cookie']['expiry_days'])
 
 if st.session_state.get("authentication_status") is not True:
+    # الشعار في صفحة الدخول
     if os.path.exists("chatscrape.png"):
         with open("chatscrape.png", "rb") as f: b64 = base64.b64encode(f.read()).decode()
-        st.markdown(f'<div style="text-align:center; padding-top: 100px; padding-bottom: 20px;"><img src="data:image/png;base64,{b64}" style="width:280px;"></div>', unsafe_allow_html=True)
+        st.markdown(f'<div style="text-align:center; padding-top: 100px; padding-bottom: 20px;"><img src="data:image/png;base64,{b64}" style="width:300px;"></div>', unsafe_allow_html=True)
     
     col1, col2, col3 = st.columns([1, 1.2, 1])
     with col2:
         try: authenticator.login()
         except: pass
         if st.session_state["authentication_status"] is False:
-            st.error("Incorrect credentials")
+            st.error("Username/password is incorrect")
         if st.session_state["authentication_status"] is None:
-            st.info("Please Login to access Elite Pro.")
+            st.info("🔒 Elite Access Required")
         st.stop()
 
 # ==============================================================================
-# 5. SIDEBAR & ADMIN (ORIGINAL LOGIC - NO CHANGES)
+# 5. SIDEBAR & ADMIN (FROM APP 15 - UNTOUCHED)
 # ==============================================================================
 with st.sidebar:
     st.title("Profile Settings")
@@ -225,14 +216,14 @@ with st.sidebar:
     if st.button("Logout"): authenticator.logout('Logout', 'main'); st.session_state.clear(); st.rerun()
 
 # ==============================================================================
-# 6. HEADER LOGO
+# 6. HEADER LOGO (DASHBOARD)
 # ==============================================================================
 if os.path.exists("chatscrape.png"):
     with open("chatscrape.png", "rb") as f: b64 = base64.b64encode(f.read()).decode()
     st.markdown(f'<div class="centered-logo"><img src="data:image/png;base64,{b64}" class="logo-img"></div>', unsafe_allow_html=True)
 
 # ==============================================================================
-# 7. INPUTS & 4-BUTTON ROW (ORIGINAL - NO CHANGES)
+# 7. INPUTS & 4-BUTTON ROW (FROM APP 15 - UNTOUCHED)
 # ==============================================================================
 with st.container():
     c1, c2, c3, c4 = st.columns([3, 3, 2, 1.5])
@@ -286,7 +277,7 @@ with st.container():
             st.rerun()
 
 # ==============================================================================
-# 8. ENGINE & LOGIC (KEEPING EVERYTHING 100% SAME AS APP 15)
+# 8. ENGINE & LOGIC (KEEPING 100% SAME AS APP 15)
 # ==============================================================================
 def get_driver():
     opts = Options()
@@ -328,6 +319,8 @@ with tab_live:
     status_ui = st.empty()
     table_ui = st.empty()
     download_ui = st.empty()
+    
+    # إصلاح ظهور شريط التقدم
     prog_spot.markdown(f'<div class="prog-container"><div class="prog-bar-fill" style="width: {st.session_state.progress}%;"></div></div>', unsafe_allow_html=True)
 
     if st.session_state.results_list:
@@ -349,7 +342,7 @@ with tab_live:
                     if i < st.session_state.task_index: continue
                     if not st.session_state.running: break
                     base_progress = i * limit_in
-                    status_ui.markdown(f"**Scanning:** `{kw}` in `{city}`...")
+                    status_ui.markdown(f"**Scanning:** `{kw}` in `{city}`... ({i+1}/{len(all_tasks)})")
                     gl = {"Morocco":"ma", "France":"fr", "USA":"us"}.get(country_in, "ma")
                     driver.get(f"https://www.google.com/maps/search/{quote(kw)}+in+{quote(city)}?hl=en&gl={gl}")
                     time.sleep(4)
@@ -369,15 +362,19 @@ with tab_live:
                             try: phone = driver.find_element(By.XPATH, '//*[contains(@data-item-id, "phone:tel")]').get_attribute("aria-label").replace("Phone: ", "")
                             except: pass
                             if any(res['Name'] == name and res['Phone'] == phone for res in st.session_state.results_list): continue
+                            
                             st.session_state.progress = min(int(((base_progress + processed + 1) / total_estimated) * 100), 100)
                             prog_spot.markdown(f'<div class="prog-container"><div class="prog-bar-fill" style="width: {st.session_state.progress}%;"></div></div>', unsafe_allow_html=True)
+                            
                             raw_web = driver.find_element(By.CSS_SELECTOR, 'a[data-item-id="authority"]').get_attribute("href") if driver.find_elements(By.CSS_SELECTOR, 'a[data-item-id="authority"]') else "N/A"
                             if w_phone and (phone == "N/A" or not phone): continue
                             if w_nosite and raw_web != "N/A": continue
+                            
                             wa_link = "N/A"
                             cp = re.sub(r'\D', '', phone)
                             if any(cp.startswith(x) for x in ['2126','2127','06','07']) and not (cp.startswith('2125') or cp.startswith('05')):
                                 wa_link = f'<a href="https://wa.me/{cp}" target="_blank" class="wa-link"><i class="fab fa-whatsapp"></i> Chat Now</a>'
+                            
                             email_found = fetch_email_deep(driver, raw_web) if w_email and raw_web != "N/A" else "N/A"
                             row = {"Keyword":kw, "City":city, "Name":name, "Phone":phone, "WhatsApp":wa_link, "Website":raw_web if w_web else "N/A", "Email":email_found}
                             with sqlite3.connect(DB_NAME) as conn:
@@ -396,7 +393,7 @@ with tab_live:
                 driver.quit()
 
 # ==============================================================================
-# 9. ARCHIVE TAB
+# 9. ARCHIVE TAB (FROM APP 15 - UNTOUCHED)
 # ==============================================================================
 with tab_archive:
     st.subheader("Persistent History")
@@ -415,10 +412,10 @@ with tab_archive:
                 else: st.warning("Empty results.")
 
 # ==============================================================================
-# 10. MARKETING TAB
+# 10. MARKETING TAB (FROM APP 15 - UNTOUCHED)
 # ==============================================================================
 with tab_tools:
     st.subheader("🤖 Marketing Automation")
     st.info("Marketing tools coming soon in the next update!")
 
-st.markdown('<div style="text-align:center;color:#64748B;padding:30px;font-size:12px;">Designed by Chatir Elite Pro - Architect Edition V64</div>', unsafe_allow_html=True)
+st.markdown(f'<div style="text-align:center;color:#444;padding:30px;font-size:12px;">Designed by Chatir Elite Pro - Architect Edition V64</div>', unsafe_allow_html=True)
