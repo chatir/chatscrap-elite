@@ -75,7 +75,7 @@ else:
     """, unsafe_allow_html=True) #
 
 # ==============================================================================
-# 3. DATABASE (RESTORED V9 + COLUMN MIGRATION)
+# 3. DATABASE (V9 RESTORED + MIGRATION)
 # ==============================================================================
 DB_NAME = "chatscrap_elite_pro_v9.db" #
 
@@ -122,12 +122,12 @@ if st.session_state.get("authentication_status") is not True:
     with col2:
         try: authenticator.login() #
         except: pass
-        if st.session_state["authentication_status"] is False: st.error("Wrong username/password")
-        if st.session_state["authentication_status"] is None: st.info("🔒 Welcome to Elite Pro. Please Login.")
+        if st.session_state["authentication_status"] is False: st.error("Wrong credentials")
+        if st.session_state["authentication_status"] is None: st.info("🔒 Welcome to Elite Pro.")
         st.stop()
 
 # ==============================================================================
-# 5. SIDEBAR & ADMIN PANEL (FROM APP 16)
+# 5. SIDEBAR & ADMIN PANEL
 # ==============================================================================
 with st.sidebar:
     st.title("Profile Settings") #
@@ -150,11 +150,11 @@ with st.sidebar:
             if c3.button("🗑️ Del"): conn.execute("DELETE FROM user_credits WHERE username=?", (target,)); conn.commit(); st.rerun()
             st.divider()
             nu, np = st.text_input("New User"), st.text_input("New Pwd", type="password")
-            if st.button("Create Account") and nu and np:
+            if st.button("Create") and nu and np:
                 hashed_pw = stauth.Hasher([np]).generate()[0]
                 config['credentials']['usernames'][nu] = {'name': nu, 'password': hashed_pw, 'email': 'x'}
                 with open('config.yaml', 'w') as f: yaml.dump(config, f)
-                get_user_data(nu); st.success(f"User {nu} Created!"); st.rerun()
+                get_user_data(nu); st.success(f"User Created!"); st.rerun()
 
     st.divider() #
     if st.button("Logout"): authenticator.logout('Logout', 'main'); st.session_state.clear(); st.rerun()
@@ -182,7 +182,7 @@ with st.container():
     w_global = f5.checkbox("🛡️ Global Dedupe", True)
     
     f6, f7, f8 = st.columns([1.5, 1.5, 2.5])
-    w_neg = f6.checkbox("⭐ Neg. Filter (<3.5)", False)
+    w_neg = f6.checkbox("⭐ Negative Filter (<3.5)", False)
     depth_in = f8.slider("Scroll Depth", 1, 100, 10) #
 
     st.write("") #
@@ -207,7 +207,7 @@ with st.container():
         if st.button("Stop Search", disabled=not st.session_state.running): st.session_state.running, st.session_state.paused = False, False; st.rerun() #
 
 # ==============================================================================
-# 8. ENGINE & SOCIAL/REVIEW LOGIC
+# 8. ENGINE & ROBUST SCRAPER LOGIC
 # ==============================================================================
 def get_driver():
     opts = Options(); opts.add_argument("--headless=new"); opts.add_argument("--no-sandbox"); opts.add_argument("--disable-dev-shm-usage")
@@ -222,11 +222,10 @@ def fetch_data_pro(driver, url, find_socials, find_email):
         driver.execute_script("window.open('');"); driver.switch_to.window(driver.window_handles[-1])
         driver.set_page_load_timeout(10); driver.get(url); time.sleep(3); src = driver.page_source.lower()
         if find_socials:
-            # Smart Search for any social media
-            patterns = [r'instagram\.com/[a-zA-Z0-9_.]+', r'facebook\.com/[a-zA-Z0-9_.]+', r'linkedin\.com/company/[a-zA-Z0-9_-]+', r'twitter\.com/[a-zA-Z0-9_]+']
+            patterns = [r'instagram\.com/[a-zA-Z0-9_.]+', r'facebook\.com/[a-zA-Z0-9_.]+', r'linkedin\.com/company/[a-zA-Z0-9_-]+']
             for p in patterns:
-                match = re.findall(p, src)
-                if match: social = match[0]; break
+                m = re.findall(p, src)
+                if m: social = m[0]; break
         if find_email:
             em_m = re.findall(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}", src)
             em = list(set(em_m))[0] if em_m else "N/A"
@@ -244,7 +243,7 @@ with tab_live:
     if st.session_state.results_list:
         df_live = pd.DataFrame(st.session_state.results_list) #
         table_ui.write(df_live.to_html(escape=False, index=False), unsafe_allow_html=True)
-        download_ui.download_button(label="⬇️ Download CSV", data=df_live.to_csv(index=False).encode('utf-8'), file_name="leads.csv", mime="text/csv")
+        download_ui.download_button(label="⬇️ Export Results CSV", data=df_live.to_csv(index=False).encode('utf-8'), file_name="leads.csv", mime="text/csv")
 
     if st.session_state.running and not st.session_state.paused:
         akws = [k.strip() for k in st.session_state.active_kw.split(',') if k.strip()] #
@@ -278,37 +277,36 @@ with tab_live:
                             try: phone = driver.find_element(By.XPATH, '//*[contains(@data-item-id, "phone:tel")]').get_attribute("aria-label").replace("Phone: ", "")
                             except: pass
 
-                            # STRICT PHONE & DEDUPE
                             if w_phone and (phone == "N/A" or not phone): continue
                             if w_global:
                                 with sqlite3.connect(DB_NAME) as conn:
                                     if conn.execute("SELECT 1 FROM leads WHERE name=? AND phone=?", (name, phone)).fetchone(): continue
 
-                            # 🔥 IMPROVED RATING & REVIEWS
+                            # 🔥 STRICT RATING & REVIEW SCRAPER
                             full_review = "N/A"
+                            rating_val = 5.0 # Default for filter if N/A
                             try:
-                                stars = driver.find_element(By.CSS_SELECTOR, "span.ce40Ff").get_attribute("aria-label")
-                                rev_count = driver.find_element(By.XPATH, '//span[contains(@aria-label, "reviews")]').text
-                                full_review = f"{stars} ({rev_count})"
+                                stars_el = driver.find_element(By.XPATH, '//span[contains(@aria-label, "stars")]')
+                                stars_text = stars_el.get_attribute("aria-label") # "4.5 stars"
+                                rev_count = driver.find_element(By.XPATH, '//span[contains(@aria-label, "reviews")]').text # "(120)"
+                                full_review = f"{stars_text} {rev_count}"
+                                rating_val = float(re.findall(r"(\d+\.\d+|\d+)", stars_text)[0])
                             except: pass
 
-                            if w_neg and "N/A" not in full_review:
-                                try:
-                                    val = float(re.findall(r"(\d+\.\d+|\d+)", full_review)[0])
-                                    if val >= 3.5: continue
-                                except: pass
+                            # 🔥 STRICT NEGATIVE FILTER (<3.5)
+                            if w_neg and rating_val >= 3.5: continue
 
                             st.session_state.progress = min(int(((base_progress + processed + 1) / total_est) * 100), 100)
                             prog_spot.markdown(f'<div class="prog-container"><div class="prog-bar-fill" style="width: {st.session_state.progress}%;"></div></div>', unsafe_allow_html=True)
                             
                             web = driver.find_element(By.CSS_SELECTOR, 'a[data-item-id="authority"]').get_attribute("href") if driver.find_elements(By.CSS_SELECTOR, 'a[data-item-id="authority"]') else "N/A"
                             
-                            # SOCIAL/EMAIL SCRAPER
+                            # PRO DATA SCRAPER
                             social_found, email = "N/A", "N/A"
                             if web != "N/A" and (w_social or w_email):
                                 social_found, email = fetch_data_pro(driver, web, w_social, w_email)
 
-                            cp = re.sub(r'\D', '', phone); wa = "N/A"
+                            wa = "N/A"; cp = re.sub(r'\D', '', phone)
                             if any(cp.startswith(x) for x in ['2126','2127','06','07']) and not (cp.startswith('2125') or cp.startswith('05')):
                                 wa = f'<a href="https://wa.me/{cp}" target="_blank" class="wa-link"><i class="fab fa-whatsapp"></i> Chat Now</a>'
                             
@@ -348,13 +346,12 @@ with tab_archive:
 
 with tab_tools:
     st.subheader("🤖 Marketing Automation")
-    st.info("💡 Pro Tip: Filter leads with <3.5 rating to offer Review Management services!")
     with sqlite3.connect(DB_NAME) as conn:
-        all_leads = pd.read_sql("SELECT name, keyword, rating, social_media FROM leads ORDER BY id DESC LIMIT 50", conn)
+        all_leads = pd.read_sql("SELECT name, keyword, rating FROM leads ORDER BY id DESC LIMIT 50", conn)
     if not all_leads.empty:
         sel = st.selectbox("Analyze Lead", all_leads['name'])
         biz = all_leads[all_leads['name'] == sel].iloc[0]
-        msg = f"Hi {biz['name']}, I saw your profile in {biz['keyword']}. You have a {biz['rating']} rating. We can help you boost your social presence!"
-        st.text_area("Generated Outreach Message:", msg, height=100)
+        msg = f"Hi {biz['name']}, I noticed you have a {biz['rating']} on Google Maps. We can help you manage your reviews!"
+        st.text_area("Outreach Message:", msg, height=100)
 
-st.markdown('<div style="text-align:center;color:#666;padding:30px;">Designed by Chatir Elite Pro - Architect Edition V75</div>', unsafe_allow_html=True) #
+st.markdown('<div style="text-align:center;color:#666;padding:30px;">Designed by Chatir Elite Pro - Architect Edition V76</div>', unsafe_allow_html=True) #
