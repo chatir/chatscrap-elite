@@ -17,7 +17,7 @@ from webdriver_manager.chrome import ChromeDriverManager
 from urllib.parse import quote
 
 # ==============================================================================
-# 1. GLOBAL CONFIGURATION & STATE (FROM APP 15 & 16)
+# 1. GLOBAL CONFIGURATION & STATE (FROM APP 16)
 # ==============================================================================
 st.set_page_config(page_title="ChatScrap Elite Pro", layout="wide", page_icon="💎") #
 
@@ -60,9 +60,8 @@ else:
     .stButton > button { width: 100% !important; height: 50px !important; font-weight: 700 !important; font-size: 14px !important; border: none !important; text-transform: uppercase; letter-spacing: 1px; transition: all 0.3s ease-in-out; border-radius: 8px !important; color: white !important; }
     div[data-testid="column"]:nth-of-type(1) .stButton > button { background: linear-gradient(135deg, #FF8C00 0%, #FF4500 100%) !important; box-shadow: 0 4px 15px rgba(255,69,0,0.3) !important; }
     div[data-testid="column"]:nth-of-type(2) .stButton > button { background-color: #1F2937 !important; border: 1px solid #374151 !important; color: #E5E7EB !important; }
-    div[data-testid="column"]:nth-of-type(3) .stButton > button { background: linear-gradient(135deg, #28a745 0%, #218838 100%) !important; box-shadow: 0 4px 15px rgba(40, 167, 69, 0.3) !important; }
+    div[data-testid="column"]:nth-of-type(3) .stButton > button { background: linear-gradient(135deg, #28a745 0%, #218838 100%) !important; color: white !important; box-shadow: 0 4px 15px rgba(40, 167, 69, 0.3) !important; }
     div[data-testid="column"]:nth-of-type(4) .stButton > button { background: linear-gradient(135deg, #DC2626 0%, #991B1B 100%) !important; box-shadow: 0 4px 15px rgba(220, 38, 38, 0.4) !important; }
-    /* 🔥 STRIPY PROGRESS BAR UI */
     .prog-container { width: 100%; background: #111827; border-radius: 50px; padding: 4px; border: 1px solid #374151; margin: 25px 0; }
     .prog-bar-fill { height: 16px; background: repeating-linear-gradient(45deg, #FF8C00, #FF8C00 12px, #FF4500 12px, #FF4500 24px); border-radius: 20px; transition: width 0.3s ease-in-out; animation: stripes 1s linear infinite; }
     @keyframes stripes { 0% {background-position: 0 0;} 100% {background-position: 48px 48px;} }
@@ -88,7 +87,7 @@ def init_db():
             website TEXT, email TEXT, address TEXT, whatsapp TEXT)""") #
         cursor.execute("CREATE TABLE IF NOT EXISTS user_credits (username TEXT PRIMARY KEY, balance INTEGER, status TEXT DEFAULT 'active')") #
         
-        # SMART MIGRATION: Add columns if they don't exist
+        # SMART MIGRATION: Auto-add columns without losing users
         cols = [c[1] for c in cursor.execute("PRAGMA table_info(leads)").fetchall()]
         for col in ["rating", "social_media"]:
             if col not in cols: cursor.execute(f"ALTER TABLE leads ADD COLUMN {col} TEXT")
@@ -104,7 +103,7 @@ def get_user_data(username):
         conn.commit(); return (100, 'active')
 
 # ==============================================================================
-# 4. AUTHENTICATION & WP LOGIN (RAISED LOGO)
+# 4. AUTHENTICATION (WORDPRESS STYLE LOGO)
 # ==============================================================================
 try:
     with open('config.yaml') as file: config = yaml.load(file, Loader=SafeLoader) #
@@ -115,18 +114,18 @@ authenticator = stauth.Authenticate(config['credentials'], config['cookie']['nam
 if st.session_state.get("authentication_status") is not True:
     if os.path.exists("chatscrape.png"):
         with open("chatscrape.png", "rb") as f: b64 = base64.b64encode(f.read()).decode() #
-        st.markdown(f'<div style="text-align:center; padding-top: 100px; padding-bottom: 20px;"><img src="data:image/png;base64,{b64}" style="width:320px; filter: drop-shadow(0 0 15px rgba(255,140,0,0.3));"></div>', unsafe_allow_html=True) #
+        st.markdown(f'<div style="text-align:center; padding-top: 100px; padding-bottom: 20px;"><img src="data:image/png;base64,{b64}" style="width:320px; filter: drop-shadow(0 0 15px rgba(255,140,0,0.3));"></div>', unsafe_allow_html=True)
     
     col1, col2, col3 = st.columns([1, 1.2, 1]) #
     with col2:
         try: authenticator.login() #
         except: pass
         if st.session_state["authentication_status"] is False: st.error("Wrong credentials")
-        if st.session_state["authentication_status"] is None: st.info("🔒 Private Access - Elite Edition")
+        if st.session_state["authentication_status"] is None: st.info("🔒 Private Access - Please Login")
         st.stop()
 
 # ==============================================================================
-# 5. SIDEBAR & ADMIN PANEL
+# 5. SIDEBAR & ADMIN (RESTORED ADD USER)
 # ==============================================================================
 with st.sidebar:
     st.title("Profile Settings") #
@@ -142,10 +141,22 @@ with st.sidebar:
             target = st.selectbox("Select User", u_df['username'])
             c1, c2, c3 = st.columns(3)
             if c1.button("💰 +100"): conn.execute("UPDATE user_credits SET balance=balance+100 WHERE username=?", (target,)); conn.commit(); st.rerun()
-            if c2.button("🚫 State"):
+            if c2.button("🚫 Status"):
                 curr = conn.execute("SELECT status FROM user_credits WHERE username=?", (target,)).fetchone()[0]
                 conn.execute("UPDATE user_credits SET status=? WHERE username=?", ('suspended' if curr=='active' else 'active', target)); conn.commit(); st.rerun()
             if c3.button("🗑️ Del"): conn.execute("DELETE FROM user_credits WHERE username=?", (target,)); conn.commit(); st.rerun()
+            st.divider()
+            # 🔥 RESTORED: Add User Section
+            st.write("Add New User:")
+            nu = st.text_input("New User", key="add_u_key")
+            np = st.text_input("New Pass", type="password", key="add_p_key")
+            if st.button("Create Account"):
+                if nu and np:
+                    try: hashed_pw = stauth.Hasher.hash(np)
+                    except: hashed_pw = stauth.Hasher([np]).generate()[0]
+                    config['credentials']['usernames'][nu] = {'name': nu, 'password': hashed_pw, 'email': 'x'}
+                    with open('config.yaml', 'w') as f: yaml.dump(config, f)
+                    get_user_data(nu); st.success(f"User {nu} Created!"); st.rerun()
 
     st.divider() #
     if st.button("Logout"): authenticator.logout('Logout', 'main'); st.session_state.clear(); st.rerun()
@@ -155,11 +166,11 @@ with st.sidebar:
 # ==============================================================================
 if os.path.exists("chatscrape.png"):
     with open("chatscrape.png", "rb") as f: b64 = base64.b64encode(f.read()).decode() #
-    st.markdown(f'<div class="centered-logo"><img src="data:image/png;base64,{b64}" class="logo-img"></div>', unsafe_allow_html=True) #
+    st.markdown(f'<div class="centered-logo"><img src="data:image/png;base64,{b64}" class="logo-img"></div>', unsafe_allow_html=True)
 
 with st.container():
     c1, c2, c3, c4 = st.columns([3, 3, 2, 1.5]) #
-    kw_in = c1.text_input("Keywords", placeholder="e.g. hotel, gym", key="kw_in_key") #
+    kw_in = c1.text_input("Keywords", placeholder="e.g. doctor, cafe", key="kw_in_key") #
     city_in = c2.text_input("Cities", placeholder="e.g. Agadir, Rabat", key="city_in_key") #
     country_in = c3.selectbox("Country", ["Morocco", "France", "USA", "Spain", "UAE", "UK"], key="country_in_key") #
     limit_in = c4.number_input("Limit/City", 1, 1000, 20, key="limit_in_key") #
@@ -169,7 +180,7 @@ with st.container():
     w_phone = f1.checkbox("Phone Only", True) #
     w_web = f2.checkbox("Website", False) #
     w_email = f3.checkbox("Deep Email", False) #
-    w_social = f4.checkbox("📸 Social Media", False)
+    w_social = f4.checkbox("🛡️ Social Media", False)
     w_global = f5.checkbox("🛡️ Global Dedupe", True)
     
     f6, f7, f8 = st.columns([1.5, 1.5, 2.5])
@@ -198,7 +209,7 @@ with st.container():
         if st.button("Stop Search", disabled=not st.session_state.running): st.session_state.running, st.session_state.paused = False, False; st.rerun() #
 
 # ==============================================================================
-# 8. ENGINE & ANTI-FREEZE SELENIUM LOGIC (V89)
+# 8. ENGINE & ANTI-FREEZE ROBUST LOGIC (V90 ROOT FIX)
 # ==============================================================================
 def get_driver():
     opts = Options(); opts.add_argument("--headless=new"); opts.add_argument("--no-sandbox"); opts.add_argument("--disable-dev-shm-usage")
@@ -207,7 +218,7 @@ def get_driver():
     except: return webdriver.Chrome(options=opts) #
 
 def safe_math_rating(text):
-    """ Safe rating extraction for anti-freeze. Returns 5.0 for N/A. """
+    """ Converts text like '4.1 stars' to float. Returns 5.0 for N/A to prevent freezing. """
     try:
         if not text or text == "N/A": return 5.0
         match = re.findall(r"(\d+\.\d+|\d+)", text)
@@ -237,12 +248,12 @@ tab_live, tab_archive, tab_tools = st.tabs(["⚡ Live Data", "📜 Archives", "�
 
 with tab_live:
     prog_spot, status_ui, table_ui, download_ui = st.empty(), st.empty(), st.empty(), st.empty() #
-    prog_spot.markdown(f'<div class="prog-container"><div class="prog-bar-fill" style="width: {st.session_state.progress}%;"></div></div>', unsafe_allow_html=True) #
+    prog_spot.markdown(f'<div class="prog-container"><div class="prog-bar-fill" style="width: {st.session_state.progress}%;"></div></div>', unsafe_allow_html=True)
 
     if st.session_state.results_list:
         df_live = pd.DataFrame(st.session_state.results_list) #
         table_ui.write(df_live.to_html(escape=False, index=False), unsafe_allow_html=True)
-        download_ui.download_button(label="⬇️ Export CSV", data=df_live.to_csv(index=False).encode('utf-8'), file_name="leads.csv", mime="text/csv")
+        download_ui.download_button(label="⬇️ Export Leads CSV", data=df_live.to_csv(index=False).encode('utf-8'), file_name="leads.csv", mime="text/csv")
 
     if st.session_state.running and not st.session_state.paused:
         akws = [k.strip() for k in st.session_state.active_kw.split(',') if k.strip()] #
@@ -281,12 +292,11 @@ with tab_live:
                                 with sqlite3.connect(DB_NAME) as conn:
                                     if conn.execute("SELECT 1 FROM leads WHERE name=? AND phone=?", (name, phone)).fetchone(): continue
 
-                            # 🔥 ROOT FIX: ROBUST RATING & REVIEWS EXTRACTION
+                            # 🔥 ROOT FIX: ROBUST RATING EXTRACTION (Stars + Reviews)
                             full_review = "N/A"; r_val = 5.0
                             try:
-                                # Target elements with "stars" and "reviews"
                                 stars_el = driver.find_element(By.XPATH, '//span[contains(@aria-label, "stars")]')
-                                stars_txt = stars_el.get_attribute("aria-label")
+                                stars_txt = stars_el.get_attribute("aria-label") # e.g. "4.6 stars"
                                 r_val = safe_math_rating(stars_txt)
                                 try:
                                     rev_el = driver.find_element(By.XPATH, '//span[contains(@aria-label, "reviews")]')
@@ -295,17 +305,17 @@ with tab_live:
                                 except: full_review = stars_txt
                             except: pass
 
-                            # 🔥 ROOT FIX: ANTI-FREEZE FILTER
+                            # 🔥 ROOT FIX: SAFE NEGATIVE FILTER
                             if w_neg and r_val >= 3.5: continue
 
                             st.session_state.progress = min(int(((base_progress + processed + 1) / total_est) * 100), 100)
-                            prog_spot.markdown(f'<div class="prog-container"><div class="prog-bar-fill" style="width: {st.session_state.progress}%;"></div></div>', unsafe_allow_html=True) #
+                            prog_spot.markdown(f'<div class="prog-container"><div class="prog-bar-fill" style="width: {st.session_state.progress}%;"></div></div>', unsafe_allow_html=True)
 
                             maps_web = "N/A"
                             try: maps_web = driver.find_element(By.CSS_SELECTOR, 'a[data-item-id="authority"]').get_attribute("href")
                             except: pass
                             
-                            # 🔥 ROOT FIX: SOCIAL CLASSIFIER (FB/IG separation)
+                            # 🔥 ROOT FIX: SOCIAL CLASSIFIER (Separates FB/IG from Website)
                             final_web = maps_web; social_found = "N/A"
                             if any(x in str(maps_web).lower() for x in ["facebook.com", "instagram.com", "linkedin.com", "twitter.com"]):
                                 social_found = maps_web; final_web = "N/A"
@@ -319,7 +329,7 @@ with tab_live:
 
                             wa = "N/A"; cp = re.sub(r'\D', '', phone)
                             if any(cp.startswith(x) for x in ['2126','2127','06','07']) and not (cp.startswith('2125') or cp.startswith('05')):
-                                wa = f'<a href="https://wa.me/{cp}" target="_blank" class="wa-link"><i class="fab fa-whatsapp"></i> Chat Now</a>' #
+                                wa = f'<a href="https://wa.me/{cp}" target="_blank" class="wa-link"><i class="fab fa-whatsapp"></i> Chat Now</a>'
                             
                             row = {"Keyword":kw, "City":city, "Name":name, "Phone":phone, "WhatsApp":wa, 
                                    "Website": final_web if w_web else "N/A", "Email": email if w_email else "N/A",
@@ -340,7 +350,7 @@ with tab_live:
             finally: driver.quit()
 
 # ==============================================================================
-# 9. ARCHIVE & MARKETING (FROM APP 15/16)
+# 9. ARCHIVE & MARKETING (FROM APP 16)
 # ==============================================================================
 with tab_archive:
     st.subheader("Persistent History") #
@@ -365,4 +375,4 @@ with tab_tools:
         msg = f"Hi {biz['name']}, I noticed your Google rating is {biz['rating']}. We can help you boost it!"
         st.text_area("Generated Outreach Message:", msg, height=100)
 
-st.markdown('<div style="text-align:center;color:#666;padding:30px;">Designed by Chatir Elite Pro - Architect Edition V89</div>', unsafe_allow_html=True) #
+st.markdown('<div style="text-align:center;color:#666;padding:30px;">Designed by Chatir Elite Pro</div>', unsafe_allow_html=True) #
