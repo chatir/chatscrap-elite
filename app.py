@@ -17,7 +17,7 @@ from webdriver_manager.chrome import ChromeDriverManager
 from urllib.parse import quote
 
 # ==============================================================================
-# 1. GLOBAL CONFIGURATION & STATE (حفاظ تام على المتغيرات)
+# 1. GLOBAL CONFIGURATION & STATE (FROM APP 15)
 # ==============================================================================
 st.set_page_config(page_title="ChatScrap Elite Pro", layout="wide", page_icon="💎")
 
@@ -33,96 +33,53 @@ if 'active_kw' not in st.session_state: st.session_state.active_kw = ""
 if 'active_city' not in st.session_state: st.session_state.active_city = ""
 
 # ==============================================================================
-# 2. DESIGN SYSTEM (MODERN FLAT ORANGE & CHARCOAL)
+# 2. DESIGN SYSTEM (MODERN DARK FLAT ORANGE)
 # ==============================================================================
 st.markdown('<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">', unsafe_allow_html=True)
 
-# ألوان من عائلة البرتقالي مع خلفية سوداء فحمية (بدون أزرق)
-main_orange = "#FF8C00"
-dark_bg = "#0A0A0A"
-card_bg = "#1A1A1A"
-border_col = "#333333"
+orange_flat = "#FF8C00"
+charcoal_bg = "#0A0A0A"
+card_bg = "#161616"
+border_flat = "#2A2A2A"
 
 if st.session_state.get("authentication_status") is not True:
-    # --- FLAT LOGIN PAGE (ORANGE THEME) ---
+    # LOGIN UI FLAT
     st.markdown(f"""
     <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap');
-    [data-testid="stAppViewContainer"] {{ background-color: {dark_bg} !important; }}
-    
+    [data-testid="stAppViewContainer"] {{ background-color: {charcoal_bg} !important; }}
     [data-testid="stVerticalBlock"] > div:has(div.stButton) {{
-        background-color: {card_bg};
-        padding: 50px !important;
-        border: 1px solid {main_orange};
-        border-radius: 8px;
-        max-width: 420px;
-        margin: auto;
-        box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+        background-color: {card_bg}; padding: 50px !important; border: 1px solid {orange_flat};
+        border-radius: 8px; max-width: 420px; margin: auto;
     }}
-    
-    .stTextInput input {{
-        background-color: #222222 !important;
-        color: white !important;
-        border: 1px solid {border_col} !important;
-        border-radius: 6px !important;
-    }}
-    
-    .stButton > button {{
-        background-color: {main_orange} !important;
-        color: white !important;
-        font-weight: 700 !important;
-        height: 50px !important;
-        border-radius: 6px !important;
-        text-transform: uppercase;
-        border: none !important;
-    }}
+    .stTextInput input {{ background-color: #1F1F1F !important; color: white !important; border: 1px solid {border_flat} !important; }}
+    .stButton > button {{ background-color: {orange_flat} !important; color: white !important; font-weight: 700 !important; height: 50px !important; border: none !important; }}
     [data-testid="stHeader"], [data-testid="stSidebar"] {{ display: none; }}
     </style>
     """, unsafe_allow_html=True)
 else:
-    # --- FLAT DASHBOARD STYLE (ORANGE & BLACK) ---
+    # DASHBOARD UI FLAT
     st.markdown(f"""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap');
-    html, body, [data-testid="stAppViewContainer"] {{ 
-        font-family: 'Inter', sans-serif !important; 
-        background-color: {dark_bg} !important; 
-    }}
+    html, body, [data-testid="stAppViewContainer"] {{ font-family: 'Inter', sans-serif !important; background-color: {charcoal_bg} !important; }}
     .centered-logo {{ text-align: center; padding: 20px 0 40px 0; }}
     .logo-img {{ width: 280px; }}
-    
-    /* Flat Buttons */
-    .stButton > button {{ 
-        width: 100% !important; height: 48px !important; font-weight: 700 !important; 
-        border: none !important; border-radius: 4px !important; color: white !important; 
-    }}
-    
-    div[data-testid="column"]:nth-of-type(1) .stButton > button {{ background-color: {main_orange} !important; }} /* Start */
-    div[data-testid="column"]:nth-of-type(2) .stButton > button {{ background-color: #333333 !important; }} /* Pause */
-    div[data-testid="column"]:nth-of-type(3) .stButton > button {{ background-color: #2D5A27 !important; }} /* Continue */
-    div[data-testid="column"]:nth-of-type(4) .stButton > button {{ background-color: #A30000 !important; }} /* Stop */
-    
-    .stButton > button:disabled {{ opacity: 0.2 !important; }}
-
-    /* Fix Progress Bar (Flat Design) */
-    .prog-container {{ width: 100%; background: #222222; border-radius: 2px; padding: 0; border: 1px solid {border_col}; margin: 25px 0; height: 12px; overflow: hidden; }}
-    .prog-bar-fill {{ height: 100%; background-color: {main_orange}; transition: width 0.5s ease-in-out; }}
-    
-    [data-testid="stMetricValue"] {{ color: {main_orange} !important; font-weight: 800; }}
-    section[data-testid="stSidebar"] {{ background-color: {card_bg} !important; border-right: 1px solid {border_col}; }}
-    
-    /* WhatsApp Green */
+    .stButton > button {{ width: 100% !important; height: 48px !important; font-weight: 700 !important; border: none !important; border-radius: 4px !important; color: white !important; }}
+    div[data-testid="column"]:nth-of-type(1) .stButton > button {{ background-color: {orange_flat} !important; }}
+    div[data-testid="column"]:nth-of-type(2) .stButton > button {{ background-color: #333 !important; }}
+    div[data-testid="column"]:nth-of-type(3) .stButton > button {{ background-color: #2E7D32 !important; }}
+    div[data-testid="column"]:nth-of-type(4) .stButton > button {{ background-color: #C62828 !important; }}
+    .prog-container {{ width: 100%; background: #1F1F1F; border-radius: 2px; border: 1px solid {border_flat}; margin: 25px 0; height: 12px; overflow: hidden; }}
+    .prog-bar-fill {{ height: 100%; background-color: {orange_flat}; transition: width 0.5s ease; }}
+    [data-testid="stMetricValue"] {{ color: {orange_flat} !important; font-weight: 800; }}
+    section[data-testid="stSidebar"] {{ background-color: {card_bg} !important; border-right: 1px solid {border_flat}; }}
     .wa-link {{ color: #25D366 !important; text-decoration: none !important; font-weight: bold; }}
-    
-    /* Tabs Flat */
-    .stTabs [data-baseweb="tab-list"] {{ gap: 8px; }}
-    .stTabs [data-baseweb="tab"] {{ background-color: {card_bg}; color: #888; border: 1px solid {border_col}; padding: 10px 25px; border-radius: 4px 4px 0 0; }}
-    .stTabs [aria-selected="true"] {{ background-color: {main_orange} !important; color: white !important; border-color: {main_orange} !important; }}
+    .stTabs [aria-selected="true"] {{ background-color: {orange_flat} !important; color: white !important; }}
     </style>
     """, unsafe_allow_html=True)
 
 # ==============================================================================
-# 3. DATABASE (FROM APP 15 - UNTOUCHED)
+# 3. DATABASE (FROM APP 15)
 # ==============================================================================
 DB_NAME = "chatscrap_elite_pro_v9.db"
 
@@ -148,7 +105,7 @@ def get_user_data(username):
         return (100, 'active')
 
 # ==============================================================================
-# 4. AUTHENTICATION & LOGIN UI (FIXED LOGO & POSITION)
+# 4. AUTHENTICATION (FROM APP 15)
 # ==============================================================================
 try:
     with open('config.yaml') as file: config = yaml.load(file, Loader=SafeLoader)
@@ -157,23 +114,18 @@ except: st.error("config.yaml missing"); st.stop()
 authenticator = stauth.Authenticate(config['credentials'], config['cookie']['name'], config['cookie']['key'], config['cookie']['expiry_days'])
 
 if st.session_state.get("authentication_status") is not True:
-    # الشعار في صفحة الدخول
     if os.path.exists("chatscrape.png"):
         with open("chatscrape.png", "rb") as f: b64 = base64.b64encode(f.read()).decode()
         st.markdown(f'<div style="text-align:center; padding-top: 100px; padding-bottom: 20px;"><img src="data:image/png;base64,{b64}" style="width:300px;"></div>', unsafe_allow_html=True)
-    
     col1, col2, col3 = st.columns([1, 1.2, 1])
     with col2:
         try: authenticator.login()
         except: pass
-        if st.session_state["authentication_status"] is False:
-            st.error("Username/password is incorrect")
-        if st.session_state["authentication_status"] is None:
-            st.info("🔒 Elite Access Required")
+        if st.session_state["authentication_status"] is False: st.error("Incorrect credentials")
         st.stop()
 
 # ==============================================================================
-# 5. SIDEBAR & ADMIN (FROM APP 15 - UNTOUCHED)
+# 5. SIDEBAR & ADMIN (FROM APP 15)
 # ==============================================================================
 with st.sidebar:
     st.title("Profile Settings")
@@ -194,14 +146,11 @@ with st.sidebar:
                 conn.commit(); st.rerun()
             if c2.button("🚫 Status"):
                 curr = conn.execute("SELECT status FROM user_credits WHERE username=?", (target,)).fetchone()[0]
-                new_s = 'suspended' if curr == 'active' else 'active'
-                conn.execute("UPDATE user_credits SET status=? WHERE username=?", (new_s, target))
+                conn.execute("UPDATE user_credits SET status=? WHERE username=?", ('suspended' if curr=='active' else 'active', target))
                 conn.commit(); st.rerun()
             if c3.button("🗑️ Del"):
-                conn.execute("DELETE FROM user_credits WHERE username=?", (target,))
-                conn.commit(); st.rerun()
+                conn.execute("DELETE FROM user_credits WHERE username=?", (target,)); conn.commit(); st.rerun()
             st.divider()
-            st.write("Add New User:")
             nu = st.text_input("New Username", key="new_u")
             np = st.text_input("New Password", type="password", key="new_p")
             if st.button("Create Account"):
@@ -216,14 +165,14 @@ with st.sidebar:
     if st.button("Logout"): authenticator.logout('Logout', 'main'); st.session_state.clear(); st.rerun()
 
 # ==============================================================================
-# 6. HEADER LOGO (DASHBOARD)
+# 6. HEADER LOGO (FROM APP 15)
 # ==============================================================================
 if os.path.exists("chatscrape.png"):
     with open("chatscrape.png", "rb") as f: b64 = base64.b64encode(f.read()).decode()
     st.markdown(f'<div class="centered-logo"><img src="data:image/png;base64,{b64}" class="logo-img"></div>', unsafe_allow_html=True)
 
 # ==============================================================================
-# 7. INPUTS & 4-BUTTON ROW (FROM APP 15 - UNTOUCHED)
+# 7. INPUTS & 4-BUTTON ROW (FROM APP 15)
 # ==============================================================================
 with st.container():
     c1, c2, c3, c4 = st.columns([3, 3, 2, 1.5])
@@ -234,57 +183,38 @@ with st.container():
 
     st.divider()
     f1, f2, f3, f4, f5 = st.columns([1, 1, 1, 1, 1.5])
-    w_phone = f1.checkbox("Phone Only", True)
-    w_web = f2.checkbox("Website", False)
-    w_email = f3.checkbox("Deep Email", False)
-    w_nosite = f4.checkbox("No Site Only", False)
+    w_phone = f1.checkbox("Phone Only", True); w_web = f2.checkbox("Website", False)
+    w_email = f3.checkbox("Deep Email", False); w_nosite = f4.checkbox("No Site Only", False)
     depth_in = f5.slider("Scroll Depth", 1, 100, 10)
 
     st.write("")
     b_start, b_pause, b_cont, b_stop = st.columns(4)
     
-    with b_start:
-        if st.button("Start Search", disabled=st.session_state.running):
-            if kw_in and city_in:
-                st.session_state.active_kw = kw_in
-                st.session_state.active_city = city_in
-                st.session_state.running = True
-                st.session_state.paused = False
-                st.session_state.results_list = []
-                st.session_state.progress = 0
-                st.session_state.task_index = 0
-                with sqlite3.connect(DB_NAME) as conn:
-                    cur = conn.cursor()
-                    cur.execute("INSERT INTO sessions (query, date) VALUES (?, ?)", (f"{kw_in} | {city_in}", time.strftime("%Y-%m-%d %H:%M")))
-                    st.session_state.current_sid = cur.lastrowid
-                    conn.commit()
-                st.rerun()
-
-    with b_pause:
-        if st.button("Pause", disabled=not st.session_state.running or st.session_state.paused):
-            st.session_state.paused = True
+    if b_start.button("Start Search", disabled=st.session_state.running):
+        if kw_in and city_in:
+            st.session_state.active_kw, st.session_state.active_city = kw_in, city_in
+            st.session_state.running, st.session_state.paused = True, False
+            st.session_state.results_list, st.session_state.progress, st.session_state.task_index = [], 0, 0
+            with sqlite3.connect(DB_NAME) as conn:
+                cur = conn.cursor()
+                cur.execute("INSERT INTO sessions (query, date) VALUES (?, ?)", (f"{kw_in} | {city_in}", time.strftime("%Y-%m-%d %H:%M")))
+                st.session_state.current_sid = cur.lastrowid
+                conn.commit()
             st.rerun()
 
-    with b_cont:
-        if st.button("Continue", disabled=not st.session_state.running or not st.session_state.paused):
-            st.session_state.paused = False
-            st.rerun()
-
-    with b_stop:
-        if st.button("Stop Search", disabled=not st.session_state.running):
-            st.session_state.running = False
-            st.session_state.paused = False
-            st.rerun()
+    if b_pause.button("Pause", disabled=not st.session_state.running or st.session_state.paused):
+        st.session_state.paused = True; st.rerun()
+    if b_cont.button("Continue", disabled=not st.session_state.running or not st.session_state.paused):
+        st.session_state.paused = False; st.rerun()
+    if b_stop.button("Stop Search", disabled=not st.session_state.running):
+        st.session_state.running, st.session_state.paused = False, False; st.rerun()
 
 # ==============================================================================
-# 8. ENGINE & LOGIC (KEEPING 100% SAME AS APP 15)
+# 8. ENGINE & LOGIC (FROM APP 15 - UNTOUCHED)
 # ==============================================================================
 def get_driver():
     opts = Options()
-    opts.add_argument("--headless=new")
-    opts.add_argument("--no-sandbox")
-    opts.add_argument("--disable-dev-shm-usage")
-    opts.add_argument("--window-size=1920,1080")
+    opts.add_argument("--headless=new"); opts.add_argument("--no-sandbox"); opts.add_argument("--disable-dev-shm-usage")
     path = shutil.which("chromium") or shutil.which("chromium-browser")
     if path: opts.binary_location = path
     try: return webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=opts)
@@ -293,41 +223,25 @@ def get_driver():
 def fetch_email_deep(driver, url):
     if not url or "google" in url or url == "N/A": return "N/A"
     try:
-        driver.execute_script("window.open('');")
-        driver.switch_to.window(driver.window_handles[-1])
+        driver.execute_script("window.open('');"); driver.switch_to.window(driver.window_handles[-1])
         try:
-            driver.set_page_load_timeout(10)
-            driver.get(url)
-            time.sleep(2)
-            page_source = driver.page_source
-            emails = re.findall(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}", page_source)
+            driver.set_page_load_timeout(10); driver.get(url); time.sleep(2)
+            emails = re.findall(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}", driver.page_source)
             result = list(set(emails))[0] if emails else "N/A"
         except: result = "N/A"
-        driver.close()
-        driver.switch_to.window(driver.window_handles[0])
-        return result
-    except:
-        if len(driver.window_handles) > 1: driver.switch_to.window(driver.window_handles[0])
-        return "N/A"
-
-def convert_df(df): return df.to_csv(index=False).encode('utf-8')
+        driver.close(); driver.switch_to.window(driver.window_handles[0]); return result
+    except: return "N/A"
 
 tab_live, tab_archive, tab_tools = st.tabs(["⚡ Live Data", "📜 Archives", "🤖 Marketing"])
 
 with tab_live:
-    prog_spot = st.empty()
-    status_ui = st.empty()
-    table_ui = st.empty()
-    download_ui = st.empty()
-    
-    # إصلاح ظهور شريط التقدم
+    prog_spot, status_ui, table_ui, download_ui = st.empty(), st.empty(), st.empty(), st.empty()
     prog_spot.markdown(f'<div class="prog-container"><div class="prog-bar-fill" style="width: {st.session_state.progress}%;"></div></div>', unsafe_allow_html=True)
 
     if st.session_state.results_list:
         df_live = pd.DataFrame(st.session_state.results_list)
         table_ui.write(df_live.to_html(escape=False, index=False), unsafe_allow_html=True)
-        csv = convert_df(df_live)
-        download_ui.download_button(label="⬇️ Download Results CSV", data=csv, file_name="extraction_results.csv", mime="text/csv", key='live_dl')
+        download_ui.download_button("⬇️ Download CSV", df_live.to_csv(index=False).encode('utf-8'), "results.csv", "text/csv")
 
     if st.session_state.running and not st.session_state.paused:
         active_kws = [k.strip() for k in st.session_state.active_kw.split(',') if k.strip()]
@@ -339,17 +253,14 @@ with tab_live:
             try:
                 total_estimated = len(all_tasks) * limit_in
                 for i, (city, kw) in enumerate(all_tasks):
-                    if i < st.session_state.task_index: continue
-                    if not st.session_state.running: break
-                    base_progress = i * limit_in
+                    if i < st.session_state.task_index or not st.session_state.running: continue
                     status_ui.markdown(f"**Scanning:** `{kw}` in `{city}`... ({i+1}/{len(all_tasks)})")
                     gl = {"Morocco":"ma", "France":"fr", "USA":"us"}.get(country_in, "ma")
                     driver.get(f"https://www.google.com/maps/search/{quote(kw)}+in+{quote(city)}?hl=en&gl={gl}")
                     time.sleep(4)
                     try:
                         pane = driver.find_element(By.CSS_SELECTOR, 'div[role="feed"]')
-                        for _ in range(depth_in):
-                            driver.execute_script("arguments[0].scrollTop = arguments[0].scrollHeight", pane); time.sleep(1)
+                        for _ in range(depth_in): driver.execute_script("arguments[0].scrollTop = arguments[0].scrollHeight", pane); time.sleep(1)
                     except: pass
                     items = driver.find_elements(By.XPATH, '//a[contains(@href, "/maps/place/")]')
                     processed = 0
@@ -363,11 +274,11 @@ with tab_live:
                             except: pass
                             if any(res['Name'] == name and res['Phone'] == phone for res in st.session_state.results_list): continue
                             
-                            st.session_state.progress = min(int(((base_progress + processed + 1) / total_estimated) * 100), 100)
+                            st.session_state.progress = min(int(((i * limit_in + processed + 1) / total_estimated) * 100), 100)
                             prog_spot.markdown(f'<div class="prog-container"><div class="prog-bar-fill" style="width: {st.session_state.progress}%;"></div></div>', unsafe_allow_html=True)
                             
                             raw_web = driver.find_element(By.CSS_SELECTOR, 'a[data-item-id="authority"]').get_attribute("href") if driver.find_elements(By.CSS_SELECTOR, 'a[data-item-id="authority"]') else "N/A"
-                            if w_phone and (phone == "N/A" or not phone): continue
+                            if w_phone and not phone: continue
                             if w_nosite and raw_web != "N/A": continue
                             
                             wa_link = "N/A"
@@ -378,44 +289,36 @@ with tab_live:
                             email_found = fetch_email_deep(driver, raw_web) if w_email and raw_web != "N/A" else "N/A"
                             row = {"Keyword":kw, "City":city, "Name":name, "Phone":phone, "WhatsApp":wa_link, "Website":raw_web if w_web else "N/A", "Email":email_found}
                             with sqlite3.connect(DB_NAME) as conn:
-                                conn.execute("""INSERT INTO leads (session_id, keyword, city, country, name, phone, website, email, whatsapp)
-                                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""", (st.session_state.current_sid, kw, city, country_in, name, phone, row["Website"], email_found, wa_link))
+                                conn.execute("""INSERT INTO leads (session_id, keyword, city, country, name, phone, website, email, whatsapp) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""", (st.session_state.current_sid, kw, city, country_in, name, phone, row["Website"], email_found, wa_link))
                                 if me != 'admin': conn.execute("UPDATE user_credits SET balance = balance - 1 WHERE username=?", (me,))
                                 conn.commit()
                             st.session_state.results_list.append(row)
                             table_ui.write(pd.DataFrame(st.session_state.results_list).to_html(escape=False, index=False), unsafe_allow_html=True)
                             processed += 1
-                        except Exception: continue
+                        except: continue
                     st.session_state.task_index += 1
-                if st.session_state.task_index >= len(all_tasks) and st.session_state.running:
-                    st.success("🏁 Extraction Finished!"); st.session_state.running = False
-            finally:
-                driver.quit()
+                if st.session_state.running: st.success("🏁 Finished!"); st.session_state.running = False
+            finally: driver.quit()
 
 # ==============================================================================
-# 9. ARCHIVE TAB (FROM APP 15 - UNTOUCHED)
+# 9. ARCHIVE TAB (FROM APP 15)
 # ==============================================================================
 with tab_archive:
-    st.subheader("Persistent History")
-    search_f = st.text_input("Filter History", placeholder="🔍 Search...", key="archive_search")
+    search_f = st.text_input("Filter History", placeholder="🔍 Search...", key="arch_s")
     with sqlite3.connect(DB_NAME) as conn:
         df_s = pd.read_sql("SELECT * FROM sessions WHERE query LIKE ? ORDER BY id DESC LIMIT 30", conn, params=(f"%{search_f}%",))
-    if not df_s.empty:
-        for _, sess in df_s.iterrows():
-            with st.expander(f"📦 {sess['date']} | {sess['query']}"):
-                with sqlite3.connect(DB_NAME) as conn:
-                    df_l = pd.read_sql(f"SELECT * FROM leads WHERE session_id={sess['id']}", conn)
-                if not df_l.empty:
-                    st.write(df_l.drop(columns=['id', 'session_id']).to_html(escape=False, index=False), unsafe_allow_html=True)
-                    csv_arch = convert_df(df_l)
-                    st.download_button(label="⬇️ Download Archive CSV", data=csv_arch, file_name=f"archive_{sess['id']}.csv", mime="text/csv", key=f"btn_arch_{sess['id']}")
-                else: st.warning("Empty results.")
+    for _, sess in df_s.iterrows():
+        with st.expander(f"📦 {sess['date']} | {sess['query']}"):
+            with sqlite3.connect(DB_NAME) as conn: df_l = pd.read_sql(f"SELECT * FROM leads WHERE session_id={sess['id']}", conn)
+            if not df_l.empty:
+                st.write(df_l.drop(columns=['id', 'session_id']).to_html(escape=False, index=False), unsafe_allow_html=True)
+                st.download_button("⬇️ Download CSV", df_l.to_csv(index=False).encode('utf-8'), f"arch_{sess['id']}.csv", key=f"dl_{sess['id']}")
 
 # ==============================================================================
-# 10. MARKETING TAB (FROM APP 15 - UNTOUCHED)
+# 10. MARKETING TAB (FROM APP 15)
 # ==============================================================================
 with tab_tools:
     st.subheader("🤖 Marketing Automation")
-    st.info("Marketing tools coming soon in the next update!")
+    st.info("Marketing tools coming soon!")
 
 st.markdown(f'<div style="text-align:center;color:#444;padding:30px;font-size:12px;">Designed by Chatir Elite Pro - Architect Edition V64</div>', unsafe_allow_html=True)
