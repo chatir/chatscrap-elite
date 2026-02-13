@@ -29,7 +29,7 @@ if 'progress' not in st.session_state: st.session_state.progress = 0 #
 if 'status_msg' not in st.session_state: st.session_state.status_msg = "READY" #
 if 'current_sid' not in st.session_state: st.session_state.current_sid = None #
 
-# PERSISTENCE STORAGE (Snapshot Fix)
+# SNAPSHOT STORAGE: Survives Admin Panel Reruns
 if 'active_kw' not in st.session_state: st.session_state.active_kw = ""
 if 'active_city' not in st.session_state: st.session_state.active_city = ""
 
@@ -53,15 +53,14 @@ div[data-testid="stForm"] {
     border: 1px solid #374151 !important;
     box-shadow: 0 10px 25px rgba(0,0,0,0.5) !important;
 }
-div[data-testid="stForm"] h2 { text-align: center; color: #FF8C00; font-size: 24px; margin-bottom: 20px; }
 
-/* MAIN UI ELEMENTS */
+/* MAIN UI ELEMENTS FROM APP 11 */
 .centered-logo { text-align: center; padding: 20px 0 40px 0; } #
 .logo-img { width: 280px; filter: drop-shadow(0 0 15px rgba(255,140,0,0.3)); } #
 div[data-testid="stHorizontalBlock"]:has(button) { gap: 5px !important; } #
 .stButton > button { width: 100% !important; height: 50px !important; font-weight: 700 !important; font-size: 14px !important; border-radius: 8px !important; color: white !important; } #
 
-/* BUTTON COLORS */
+/* BUTTON GRADIENTS FROM APP 11 */
 div[data-testid="column"]:nth-of-type(1) .stButton > button { background: linear-gradient(135deg, #FF8C00 0%, #FF4500 100%) !important; } #
 div[data-testid="column"]:nth-of-type(2) .stButton > button { background-color: #1F2937 !important; } #
 div[data-testid="column"]:nth-of-type(3) .stButton > button { background: linear-gradient(135deg, #28a745 0%, #218838 100%) !important; } #
@@ -71,8 +70,8 @@ div[data-testid="column"]:nth-of-type(4) .stButton > button { background: linear
 .prog-bar-fill { height: 16px; background: repeating-linear-gradient(45deg, #FF8C00, #FF8C00 12px, #FF4500 12px, #FF4500 24px); border-radius: 20px; transition: width 0.3s ease-in-out; animation: stripes 1s linear infinite; } #
 @keyframes stripes { 0% {background-position: 0 0;} 100% {background-position: 48px 48px;} } #
 
-/* 🔥 WHATSAPP LINK GREEN STYLE */
-.wa-link { color: #25D366 !important; text-decoration: none !important; font-weight: bold; display: inline-flex; align-items: center; gap: 5px; }
+/* 🔥 WHATSAPP LINK STYLE (GREEN + ICON) */
+.wa-link { color: #25D366 !important; text-decoration: none !important; font-weight: bold; display: inline-flex; align-items: center; gap: 5px; } #
 .wa-link:hover { text-decoration: underline !important; }
 </style>
 """, unsafe_allow_html=True) #
@@ -104,7 +103,7 @@ def get_user_data(username):
         return (100, 'active')
 
 # ==============================================================================
-# 4. AUTHENTICATION & LOGIN LOGO (WP STYLE)
+# 4. AUTHENTICATION & LOGIN SCREEN (WP STYLE)
 # ==============================================================================
 try:
     with open('config.yaml') as file: config = yaml.load(file, Loader=SafeLoader) #
@@ -113,7 +112,7 @@ except: st.error("config.yaml missing"); st.stop() #
 authenticator = stauth.Authenticate(config['credentials'], config['cookie']['name'], config['cookie']['key'], config['cookie']['expiry_days']) #
 
 if st.session_state.get("authentication_status") is not True:
-    # 🔥 CENTERED LOGO FOR LOGIN SCREEN
+    # Centered Logo for Login Page
     if os.path.exists("chatscrape.png"):
         with open("chatscrape.png", "rb") as f: b64 = base64.b64encode(f.read()).decode()
         st.markdown(f'<div style="text-align:center; padding-top:50px; margin-bottom:-30px;"><img src="data:image/png;base64,{b64}" width="220"></div>', unsafe_allow_html=True)
@@ -192,13 +191,12 @@ with st.container():
     depth_in = f5.slider("Scroll Depth", 1, 100, 10) #
 
     st.write("") #
-    
     b_start, b_pause, b_cont, b_stop = st.columns(4) #
     
     with b_start:
         if st.button("Start Search", disabled=st.session_state.running): #
             if kw_in and city_in:
-                # Capture snapshot for Admin Rerun Persistence
+                # Capture Snapshot for Admin Rerun
                 st.session_state.active_kw = kw_in
                 st.session_state.active_city = city_in
                 
@@ -263,12 +261,12 @@ with tab_live:
 
     if st.session_state.results_list:
         df_live = pd.DataFrame(st.session_state.results_list)
-        table_ui.write(df_live.to_html(escape=False, index=False), unsafe_allow_html=True)
+        table_ui.write(df_live.to_html(escape=False, index=False), unsafe_allow_html=True) #
         csv = convert_df(df_live)
         download_ui.download_button(label="⬇️ Download CSV", data=csv, file_name="leads.csv", mime="text/csv", key='live_dl')
 
     if st.session_state.running and not st.session_state.paused:
-        # Use Persistent Snapshot for Reruns
+        # 🔥 READ FROM PERSISTENT SNAPSHOT
         akws = [k.strip() for k in st.session_state.active_kw.split(',') if k.strip()]
         acts = [c.strip() for c in st.session_state.active_city.split(',') if c.strip()]
         all_tasks = [(c, k) for c in acts for k in akws]
@@ -302,7 +300,7 @@ with tab_live:
                             try: phone = driver.find_element(By.XPATH, '//*[contains(@data-item-id, "phone:tel")]').get_attribute("aria-label").replace("Phone: ", "")
                             except: pass
 
-                            # 🔥 DUPLICATE GUARD: Skip existing leads
+                            # 🔥 DUPLICATE GUARD: Skip if already extracted
                             if any(res['Name'] == name and res['Phone'] == phone for res in st.session_state.results_list): continue
 
                             st.session_state.progress = min(int(((base_progress + processed + 1) / total_estimated) * 100), 100)
@@ -316,7 +314,7 @@ with tab_live:
                             wa_link = "N/A"
                             cp = re.sub(r'\D', '', phone)
                             if any(cp.startswith(x) for x in ['2126','2127','06','07']) and not (cp.startswith('2125') or cp.startswith('05')):
-                                wa_link = f'<a href="https://wa.me/{cp}" target="_blank" class="wa-link"><i class="fab fa-whatsapp"></i> Chat Now</a>'
+                                wa_link = f'<a href="https://wa.me/{cp}" target="_blank" class="wa-link"><i class="fab fa-whatsapp"></i> Chat Now</a>' #
                             
                             email_found = fetch_email_deep(driver, raw_web) if w_email and raw_web != "N/A" else "N/A"
                             row = {"Keyword":kw, "City":city, "Name":name, "Phone":phone, "WhatsApp":wa_link, "Website":raw_web if w_web else "N/A", "Email":email_found}
@@ -333,7 +331,7 @@ with tab_live:
                         except Exception: continue
                     st.session_state.task_index += 1
                 if st.session_state.task_index >= len(all_tasks) and st.session_state.running:
-                    st.success("🏁 Extraction Finished!"); st.session_state.running = False
+                    st.success("🏁 Extraction Finished!"); st.session_state.running = False #
             finally: driver.quit()
 
 # ==============================================================================
@@ -357,4 +355,4 @@ with tab_tools:
     st.subheader("🤖 Marketing Automation") #
     st.info("Marketing tools coming soon in the next update!") #
 
-st.markdown('<div style="text-align:center;color:#666;padding:30px;">Designed by Chatir Elite Pro - Architect Edition V65</div>', unsafe_allow_html=True) #
+st.markdown('<div style="text-align:center;color:#666;padding:30px;">Designed by Chatir Elite Pro - Architect Edition V66</div>', unsafe_allow_html=True) #
