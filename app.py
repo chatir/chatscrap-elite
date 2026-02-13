@@ -33,63 +33,65 @@ if 'active_kw' not in st.session_state: st.session_state.active_kw = ""
 if 'active_city' not in st.session_state: st.session_state.active_city = ""
 
 # ==============================================================================
-# 2. DESIGN SYSTEM (WORDPRESS LOGIN STYLE + ELITE PRO UI)
+# 2. DESIGN SYSTEM (ELITE LOGIN STYLE)
 # ==============================================================================
 st.markdown('<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">', unsafe_allow_html=True)
 
-# CSS Conditional Styling
+# تطبيق التنسيق الشرطي: إذا لم يسجل الدخول تظهر واجهة الـ Login
 if st.session_state.get("authentication_status") is not True:
-    # --- WORDPRESS LOGIN STYLE ---
     st.markdown("""
     <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap');
     
-    /* Background like WP */
+    /* خلفية داكنة تناسب الثيم */
     [data-testid="stAppViewContainer"] {
-        background-color: #f0f0f1 !important;
+        background-color: #0e1117 !important;
     }
     
-    /* Center the login box */
+    /* تصميم صندوق الدخول (WP Style) */
     [data-testid="stVerticalBlock"] > div:has(div.stButton) {
-        background-color: #ffffff;
-        padding: 30px !important;
-        border: 1px solid #c3c4c7;
-        box-shadow: 0 1px 3px rgba(0,0,0,.04);
-        border-radius: 2px;
-        max-width: 320px;
+        background-color: #161922;
+        padding: 40px !important;
+        border: 2px solid #FF8C00; /* إطار برتقالي خفيف */
+        box-shadow: 0 10px 30px rgba(255,140,0,0.1);
+        border-radius: 12px;
+        max-width: 400px;
         margin: auto;
     }
     
-    /* Style inputs like WP */
+    /* تكبير وتنسيق حقول الإدخال */
     .stTextInput input {
-        border: 1px solid #8c8f94 !important;
-        border-radius: 4px !important;
-        padding: 8px !important;
-        font-size: 18px !important;
-    }
-    
-    /* Button like WP Blue */
-    .stButton > button {
-        background-color: #2271b1 !important;
-        border: 1px solid #2271b1 !important;
+        background-color: #1f2937 !important;
         color: white !important;
-        width: 100% !important;
-        border-radius: 3px !important;
-        font-weight: 500 !important;
-        height: 40px !important;
-        text-transform: none !important;
-    }
-    .stButton > button:hover {
-        background-color: #135e96 !important;
-        border-color: #135e96 !important;
+        border: 1px solid #374151 !important;
+        border-radius: 8px !important;
+        padding: 12px !important;
     }
     
-    /* Hide default streamlit elements during login */
+    /* زر الدخول بألوان الـ Elite */
+    .stButton > button {
+        background: linear-gradient(135deg, #FF8C00 0%, #FF4500 100%) !important;
+        border: none !important;
+        color: white !important;
+        font-weight: 800 !important;
+        height: 50px !important;
+        border-radius: 8px !important;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        box-shadow: 0 4px 15px rgba(255,69,0,0.3) !important;
+    }
+    
+    .stButton > button:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(255,69,0,0.4) !important;
+    }
+
+    /* إخفاء العناصر غير الضرورية */
     [data-testid="stHeader"], [data-testid="stSidebar"] { display: none; }
     </style>
     """, unsafe_allow_html=True)
 else:
-    # --- ELITE PRO DASHBOARD STYLE (Original) ---
+    # تنسيق لوحة التحكم الأصلي
     st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap');
@@ -146,25 +148,25 @@ except: st.error("config.yaml missing"); st.stop()
 authenticator = stauth.Authenticate(config['credentials'], config['cookie']['name'], config['cookie']['key'], config['cookie']['expiry_days'])
 
 if st.session_state.get("authentication_status") is not True:
-    # Centered Logo for Login Page (WP Style)
+    # الشعار في صفحة الدخول (كبير ومنتصف)
     if os.path.exists("chatscrape.png"):
         with open("chatscrape.png", "rb") as f: b64 = base64.b64encode(f.read()).decode()
-        st.markdown(f'<div style="text-align:center; padding-top: 50px; padding-bottom: 20px;"><img src="data:image/png;base64,{b64}" style="width:80px; height:auto;"></div>', unsafe_allow_html=True)
+        st.markdown(f'<div style="text-align:center; padding-top: 80px; padding-bottom: 20px;"><img src="data:image/png;base64,{b64}" style="width:320px; filter: drop-shadow(0 0 10px rgba(255,140,0,0.2));"></div>', unsafe_allow_html=True)
     
-    # Login Box Layout
-    col1, col2, col3 = st.columns([1, 1, 1])
-    with col2:
+    # محاذاة صندوق الدخول
+    c1, c2, c3 = st.columns([1, 1.2, 1])
+    with c2:
         try: 
             authenticator.login()
         except: pass
         if st.session_state["authentication_status"] is False:
             st.error("Username/password is incorrect")
         if st.session_state["authentication_status"] is None:
-            st.warning("Please enter your username and password")
+            st.info("Welcome back! Please login.")
         st.stop()
 
 # ==============================================================================
-# 5. SIDEBAR & ADMIN
+# 5. SIDEBAR & ADMIN (B9ITY LMA9SOD)
 # ==============================================================================
 with st.sidebar:
     st.title("Profile Settings")
@@ -206,16 +208,11 @@ with st.sidebar:
     st.divider()
     if st.button("Logout"): authenticator.logout('Logout', 'main'); st.session_state.clear(); st.rerun()
 
-# ==============================================================================
-# 6. HEADER LOGO
-# ==============================================================================
+# [بقبة الكود من محرك البحث والجداول كما هي 100%]
 if os.path.exists("chatscrape.png"):
     with open("chatscrape.png", "rb") as f: b64 = base64.b64encode(f.read()).decode()
     st.markdown(f'<div class="centered-logo"><img src="data:image/png;base64,{b64}" class="logo-img"></div>', unsafe_allow_html=True)
 
-# ==============================================================================
-# 7. INPUTS & 4-BUTTON ROW
-# ==============================================================================
 with st.container():
     c1, c2, c3, c4 = st.columns([3, 3, 2, 1.5])
     kw_in = c1.text_input("Keywords", placeholder="e.g. hotel, cafe", key="kw_in_key")
@@ -267,9 +264,6 @@ with st.container():
             st.session_state.paused = False
             st.rerun()
 
-# ==============================================================================
-# 8. ENGINE & LOGIC
-# ==============================================================================
 def get_driver():
     opts = Options()
     opts.add_argument("--headless=new")
@@ -330,19 +324,16 @@ with tab_live:
                 for i, (city, kw) in enumerate(all_tasks):
                     if i < st.session_state.task_index: continue
                     if not st.session_state.running: break
-                    
                     base_progress = i * limit_in
                     status_ui.markdown(f"**Scanning:** `{kw}` in `{city}`... ({i+1}/{len(all_tasks)})")
                     gl = {"Morocco":"ma", "France":"fr", "USA":"us"}.get(country_in, "ma")
                     driver.get(f"https://www.google.com/maps/search/{quote(kw)}+in+{quote(city)}?hl=en&gl={gl}")
                     time.sleep(4)
-
                     try:
                         pane = driver.find_element(By.CSS_SELECTOR, 'div[role="feed"]')
                         for _ in range(depth_in):
                             driver.execute_script("arguments[0].scrollTop = arguments[0].scrollHeight", pane); time.sleep(1)
                     except: pass
-
                     items = driver.find_elements(By.XPATH, '//a[contains(@href, "/maps/place/")]')
                     processed = 0
                     for item in items:
@@ -354,28 +345,22 @@ with tab_live:
                             try: phone = driver.find_element(By.XPATH, '//*[contains(@data-item-id, "phone:tel")]').get_attribute("aria-label").replace("Phone: ", "")
                             except: pass
                             if any(res['Name'] == name and res['Phone'] == phone for res in st.session_state.results_list): continue
-
                             st.session_state.progress = min(int(((base_progress + processed + 1) / total_estimated) * 100), 100)
                             prog_spot.markdown(f'<div class="prog-container"><div class="prog-bar-fill" style="width: {st.session_state.progress}%;"></div></div>', unsafe_allow_html=True)
-                            
                             raw_web = driver.find_element(By.CSS_SELECTOR, 'a[data-item-id="authority"]').get_attribute("href") if driver.find_elements(By.CSS_SELECTOR, 'a[data-item-id="authority"]') else "N/A"
                             if w_phone and (phone == "N/A" or not phone): continue
                             if w_nosite and raw_web != "N/A": continue
-
                             wa_link = "N/A"
                             cp = re.sub(r'\D', '', phone)
                             if any(cp.startswith(x) for x in ['2126','2127','06','07']) and not (cp.startswith('2125') or cp.startswith('05')):
                                 wa_link = f'<a href="https://wa.me/{cp}" target="_blank" class="wa-link"><i class="fab fa-whatsapp"></i> Chat Now</a>'
-                            
                             email_found = fetch_email_deep(driver, raw_web) if w_email and raw_web != "N/A" else "N/A"
                             row = {"Keyword":kw, "City":city, "Name":name, "Phone":phone, "WhatsApp":wa_link, "Website":raw_web if w_web else "N/A", "Email":email_found}
-                            
                             with sqlite3.connect(DB_NAME) as conn:
                                 conn.execute("""INSERT INTO leads (session_id, keyword, city, country, name, phone, website, email, whatsapp)
                                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""", (st.session_state.current_sid, kw, city, country_in, name, phone, row["Website"], email_found, wa_link))
                                 if me != 'admin': conn.execute("UPDATE user_credits SET balance = balance - 1 WHERE username=?", (me,))
                                 conn.commit()
-                            
                             st.session_state.results_list.append(row)
                             table_ui.write(pd.DataFrame(st.session_state.results_list).to_html(escape=False, index=False), unsafe_allow_html=True)
                             processed += 1
@@ -386,9 +371,6 @@ with tab_live:
             finally:
                 driver.quit()
 
-# ==============================================================================
-# 9. ARCHIVE TAB
-# ==============================================================================
 with tab_archive:
     st.subheader("Persistent History")
     search_f = st.text_input("Filter History", placeholder="🔍 Search e.g. 'lawyer' or 'tiznit'...")
@@ -405,9 +387,6 @@ with tab_archive:
                     st.download_button(label="⬇️ Download Archive CSV", data=csv_arch, file_name=f"archive_{sess['id']}.csv", mime="text/csv", key=f"btn_arch_{sess['id']}")
                 else: st.warning("Empty results.")
 
-# ==============================================================================
-# 10. MARKETING TAB
-# ==============================================================================
 with tab_tools:
     st.subheader("🤖 Marketing Automation")
     st.info("Marketing tools coming soon in the next update!")
