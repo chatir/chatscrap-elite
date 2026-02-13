@@ -178,7 +178,7 @@ with st.container():
     w_web = f2.checkbox("Website", False)
     w_email = f3.checkbox("Deep Email", False)
     w_social = f4.checkbox("📸 Social Finder", False)
-    w_global = f5.checkbox("🛡️ Global Dedupe", True)
+    w_global = f5.checkbox("🛡️ De-duplication", True)
     
     f6, f7, f8 = st.columns([1.5, 1.5, 2.5])
     w_neg = f6.checkbox("⭐ Negative Filter (<3.5)", False)
