@@ -274,3 +274,99 @@ with tab_live:
                     processed = 0
                     for item in items:
                         if processed >= limit_in or not st.session_state.running: break
+                        try:
+                            driver.execute_script("arguments[0].click();", item); time.sleep(3)
+                            name = driver.find_element(By.CSS_SELECTOR, "h1.DUwDvf").text
+                            phone = "N/A"
+                            try: phone = driver.find_element(By.XPATH, '//*[contains(@data-item-id, "phone:tel")]').get_attribute("aria-label").replace("Phone: ", "")
+                            except: pass
+                            
+                            if w_phone and (phone == "N/A" or not phone): continue
+                            if w_global:
+                                with sqlite3.connect(DB_NAME) as conn:
+                                    if conn.execute("SELECT 1 FROM leads WHERE name=? AND phone=?", (name, phone)).fetchone(): continue
+
+                            # 🔥 ROOT FIX: ARIA-LABEL RATING & REVIEWS EXTRACTION
+                            full_review = "N/A"; r_numeric = 5.0
+                            try:
+                                stars_el = driver.find_element(By.XPATH, '//span[contains(@aria-label, "stars")]')
+                                stars_txt = stars_el.get_attribute("aria-label") 
+                                try:
+                                    rev_el = driver.find_element(By.XPATH, '//span[contains(@aria-label, "reviews")]')
+                                    rev_txt = rev_el.text if rev_el.text else rev_el.get_attribute("aria-label")
+                                    full_review = f"{stars_txt} ({rev_txt})"
+                                except: full_review = stars_txt
+                                r_numeric = safe_numeric_rating(stars_txt)
+                            except: pass
+
+                            # 🔥 ROOT FIX: ANTI-FREEZE MATH CHECK
+                            if w_neg and r_numeric >= 3.5: continue
+
+                            st.session_state.progress = min(int(((base_progress + processed + 1) / total_est) * 100), 100)
+                            prog_spot.markdown(f'<div class="prog-container"><div class="prog-bar-fill" style="width: {st.session_state.progress}%;"></div></div>', unsafe_allow_html=True)
+
+                            maps_web = "N/A"
+                            try: maps_web = driver.find_element(By.CSS_SELECTOR, 'a[data-item-id="authority"]').get_attribute("href")
+                            except: pass
+                            
+                            # 🔥 ROOT FIX: SOCIAL VS WEBSITE CLASSIFIER
+                            final_web = maps_web; social_found = "N/A"
+                            if any(x in str(maps_web).lower() for x in ["facebook.com", "instagram.com", "linkedin.com", "twitter.com"]):
+                                social_found = maps_web; final_web = "N/A"
+
+                            # PRO DATA SCRAPER
+                            email = "N/A"
+                            if final_web != "N/A" and (w_social or w_email):
+                                s_crawl, em_crawl = fetch_data_pro(driver, final_web, w_social, w_email)
+                                if social_found == "N/A": social_found = s_crawl
+                                email = em_crawl
+
+                            wa = "N/A"; cp = re.sub(r'\D', '', phone)
+                            if any(cp.startswith(x) for x in ['2126','2127','06','07']) and not (cp.startswith('2125') or cp.startswith('05')):
+                                wa = f'<a href="https://wa.me/{cp}" target="_blank" class="wa-link"><i class="fab fa-whatsapp"></i> Chat Now</a>'
+                            
+                            row = {"Keyword":kw, "City":city, "Name":name, "Phone":phone, "WhatsApp":wa, 
+                                   "Website": final_web if w_web else "N/A", "Email": email if w_email else "N/A",
+                                   "Rating/Reviews": full_review, "Social Media": social_found if w_social else "N/A"}
+                            
+                            with sqlite3.connect(DB_NAME) as conn:
+                                conn.execute("""INSERT INTO leads (session_id, keyword, city, country, name, phone, website, email, whatsapp, rating, social_media)
+                                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""", (st.session_state.current_sid, kw, city, country_in, name, phone, row["Website"], row["Email"], wa, full_review, social_found))
+                                if me != 'admin': conn.execute("UPDATE user_credits SET balance=balance-1 WHERE username=?", (me,))
+                                conn.commit()
+                            
+                            st.session_state.results_list.append(row); table_ui.write(pd.DataFrame(st.session_state.results_list).to_html(escape=False, index=False), unsafe_allow_html=True)
+                            processed += 1
+                        except Exception: continue
+                    st.session_state.task_index += 1
+                if st.session_state.task_index >= len(all_tasks) and st.session_state.running:
+                    st.success("🏁 Extraction Finished!"); st.session_state.running = False
+            finally: driver.quit()
+
+# ==============================================================================
+# 9. ARCHIVE & MARKETING (FROM APP 16)
+# ==============================================================================
+with tab_archive:
+    st.subheader("Persistent History")
+    search_f = st.text_input("Filter History", placeholder="🔍 Search...")
+    with sqlite3.connect(DB_NAME) as conn:
+        df_s = pd.read_sql("SELECT * FROM sessions WHERE query LIKE ? ORDER BY id DESC LIMIT 30", conn, params=(f"%{search_f}%",))
+    if not df_s.empty:
+        for _, sess in df_s.iterrows():
+            with st.expander(f"📦 {sess['date']} | {sess['query']}"):
+                with sqlite3.connect(DB_NAME) as conn: df_l = pd.read_sql(f"SELECT * FROM leads WHERE session_id={sess['id']}", conn)
+                if not df_l.empty:
+                    st.write(df_l.drop(columns=['id', 'session_id']).to_html(escape=False, index=False), unsafe_allow_html=True)
+                    st.download_button(label="⬇️ Export CSV", data=df_l.to_csv(index=False).encode('utf-8'), file_name=f"archive_{sess['id']}.csv", key=f"btn_{sess['id']}")
+
+with tab_tools:
+    st.subheader("🤖 Marketing Automation")
+    with sqlite3.connect(DB_NAME) as conn:
+        all_leads = pd.read_sql("SELECT name, keyword, rating FROM leads ORDER BY id DESC LIMIT 50", conn)
+    if not all_leads.empty:
+        sel = st.selectbox("Analyze Lead", all_leads['name'])
+        biz = all_leads[all_leads['name'] == sel].iloc[0]
+        msg = f"Hi {biz['name']}, I noticed your rating is {biz['rating']}. We can help you boost it!"
+        st.text_area("Generated Outreach Message:", msg, height=100)
+
+st.markdown('<div style="text-align:center;color:#666;padding:30px;">Designed by Chatir Elite Pro - Architect Edition V93</div>', unsafe_allow_html=True)
