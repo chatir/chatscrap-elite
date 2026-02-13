@@ -38,7 +38,7 @@ if st.session_state.get("authentication_status") is not True:
     [data-testid="stAppViewContainer"] { background-color: #0e1117 !important; }
     div[data-testid="stForm"] {
         background-color: #161922 !important; padding: 40px !important; border: 1px solid #FF8C00 !important;
-        box-shadow: 0 10px 40px rgba(255,140,0,0.2) !important; border-radius: 12px !important; max-width: 400px !important; margin: auto !important;
+        box-shadow: 0 10px 40px rgba(255,140,0,0.2) !important; border-radius: 12px !important; max-width: 420px !important; margin: auto !important;
     }
     .stButton > button { background: linear-gradient(135deg, #FF8C00 0%, #FF4500 100%) !important; color: white !important; font-weight: 800 !important; height: 50px !important; border-radius: 8px !important; text-transform: uppercase; width: 100% !important; }
     [data-testid="stHeader"], [data-testid="stSidebar"] { display: none; }
@@ -57,6 +57,7 @@ else:
     div[data-testid="column"]:nth-of-type(2) .stButton > button { background-color: #1F2937 !important; border: 1px solid #374151 !important; color: #E5E7EB !important; }
     div[data-testid="column"]:nth-of-type(3) .stButton > button { background: linear-gradient(135deg, #28a745 0%, #218838 100%) !important; color: white !important; box-shadow: 0 4px 15px rgba(40, 167, 69, 0.3) !important; }
     div[data-testid="column"]:nth-of-type(4) .stButton > button { background: linear-gradient(135deg, #DC2626 0%, #991B1B 100%) !important; box-shadow: 0 4px 15px rgba(220, 38, 38, 0.4) !important; }
+    /* 🔥 STRIPY PROGRESS BAR UI */
     .prog-container { width: 100%; background: #111827; border-radius: 50px; padding: 4px; border: 1px solid #374151; margin: 25px 0; }
     .prog-bar-fill { height: 16px; background: repeating-linear-gradient(45deg, #FF8C00, #FF8C00 12px, #FF4500 12px, #FF4500 24px); border-radius: 20px; transition: width 0.3s ease-in-out; animation: stripes 1s linear infinite; }
     @keyframes stripes { 0% {background-position: 0 0;} 100% {background-position: 48px 48px;} }
@@ -82,6 +83,7 @@ def init_db():
             website TEXT, email TEXT, address TEXT, whatsapp TEXT)""") #
         cursor.execute("CREATE TABLE IF NOT EXISTS user_credits (username TEXT PRIMARY KEY, balance INTEGER, status TEXT DEFAULT 'active')") #
         
+        # SMART MIGRATION
         cols = [c[1] for c in cursor.execute("PRAGMA table_info(leads)").fetchall()]
         for col in ["rating", "social_media"]:
             if col not in cols: cursor.execute(f"ALTER TABLE leads ADD COLUMN {col} TEXT")
@@ -141,8 +143,8 @@ with st.sidebar:
                 conn.execute("UPDATE user_credits SET status=? WHERE username=?", ('suspended' if curr=='active' else 'active', target)); conn.commit(); st.rerun()
             if c3.button("🗑️ Del"): conn.execute("DELETE FROM user_credits WHERE username=?", (target,)); conn.commit(); st.rerun()
             st.divider()
-            nu, np = st.text_input("New User"), st.text_input("New Pwd", type="password")
-            if st.button("Create") and nu and np:
+            nu, np = st.text_input("New Username"), st.text_input("New Password", type="password")
+            if st.button("Create Account") and nu and np:
                 hashed_pw = stauth.Hasher([np]).generate()[0]
                 config['credentials']['usernames'][nu] = {'name': nu, 'password': hashed_pw, 'email': 'x'}
                 with open('config.yaml', 'w') as f: yaml.dump(config, f)
@@ -199,22 +201,22 @@ with st.container():
         if st.button("Stop Search", disabled=not st.session_state.running): st.session_state.running, st.session_state.paused = False, False; st.rerun() #
 
 # ==============================================================================
-# 8. ENGINE & PLAYWRIGHT ROBUST LOGIC (V85)
+# 8. ENGINE & PLAYWRIGHT ANTI-FREEZE LOGIC (V86)
 # ==============================================================================
-def safe_calc_rating(text):
-    """ Converts text like '4.1 stars 120 reviews' to 4.1. Returns 5.0 for N/A. """
+def safe_math_rating(text):
+    """ Converts text like '4.1 stars 120 reviews' to float safely. Returns 5.0 if fails. """
     try:
         if not text: return 5.0
         nums = re.findall(r"(\d+\.\d+|\d+)", text)
         return float(nums[0]) if nums else 5.0
     except: return 5.0
 
-def fetch_site_data(context, url, find_socials, find_email):
+def fetch_deep_site(context, url, find_socials, find_email):
     social, em = "N/A", "N/A"
     if not url or url == "N/A": return social, em
     try:
         page = context.new_page()
-        page.goto(url, timeout=10000, wait_until="domcontentloaded")
+        page.goto(url, timeout=12000, wait_until="domcontentloaded")
         time.sleep(2); src = page.content().lower()
         if find_socials:
             patterns = [r'instagram\.com/[a-zA-Z0-9_.]+', r'facebook\.com/[a-zA-Z0-9_.]+', r'linkedin\.com/company/[a-zA-Z0-9_-]+']
@@ -237,7 +239,7 @@ with tab_live:
     if st.session_state.results_list:
         df_live = pd.DataFrame(st.session_state.results_list) #
         table_ui.write(df_live.to_html(escape=False, index=False), unsafe_allow_html=True)
-        download_ui.download_button(label="⬇️ Download Leads", data=df_live.to_csv(index=False).encode('utf-8'), file_name="leads.csv", mime="text/csv")
+        download_ui.download_button(label="⬇️ Download Leads CSV", data=df_live.to_csv(index=False).encode('utf-8'), file_name="leads.csv", mime="text/csv")
 
     if st.session_state.running and not st.session_state.paused:
         akws = [k.strip() for k in st.session_state.active_kw.split(',') if k.strip()] #
@@ -260,7 +262,6 @@ with tab_live:
                         page.goto(f"https://www.google.com/maps/search/{quote(kw)}+in+{quote(city)}?hl=en&gl=ma", timeout=60000)
                         time.sleep(5)
                         
-                        # Scroll to load items
                         for _ in range(depth_in):
                             page.mouse.wheel(0, 5000); time.sleep(1)
                         
@@ -270,7 +271,6 @@ with tab_live:
                             if processed >= limit_in or not st.session_state.running: break
                             try:
                                 item.click(); time.sleep(3)
-                                # 🔥 PLAYWRIGHT SCRAPING
                                 name = page.locator('h1.DUwDvf').first.inner_text()
                                 phone = "N/A"
                                 try: phone = page.locator('button[data-item-id*="phone:tel"]').first.get_attribute("aria-label").replace("Phone: ", "")
@@ -281,25 +281,26 @@ with tab_live:
                                     with sqlite3.connect(DB_NAME) as conn:
                                         if conn.execute("SELECT 1 FROM leads WHERE name=? AND phone=?", (name, phone)).fetchone(): continue
 
-                                # 🔥 SOLVING THE REVIEW PROBLEM
-                                full_rev = "N/A"; r_val = 5.0
+                                # 🔥 ROOT FIX: IMPROVED PLAYWRIGHT RATING SCRAPER
+                                full_rev = "N/A"; rating_val = 5.0
                                 try:
+                                    # Locate the specific rating text
                                     rating_el = page.locator('span[aria-label*="stars"]').first
-                                    full_rev = rating_el.get_attribute("aria-label") # "4.3 stars 120 reviews"
-                                    r_val = safe_calc_rating(full_rev)
+                                    full_rev = rating_el.get_attribute("aria-label") 
+                                    rating_val = safe_math_rating(full_rev)
                                 except: pass
 
-                                # 🔥 SOLVING THE FREEZE PROBLEM
-                                if w_neg and r_val >= 3.5: continue
+                                # 🔥 ROOT FIX: ANTI-FREEZE NEGATIVE FILTER
+                                if w_neg and rating_val >= 3.5: continue
 
                                 st.session_state.progress = min(int(((base_progress + processed + 1) / total_est) * 100), 100)
-                                prog_spot.markdown(f'<div class="prog-container"><div class="prog-bar-fill" style="width: {st.session_state.progress}%;"></div></div>', unsafe_allow_html=True)
+                                prog_spot.markdown(f'<div class="prog-container"><div class="prog-bar-fill" style="width: {st.session_state.progress}%;"></div></div>', unsafe_allow_html=True) #
 
                                 maps_web = "N/A"
                                 try: maps_web = page.locator('a[data-item-id="authority"]').get_attribute("href")
                                 except: pass
                                 
-                                # 🔥 SOLVING THE LINK CLASSIFIER PROBLEM
+                                # 🔥 ROOT FIX: SOCIAL CLASSIFIER
                                 final_web = maps_web; social_found = "N/A"
                                 if any(x in str(maps_web).lower() for x in ["facebook.com", "instagram.com", "linkedin.com", "twitter.com"]):
                                     social_found = maps_web; final_web = "N/A"
@@ -307,7 +308,7 @@ with tab_live:
                                 # Deep site crawl
                                 email = "N/A"
                                 if final_web != "N/A" and (w_social or w_email):
-                                    s_crawl, em_crawl = fetch_site_data(context, final_web, w_social, w_email)
+                                    s_crawl, em_crawl = fetch_deep_site(context, final_web, w_social, w_email)
                                     if social_found == "N/A": social_found = s_crawl
                                     email = em_crawl
 
@@ -357,6 +358,6 @@ with tab_tools:
         sel = st.selectbox("Select Business", all_leads['name'])
         biz = all_leads[all_leads['name'] == sel].iloc[0]
         msg = f"Hi {biz['name']}, I noticed your Google rating is {biz['rating']}. We can help you boost your online reputation!"
-        st.text_area("Generated Outreach Message:", msg, height=100)
+        st.text_area("Generated Message:", msg, height=100)
 
-st.markdown('<div style="text-align:center;color:#666;padding:30px;">Designed by Chatir Elite Pro - Architect Edition V85 (Playwright)</div>', unsafe_allow_html=True) #
+st.markdown('<div style="text-align:center;color:#666;padding:30px;">Designed by Chatir Elite Pro - Architect Edition V86 (Playwright)</div>', unsafe_allow_html=True) #
