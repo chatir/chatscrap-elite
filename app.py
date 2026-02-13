@@ -75,7 +75,7 @@ else:
     """, unsafe_allow_html=True) #
 
 # ==============================================================================
-# 3. DATABASE (RESTORED TO V9 + AUTOMATIC MIGRATION)
+# 3. DATABASE (V9 RESTORED + MIGRATION)
 # ==============================================================================
 DB_NAME = "chatscrap_elite_pro_v9.db" #
 
@@ -89,11 +89,10 @@ def init_db():
             website TEXT, email TEXT, address TEXT, whatsapp TEXT)""") #
         cursor.execute("CREATE TABLE IF NOT EXISTS user_credits (username TEXT PRIMARY KEY, balance INTEGER, status TEXT DEFAULT 'active')") #
         
-        # 🔥 SMART MIGRATION: Add new columns if they don't exist (No data loss)
+        # Add new columns if missing
         cols = [c[1] for c in cursor.execute("PRAGMA table_info(leads)").fetchall()]
-        new_cols = {"rating": "TEXT", "instagram": "TEXT", "facebook": "TEXT", "linkedin": "TEXT"}
-        for col, type_ in new_cols.items():
-            if col not in cols: cursor.execute(f"ALTER TABLE leads ADD COLUMN {col} {type_}")
+        for col in ["rating", "instagram", "facebook", "linkedin"]:
+            if col not in cols: cursor.execute(f"ALTER TABLE leads ADD COLUMN {col} TEXT")
         conn.commit()
 
 init_db()
@@ -106,7 +105,7 @@ def get_user_data(username):
         conn.commit(); return (100, 'active')
 
 # ==============================================================================
-# 4. AUTHENTICATION & WORDPRESS LOGIN
+# 4. AUTHENTICATION & WP LOGIN
 # ==============================================================================
 try:
     with open('config.yaml') as file: config = yaml.load(file, Loader=SafeLoader) #
@@ -123,8 +122,8 @@ if st.session_state.get("authentication_status") is not True:
     with col2:
         try: authenticator.login() #
         except: pass
-        if st.session_state["authentication_status"] is False: st.error("Username/password is incorrect")
-        if st.session_state["authentication_status"] is None: st.info("🔒 Welcome to Elite Pro. Please Login.")
+        if st.session_state["authentication_status"] is False: st.error("Wrong username/password")
+        if st.session_state["authentication_status"] is None: st.info("🔒 Please Login to Elite Pro.")
         st.stop()
 
 # ==============================================================================
@@ -150,8 +149,8 @@ with st.sidebar:
                 conn.execute("UPDATE user_credits SET status=? WHERE username=?", ('suspended' if curr=='active' else 'active', target)); conn.commit(); st.rerun()
             if c3.button("🗑️ Del"): conn.execute("DELETE FROM user_credits WHERE username=?", (target,)); conn.commit(); st.rerun()
             st.divider()
-            nu, np = st.text_input("New User"), st.text_input("New Pwd", type="password")
-            if st.button("Create") and nu and np:
+            nu, np = st.text_input("New User"), st.text_input("New Pass", type="password")
+            if st.button("Create Account") and nu and np:
                 hashed_pw = stauth.Hasher([np]).generate()[0]
                 config['credentials']['usernames'][nu] = {'name': nu, 'password': hashed_pw, 'email': 'x'}
                 with open('config.yaml', 'w') as f: yaml.dump(config, f)
@@ -208,7 +207,7 @@ with st.container():
         if st.button("Stop Search", disabled=not st.session_state.running): st.session_state.running, st.session_state.paused = False, False; st.rerun() #
 
 # ==============================================================================
-# 8. ENGINE & NEW PRO FEATURES
+# 8. ENGINE & LOGIC (STRICT FILTERING)
 # ==============================================================================
 def get_driver():
     opts = Options(); opts.add_argument("--headless=new"); opts.add_argument("--no-sandbox"); opts.add_argument("--disable-dev-shm-usage")
@@ -216,9 +215,10 @@ def get_driver():
     try: return webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=opts)
     except: return webdriver.Chrome(options=opts) #
 
-def fetch_pro_data(driver, url, find_socials):
+def fetch_data_pro(driver, url, find_socials, find_email):
     ig, fb, em = "N/A", "N/A", "N/A"
     if not url or url == "N/A": return ig, fb, em
+    if not (find_socials or find_email): return ig, fb, em
     try:
         driver.execute_script("window.open('');"); driver.switch_to.window(driver.window_handles[-1])
         driver.set_page_load_timeout(10); driver.get(url); time.sleep(2); src = driver.page_source.lower()
@@ -226,8 +226,9 @@ def fetch_pro_data(driver, url, find_socials):
             ig_m = re.findall(r'instagram\.com/([a-zA-Z0-9_.]+)', src)
             fb_m = re.findall(r'facebook\.com/([a-zA-Z0-9_.]+)', src)
             ig, fb = (ig_m[0] if ig_m else "N/A"), (fb_m[0] if fb_m else "N/A")
-        em_m = re.findall(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}", src)
-        em = list(set(em_m))[0] if em_m else "N/A"
+        if find_email:
+            em_m = re.findall(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}", src)
+            em = list(set(em_m))[0] if em_m else "N/A"
         driver.close(); driver.switch_to.window(driver.window_handles[0])
     except:
         if len(driver.window_handles)>1: driver.close(); driver.switch_to.window(driver.window_handles[0])
@@ -275,13 +276,16 @@ with tab_live:
                             phone = "N/A"
                             try: phone = driver.find_element(By.XPATH, '//*[contains(@data-item-id, "phone:tel")]').get_attribute("aria-label").replace("Phone: ", "")
                             except: pass
+                            
+                            # 🔥 PHONE FILTER FIX
+                            if w_phone and (phone == "N/A" or not phone): continue
 
                             # 🔥 GLOBAL DEDUPE PRO
                             if w_global:
                                 with sqlite3.connect(DB_NAME) as conn:
                                     if conn.execute("SELECT 1 FROM leads WHERE name=? AND phone=?", (name, phone)).fetchone(): continue
 
-                            # 🔥 NEGATIVE FILTER
+                            # ⭐ RATING & NEGATIVE FILTER
                             rating = "N/A"
                             try: rating = driver.find_element(By.CSS_SELECTOR, "span.ce40Ff").get_attribute("aria-label").split()[0]
                             except: pass
@@ -290,18 +294,27 @@ with tab_live:
                             st.session_state.progress = min(int(((base_progress + processed + 1) / total_est) * 100), 100)
                             prog_spot.markdown(f'<div class="prog-container"><div class="prog-bar-fill" style="width: {st.session_state.progress}%;"></div></div>', unsafe_allow_html=True)
                             
-                            web = driver.find_element(By.CSS_SELECTOR, 'a[data-item-id="authority"]').get_attribute("href") if driver.find_elements(By.CSS_SELECTOR, 'a[data-item-id="authority"]') else "N/A"
-                            if w_phone and (phone == "N/A" or not phone): continue
+                            raw_web = driver.find_element(By.CSS_SELECTOR, 'a[data-item-id="authority"]').get_attribute("href") if driver.find_elements(By.CSS_SELECTOR, 'a[data-item-id="authority"]') else "N/A"
                             
-                            ig, fb, email = fetch_pro_data(driver, web, w_social)
+                            # 🔥 WEBSITE/EMAIL/SOCIAL FILTER FIX: Only fetch if requested
+                            ig, fb, email = "N/A", "N/A", "N/A"
+                            if raw_web != "N/A":
+                                if w_social or w_email:
+                                    ig, fb, email = fetch_data_pro(driver, raw_web, w_social, w_email)
+
                             cp = re.sub(r'\D', '', phone); wa = "N/A"
                             if any(cp.startswith(x) for x in ['2126','2127','06','07']) and not (cp.startswith('2125') or cp.startswith('05')):
                                 wa = f'<a href="https://wa.me/{cp}" target="_blank" class="wa-link"><i class="fab fa-whatsapp"></i> Chat Now</a>'
                             
-                            row = {"Keyword":kw, "City":city, "Name":name, "Phone":phone, "WhatsApp":wa, "Email":email, "Rating":rating, "IG":ig}
+                            # Build the result row dynamically
+                            row = {"Keyword":kw, "City":city, "Name":name, "Phone":phone, "WhatsApp":wa, 
+                                   "Website": raw_web if w_web else "N/A", 
+                                   "Email": email if w_email else "N/A",
+                                   "Rating": rating, "IG": ig if w_social else "N/A"}
+                            
                             with sqlite3.connect(DB_NAME) as conn:
                                 conn.execute("""INSERT INTO leads (session_id, keyword, city, country, name, phone, website, email, whatsapp, rating, instagram, facebook)
-                                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""", (st.session_state.current_sid, kw, city, country_in, name, phone, web, email, wa, rating, ig, fb))
+                                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""", (st.session_state.current_sid, kw, city, country_in, name, phone, row["Website"], row["Email"], wa, rating, ig, fb))
                                 if me != 'admin': conn.execute("UPDATE user_credits SET balance=balance-1 WHERE username=?", (me,))
                                 conn.commit()
                             
@@ -314,7 +327,7 @@ with tab_live:
             finally: driver.quit()
 
 # ==============================================================================
-# 9. ARCHIVE & MARKETING (PRO UPDATED)
+# 9. ARCHIVE & MARKETING (FROM APP 16)
 # ==============================================================================
 with tab_archive:
     st.subheader("Persistent History") #
@@ -332,13 +345,13 @@ with tab_archive:
 with tab_tools:
     st.subheader("🤖 AI Personalized Messaging")
     with sqlite3.connect(DB_NAME) as conn:
-        all_leads = pd.read_sql("SELECT name, keyword, rating, whatsapp FROM leads ORDER BY id DESC LIMIT 50", conn)
+        all_leads = pd.read_sql("SELECT name, keyword, rating FROM leads ORDER BY id DESC LIMIT 50", conn)
     if not all_leads.empty:
         sel = st.selectbox("Select Lead", all_leads['name'])
         biz = all_leads[all_leads['name'] == sel].iloc[0]
-        msg = f"Hi {biz['name']}, I noticed you're in {biz['keyword']}. Your rating is {biz['rating']}. We can help you get more 5-star reviews!"
-        st.text_area("Generated Message:", msg, height=120)
-        st.info("💡 Copy & use WhatsApp link in Live Data.")
-    else: st.warning("No leads found.")
+        msg = f"Hi {biz['name']}, I noticed your business in {biz['keyword']} has a {biz['rating']} rating. We can help you get more 5-star reviews!"
+        st.text_area("AI Message:", msg, height=120)
+        st.info("💡 Copy message & use WhatsApp link in Live Data.")
+    else: st.warning("No leads found. Start a search first!")
 
-st.markdown('<div style="text-align:center;color:#666;padding:30px;">Designed by Chatir Elite Pro - Architect Edition V72</div>', unsafe_allow_html=True) #
+st.markdown('<div style="text-align:center;color:#666;padding:30px;">Designed by Chatir Elite Pro - Architect Edition V73</div>', unsafe_allow_html=True) #
