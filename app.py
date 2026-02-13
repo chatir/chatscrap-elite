@@ -33,7 +33,7 @@ if 'active_kw' not in st.session_state: st.session_state.active_kw = "" #
 if 'active_city' not in st.session_state: st.session_state.active_city = "" #
 
 # ==============================================================================
-# 2. DESIGN SYSTEM (WORDPRESS LOGIN + DASHBOARD + STRIPY PROGRESS)
+# 2. DESIGN SYSTEM (WORDPRESS LOGIN + ELITE DASHBOARD + STRIPY PROGRESS)
 # ==============================================================================
 st.markdown('<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">', unsafe_allow_html=True) #
 
@@ -88,7 +88,7 @@ def init_db():
             website TEXT, email TEXT, address TEXT, whatsapp TEXT)""") #
         cursor.execute("CREATE TABLE IF NOT EXISTS user_credits (username TEXT PRIMARY KEY, balance INTEGER, status TEXT DEFAULT 'active')") #
         
-        # SMART MIGRATION
+        # SMART MIGRATION: Auto-add columns without losing users
         cols = [c[1] for c in cursor.execute("PRAGMA table_info(leads)").fetchall()]
         for col in ["rating", "social_media"]:
             if col not in cols: cursor.execute(f"ALTER TABLE leads ADD COLUMN {col} TEXT")
@@ -121,8 +121,8 @@ if st.session_state.get("authentication_status") is not True:
     with col2:
         try: authenticator.login() #
         except: pass
-        if st.session_state["authentication_status"] is False: st.error("Login failed")
-        if st.session_state["authentication_status"] is None: st.info("🔒 Restricted Access")
+        if st.session_state["authentication_status"] is False: st.error("Wrong credentials")
+        if st.session_state["authentication_status"] is None: st.info("🔒 Welcome to Elite Pro.")
         st.stop()
 
 # ==============================================================================
@@ -143,10 +143,10 @@ with st.sidebar:
             target = st.selectbox("Select User", u_df['username'])
             c1, c2, c3 = st.columns(3)
             if c1.button("💰 +100"): conn.execute("UPDATE user_credits SET balance=balance+100 WHERE username=?", (target,)); conn.commit(); st.rerun()
-            if c2.button("🚫 State"):
+            if c2.button("🚫 Status"):
                 curr = conn.execute("SELECT status FROM user_credits WHERE username=?", (target,)).fetchone()[0]
                 conn.execute("UPDATE user_credits SET status=? WHERE username=?", ('suspended' if curr=='active' else 'active', target)); conn.commit(); st.rerun()
-            if c3.button("🗑️ Zap"): conn.execute("DELETE FROM user_credits WHERE username=?", (target,)); conn.commit(); st.rerun()
+            if c3.button("🗑️ Del"): conn.execute("DELETE FROM user_credits WHERE username=?", (target,)); conn.commit(); st.rerun()
             st.divider()
             nu, np = st.text_input("New User"), st.text_input("New Pwd", type="password")
             if st.button("Create") and nu and np:
@@ -177,7 +177,7 @@ with st.container():
     w_phone = f1.checkbox("Phone Only", True) #
     w_web = f2.checkbox("Website", False) #
     w_email = f3.checkbox("Deep Email", False) #
-    w_social = f4.checkbox("📸 Social Media", False)
+    w_social = f4.checkbox("🛡️ Social Media", False)
     w_global = f5.checkbox("🛡️ Global Dedupe", True)
     
     f6, f7, f8 = st.columns([1.5, 1.5, 2.5])
@@ -206,7 +206,7 @@ with st.container():
         if st.button("Stop Search", disabled=not st.session_state.running): st.session_state.running, st.session_state.paused = False, False; st.rerun() #
 
 # ==============================================================================
-# 8. ENGINE & ROBUST SCRAPER LOGIC (V81 ROOT FIX)
+# 8. ENGINE & ROBUST SCRAPER LOGIC (V82 FIX)
 # ==============================================================================
 def get_driver():
     opts = Options(); opts.add_argument("--headless=new"); opts.add_argument("--no-sandbox"); opts.add_argument("--disable-dev-shm-usage")
@@ -215,12 +215,14 @@ def get_driver():
     except: return webdriver.Chrome(options=opts) #
 
 def safe_convert_rating(text):
+    """ Safely converts rating text to float. Returns 5.0 for N/A to avoid freeze. """
     try:
+        if not text or text == "N/A": return 5.0
         nums = re.findall(r"(\d+\.\d+|\d+)", text)
         return float(nums[0]) if nums else 5.0
     except: return 5.0
 
-def fetch_data_pro(driver, url, find_socials, find_email):
+def fetch_deep_pro(driver, url, find_socials, find_email):
     social, em = "N/A", "N/A"
     if not url or url == "N/A": return social, em
     try:
@@ -287,26 +289,26 @@ with tab_live:
                                 with sqlite3.connect(DB_NAME) as conn:
                                     if conn.execute("SELECT 1 FROM leads WHERE name=? AND phone=?", (name, phone)).fetchone(): continue
 
-                            # 🔥 ROOT FIX: IMPROVED RATING & REVIEWS SCRAPER
+                            # 🔥 FIX: STATED ROBUST RATING & REVIEWS SCRAPER
                             full_review = "N/A"
                             r_val = 5.0
                             try:
-                                # First, try to find the combined aria-label (stars + reviews)
+                                # Look for ANY element containing "stars" text
                                 stars_el = driver.find_element(By.XPATH, '//span[contains(@aria-label, "stars")]')
                                 stars_text = stars_el.get_attribute("aria-label") 
                                 
-                                # Find review count (usually adjacent or near)
+                                # Find review count (adjacent text)
                                 try:
-                                    rev_el = driver.find_element(By.XPATH, '//button[contains(@aria-label, "reviews")]')
-                                    rev_text = rev_el.text if rev_el.text else rev_el.get_attribute("aria-label")
-                                    full_review = f"{stars_text} ({rev_text})"
+                                    rev_el = driver.find_element(By.XPATH, '//span[contains(@aria-label, "reviews")]')
+                                    rev_count = rev_el.text if rev_el.text else rev_el.get_attribute("aria-label")
+                                    full_review = f"{stars_text} ({rev_count})"
                                 except:
                                     full_review = stars_text
                                     
                                 r_val = safe_convert_rating(stars_text)
                             except: pass
 
-                            # 🔥 ROOT FIX: ANTI-FREEZE NEGATIVE FILTER
+                            # 🔥 FIX: STATED ANTI-FREEZE NEGATIVE FILTER
                             if w_neg and r_val >= 3.5: continue
 
                             st.session_state.progress = min(int(((base_progress + processed + 1) / total_est) * 100), 100)
@@ -314,17 +316,17 @@ with tab_live:
                             
                             maps_web = driver.find_element(By.CSS_SELECTOR, 'a[data-item-id="authority"]').get_attribute("href") if driver.find_elements(By.CSS_SELECTOR, 'a[data-item-id="authority"]') else "N/A"
                             
-                            # 🔥 ROOT FIX: CLASSIFIER (Social vs Website)
+                            # 🔥 FIX: STATED CLASSIFIER (Social vs Website)
                             final_web = maps_web
                             social_found = "N/A"
-                            if "facebook.com" in maps_web or "instagram.com" in maps_web or "linkedin.com" in maps_web:
+                            if any(x in maps_web.lower() for x in ["facebook.com", "instagram.com", "linkedin.com", "twitter.com"]):
                                 social_found = maps_web
-                                final_web = "N/A" # Move from Website to Social Media
+                                final_web = "N/A" # Move social link to its own column
 
-                            # PRO DATA SCRAPER (Deep site crawl)
+                            # PRO DATA SCRAPER (Site crawl)
                             email = "N/A"
                             if final_web != "N/A" and (w_social or w_email):
-                                s_crawl, email = fetch_data_pro(driver, final_web, w_social, w_email)
+                                s_crawl, email = fetch_deep_pro(driver, final_web, w_social, w_email)
                                 if social_found == "N/A": social_found = s_crawl
 
                             wa = "N/A"; cp = re.sub(r'\D', '', phone)
@@ -372,8 +374,8 @@ with tab_tools:
     if not all_leads.empty:
         sel = st.selectbox("Analyze Business", all_leads['name'])
         biz = all_leads[all_leads['name'] == sel].iloc[0]
-        msg = f"Hi {biz['name']}, I noticed your rating is {biz['rating']}. We can help you boost your score!"
+        msg = f"Hi {biz['name']}, I noticed your rating on Google. We can help you manage your reputation!"
         st.text_area("AI Outreach Message:", msg, height=100)
     else: st.warning("No leads found. Start a search first!")
 
-st.markdown('<div style="text-align:center;color:#666;padding:30px;">Designed by Chatir Elite Pro - Architect Edition V81</div>', unsafe_allow_html=True) #
+st.markdown('<div style="text-align:center;color:#666;padding:30px;">Designed by Chatir Elite Pro - Architect Edition V82</div>', unsafe_allow_html=True) #
