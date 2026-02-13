@@ -74,7 +74,7 @@ else:
     """, unsafe_allow_html=True) #
 
 # ==============================================================================
-# 3. DATABASE (V9 RESTORED + MIGRATION)
+# 3. DATABASE (RESTORED V9 + SMART MIGRATION)
 # ==============================================================================
 DB_NAME = "chatscrap_elite_pro_v9.db" #
 
@@ -88,7 +88,7 @@ def init_db():
             website TEXT, email TEXT, address TEXT, whatsapp TEXT)""") #
         cursor.execute("CREATE TABLE IF NOT EXISTS user_credits (username TEXT PRIMARY KEY, balance INTEGER, status TEXT DEFAULT 'active')") #
         
-        # SMART MIGRATION: Auto-add columns without losing users
+        # SMART MIGRATION: Add columns if they don't exist
         cols = [c[1] for c in cursor.execute("PRAGMA table_info(leads)").fetchall()]
         for col in ["rating", "social_media"]:
             if col not in cols: cursor.execute(f"ALTER TABLE leads ADD COLUMN {col} TEXT")
@@ -121,8 +121,8 @@ if st.session_state.get("authentication_status") is not True:
     with col2:
         try: authenticator.login() #
         except: pass
-        if st.session_state["authentication_status"] is False: st.error("Username/password is incorrect")
-        if st.session_state["authentication_status"] is None: st.info("🔒 Welcome to Elite Pro. Please Login.")
+        if st.session_state["authentication_status"] is False: st.error("Wrong credentials")
+        if st.session_state["authentication_status"] is None: st.info("🔒 Welcome to Elite Pro.")
         st.stop()
 
 # ==============================================================================
@@ -149,7 +149,7 @@ with st.sidebar:
             if c3.button("🗑️ Del"): conn.execute("DELETE FROM user_credits WHERE username=?", (target,)); conn.commit(); st.rerun()
             st.divider()
             nu, np = st.text_input("New User"), st.text_input("New Pwd", type="password")
-            if st.button("Create") and nu and np:
+            if st.button("Create Account") and nu and np:
                 hashed_pw = stauth.Hasher([np]).generate()[0]
                 config['credentials']['usernames'][nu] = {'name': nu, 'password': hashed_pw, 'email': 'x'}
                 with open('config.yaml', 'w') as f: yaml.dump(config, f)
@@ -167,7 +167,7 @@ if os.path.exists("chatscrape.png"):
 
 with st.container():
     c1, c2, c3, c4 = st.columns([3, 3, 2, 1.5]) #
-    kw_in = c1.text_input("Keywords", placeholder="e.g. hotel, cafe", key="kw_in_key") #
+    kw_in = c1.text_input("Keywords", placeholder="e.g. hotel, gym", key="kw_in_key") #
     city_in = c2.text_input("Cities", placeholder="e.g. Agadir, Rabat", key="city_in_key") #
     country_in = c3.selectbox("Country", ["Morocco", "France", "USA", "Spain", "UAE", "UK"], key="country_in_key") #
     limit_in = c4.number_input("Limit/City", 1, 1000, 20, key="limit_in_key") #
@@ -177,7 +177,7 @@ with st.container():
     w_phone = f1.checkbox("Phone Only", True) #
     w_web = f2.checkbox("Website", False) #
     w_email = f3.checkbox("Deep Email", False) #
-    w_social = f4.checkbox("🛡️ Social Media", False)
+    w_social = f4.checkbox("📸 Social Media", False)
     w_global = f5.checkbox("🛡️ Global Dedupe", True)
     
     f6, f7, f8 = st.columns([1.5, 1.5, 2.5])
@@ -206,13 +206,20 @@ with st.container():
         if st.button("Stop Search", disabled=not st.session_state.running): st.session_state.running, st.session_state.paused = False, False; st.rerun() #
 
 # ==============================================================================
-# 8. ENGINE & ROBUST SCRAPER LOGIC (V79 IMPROVEMENTS)
+# 8. ENGINE & ROBUST SCRAPER LOGIC (V80 - THE ULTIMATE FIX)
 # ==============================================================================
 def get_driver():
     opts = Options(); opts.add_argument("--headless=new"); opts.add_argument("--no-sandbox"); opts.add_argument("--disable-dev-shm-usage")
     opts.add_argument("--window-size=1920,1080")
     try: return webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=opts)
     except: return webdriver.Chrome(options=opts) #
+
+def safe_convert_rating(text):
+    """ Converts text like '4.5 stars' to float safely. Returns 5.0 if fails. """
+    try:
+        nums = re.findall(r"(\d+\.\d+|\d+)", text)
+        return float(nums[0]) if nums else 5.0
+    except: return 5.0
 
 def fetch_data_pro(driver, url, find_socials, find_email):
     social, em = "N/A", "N/A"
@@ -242,7 +249,7 @@ with tab_live:
     if st.session_state.results_list:
         df_live = pd.DataFrame(st.session_state.results_list) #
         table_ui.write(df_live.to_html(escape=False, index=False), unsafe_allow_html=True)
-        download_ui.download_button(label="⬇️ Download CSV", data=df_live.to_csv(index=False).encode('utf-8'), file_name="leads.csv", mime="text/csv")
+        download_ui.download_button(label="⬇️ Export Results CSV", data=df_live.to_csv(index=False).encode('utf-8'), file_name="leads.csv", mime="text/csv")
 
     if st.session_state.running and not st.session_state.paused:
         akws = [k.strip() for k in st.session_state.active_kw.split(',') if k.strip()] #
@@ -281,21 +288,18 @@ with tab_live:
                                 with sqlite3.connect(DB_NAME) as conn:
                                     if conn.execute("SELECT 1 FROM leads WHERE name=? AND phone=?", (name, phone)).fetchone(): continue
 
-                            # 🔥 FIX: STATED ROBUST RATING EXTRACTION (STARS + REVIEWS)
+                            # 🔥 FIX: STATED ROBUST MULTI-SELECTOR RATING
                             full_review = "N/A"
-                            rating_val = 5.0 # SAFE DEFAULT FOR MATH CHECK
+                            r_val = 5.0
                             try:
                                 # Look for ANY element containing "stars" text
                                 stars_el = driver.find_element(By.XPATH, '//*[contains(@aria-label, "stars")]')
-                                full_review = stars_el.get_attribute("aria-label") # e.g. "4.2 stars 85 reviews"
-                                if full_review:
-                                    # Safe extraction of rating number for filtering
-                                    found_num = re.findall(r"(\d+\.\d+|\d+)", full_review)
-                                    if found_num: rating_val = float(found_num[0])
+                                full_review = stars_el.get_attribute("aria-label") 
+                                r_val = safe_convert_rating(full_review)
                             except: pass
 
-                            # 🔥 FIX: STATED ROBUST NEGATIVE FILTER (PREVENTS FREEZING)
-                            if w_neg and rating_val >= 3.5: continue
+                            # 🔥 FIX: STATED SAFE NEGATIVE FILTER
+                            if w_neg and r_val >= 3.5: continue
 
                             st.session_state.progress = min(int(((base_progress + processed + 1) / total_est) * 100), 100)
                             prog_spot.markdown(f'<div class="prog-container"><div class="prog-bar-fill" style="width: {st.session_state.progress}%;"></div></div>', unsafe_allow_html=True)
@@ -352,8 +356,8 @@ with tab_tools:
     if not all_leads.empty:
         sel = st.selectbox("Analyze Business", all_leads['name'])
         biz = all_leads[all_leads['name'] == sel].iloc[0]
-        msg = f"Hi {biz['name']}, I noticed you have a {biz['rating']} profile on Google Maps. We can help you boost your reputation!"
-        st.text_area("AI Message:", msg, height=100)
+        msg = f"Hi {biz['name']}, I noticed your business in {biz['keyword']} has a {biz['rating']} on Google. We can help you boost your online reputation!"
+        st.text_area("AI Outreach Message:", msg, height=100)
     else: st.warning("No leads found. Start a search first!")
 
-st.markdown('<div style="text-align:center;color:#666;padding:30px;">Designed by Chatir Elite Pro - Architect Edition V79</div>', unsafe_allow_html=True) #
+st.markdown('<div style="text-align:center;color:#666;padding:30px;">Designed by Chatir Elite Pro - Architect Edition V80</div>', unsafe_allow_html=True) #
