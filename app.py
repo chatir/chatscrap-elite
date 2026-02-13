@@ -17,7 +17,7 @@ from webdriver_manager.chrome import ChromeDriverManager
 from urllib.parse import quote
 
 # ==============================================================================
-# 1. GLOBAL CONFIGURATION & STATE
+# 1. GLOBAL CONFIGURATION & STATE (RESTORING ORIGINAL APP 16 LOGIC)
 # ==============================================================================
 st.set_page_config(page_title="ChatScrap Elite Pro", layout="wide", page_icon="💎")
 
@@ -32,7 +32,7 @@ if 'active_kw' not in st.session_state: st.session_state.active_kw = ""
 if 'active_city' not in st.session_state: st.session_state.active_city = ""
 
 # ==============================================================================
-# 2. DESIGN SYSTEM (RESTORED DASHBOARD + STRIPY PROGRESS)
+# 2. DESIGN SYSTEM (WORDPRESS LOGIN + ELITE DASHBOARD)
 # ==============================================================================
 st.markdown('<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">', unsafe_allow_html=True)
 
@@ -56,9 +56,9 @@ else:
     html, body, [data-testid="stAppViewContainer"] { font-family: 'Inter', sans-serif !important; background-color: #0e1117; }
     .centered-logo { text-align: center; padding: 20px 0 40px 0; }
     .logo-img { width: 280px; filter: drop-shadow(0 0 15px rgba(255,140,0,0.3)); }
-    .stButton > button { height: 50px !important; font-weight: 700 !important; border-radius: 8px !important; color: white !important; }
+    .stButton > button { height: 50px !important; font-weight: 700 !important; border-radius: 8px !important; color: white !important; transition: all 0.3s ease; }
     div[data-testid="column"]:nth-of-type(1) .stButton > button { background: linear-gradient(135deg, #FF8C00 0%, #FF4500 100%) !important; }
-    div[data-testid="column"]:nth-of-type(2) .stButton > button { background-color: #1F2937 !important; color: #E5E7EB !important; border: 1px solid #374151 !important; }
+    div[data-testid="column"]:nth-of-type(2) .stButton > button { background-color: #1F2937 !important; border: 1px solid #374151 !important; }
     div[data-testid="column"]:nth-of-type(3) .stButton > button { background: linear-gradient(135deg, #28a745 0%, #218838 100%) !important; }
     div[data-testid="column"]:nth-of-type(4) .stButton > button { background: linear-gradient(135deg, #DC2626 0%, #991B1B 100%) !important; }
     .prog-container { width: 100%; background: #111827; border-radius: 50px; padding: 4px; border: 1px solid #374151; margin: 25px 0; }
@@ -70,7 +70,7 @@ else:
     """, unsafe_allow_html=True)
 
 # ==============================================================================
-# 3. DATABASE (V9 RESTORED + SMART MIGRATION)
+# 3. DATABASE (V9 RESTORED + AUTOMATIC MIGRATION)
 # ==============================================================================
 DB_NAME = "chatscrap_elite_pro_v9.db"
 
@@ -84,6 +84,7 @@ def init_db():
             website TEXT, email TEXT, address TEXT, whatsapp TEXT)""")
         cursor.execute("CREATE TABLE IF NOT EXISTS user_credits (username TEXT PRIMARY KEY, balance INTEGER, status TEXT DEFAULT 'active')")
         
+        # SMART MIGRATION: Auto-add columns without losing any users
         cols = [c[1] for c in cursor.execute("PRAGMA table_info(leads)").fetchall()]
         for col in ["rating", "social_media"]:
             if col not in cols: cursor.execute(f"ALTER TABLE leads ADD COLUMN {col} TEXT")
@@ -99,7 +100,7 @@ def get_user_data(username):
         conn.commit(); return (100, 'active')
 
 # ==============================================================================
-# 4. AUTHENTICATION
+# 4. AUTHENTICATION & WP LOGIN
 # ==============================================================================
 try:
     with open('config.yaml') as file: config = yaml.load(file, Loader=SafeLoader)
@@ -110,18 +111,18 @@ authenticator = stauth.Authenticate(config['credentials'], config['cookie']['nam
 if st.session_state.get("authentication_status") is not True:
     if os.path.exists("chatscrape.png"):
         with open("chatscrape.png", "rb") as f: b64 = base64.b64encode(f.read()).decode()
-        st.markdown(f'<div style="text-align:center; padding-top: 120px; padding-bottom: 20px;"><img src="data:image/png;base64,{b64}" style="width:320px; filter: drop-shadow(0 0 15px rgba(255,140,0,0.3));"></div>', unsafe_allow_html=True)
+        st.markdown(f'<div style="text-align:center; padding-top: 100px; padding-bottom: 20px;"><img src="data:image/png;base64,{b64}" style="width:320px; filter: drop-shadow(0 0 15px rgba(255,140,0,0.3));"></div>', unsafe_allow_html=True)
     
     col1, col2, col3 = st.columns([1, 1.2, 1])
     with col2:
         try: authenticator.login()
         except: pass
         if st.session_state["authentication_status"] is False: st.error("Access Denied")
-        if st.session_state["authentication_status"] is None: st.info("🔒 Private Access - Elite Edition")
+        if st.session_state["authentication_status"] is None: st.info("🔒 Private Access - Please Login")
         st.stop()
 
 # ==============================================================================
-# 5. SIDEBAR & ADMIN (RESTORED ADD USER)
+# 5. SIDEBAR & ADMIN PANEL (RESTORING ADD USER)
 # ==============================================================================
 with st.sidebar:
     st.title("Profile Settings")
@@ -137,27 +138,27 @@ with st.sidebar:
             target = st.selectbox("Select User", u_df['username'])
             c1, c2, c3 = st.columns(3)
             if c1.button("💰 +100"): conn.execute("UPDATE user_credits SET balance=balance+100 WHERE username=?", (target,)); conn.commit(); st.rerun()
-            if c2.button("🚫 State"):
+            if c2.button("🚫 Status"):
                 curr = conn.execute("SELECT status FROM user_credits WHERE username=?", (target,)).fetchone()[0]
                 conn.execute("UPDATE user_credits SET status=? WHERE username=?", ('suspended' if curr=='active' else 'active', target)); conn.commit(); st.rerun()
             if c3.button("🗑️ Del"): conn.execute("DELETE FROM user_credits WHERE username=?", (target,)); conn.commit(); st.rerun()
             st.divider()
             st.write("Add New User:")
-            nu = st.text_input("New Username", key="add_u")
-            np = st.text_input("New Password", type="password", key="add_p")
+            nu = st.text_input("Username", key="ad_u")
+            np = st.text_input("Password", type="password", key="ad_p")
             if st.button("Create Account"):
                 if nu and np:
                     try: hashed_pw = stauth.Hasher.hash(np)
                     except: hashed_pw = stauth.Hasher([np]).generate()[0]
                     config['credentials']['usernames'][nu] = {'name': nu, 'password': hashed_pw, 'email': 'x'}
                     with open('config.yaml', 'w') as f: yaml.dump(config, f)
-                    get_user_data(nu); st.success(f"User {nu} Created!"); st.rerun()
+                    get_user_data(nu); st.success(f"User Created!"); st.rerun()
 
     st.divider()
     if st.button("Logout"): authenticator.logout('Logout', 'main'); st.session_state.clear(); st.rerun()
 
 # ==============================================================================
-# 6. HEADER & INPUTS
+# 6. HEADER & INPUTS (RESTORING APP 16 DESIGN)
 # ==============================================================================
 if os.path.exists("chatscrape.png"):
     with open("chatscrape.png", "rb") as f: b64 = base64.b64encode(f.read()).decode()
@@ -171,11 +172,12 @@ with st.container():
     limit_in = c4.number_input("Limit/City", 1, 1000, 20, key="limit_in_key")
 
     st.divider()
+    # 🔥 UPDATED FEATURES ROW
     f1, f2, f3, f4, f5 = st.columns([1, 1, 1, 1.2, 1.2])
     w_phone = f1.checkbox("Phone Only", True)
     w_web = f2.checkbox("Website", False)
     w_email = f3.checkbox("Deep Email", False)
-    w_social = f4.checkbox("📸 Social Media", False)
+    w_social = f4.checkbox("📸 Social Finder", False)
     w_global = f5.checkbox("🛡️ Global Dedupe", True)
     
     f6, f7, f8 = st.columns([1.5, 1.5, 2.5])
@@ -204,7 +206,7 @@ with st.container():
         if st.button("Stop Search", disabled=not st.session_state.running): st.session_state.running, st.session_state.paused = False, False; st.rerun()
 
 # ==============================================================================
-# 8. ENGINE & ROBUST SCRAPER LOGIC (V93 ROOT FIX)
+# 8. ENGINE & ROBUST LOGIC (ROOT FIX FOR REVIEWS & FREEZING)
 # ==============================================================================
 def get_driver():
     opts = Options(); opts.add_argument("--headless=new"); opts.add_argument("--no-sandbox"); opts.add_argument("--disable-dev-shm-usage")
@@ -212,14 +214,15 @@ def get_driver():
     try: return webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=opts)
     except: return webdriver.Chrome(options=opts)
 
-def safe_numeric_rating(text):
+def safe_math_rating(text):
+    """ Converts text like '4.4 stars' to float. Returns 5.0 for N/A to prevent freezing. """
     try:
         if not text or text == "N/A": return 5.0
         match = re.findall(r"(\d+\.\d+|\d+)", text)
         return float(match[0]) if match else 5.0
     except: return 5.0
 
-def fetch_data_pro(driver, url, find_socials, find_email):
+def fetch_deep_socials(driver, url, find_socials, find_email):
     social, em = "N/A", "N/A"
     if not url or url == "N/A": return social, em
     try:
@@ -247,7 +250,7 @@ with tab_live:
     if st.session_state.results_list:
         df_live = pd.DataFrame(st.session_state.results_list)
         table_ui.write(df_live.to_html(escape=False, index=False), unsafe_allow_html=True)
-        download_ui.download_button(label="⬇️ Export CSV", data=df_live.to_csv(index=False).encode('utf-8'), file_name="leads.csv", mime="text/csv")
+        download_ui.download_button(label="⬇️ Export Leads CSV", data=df_live.to_csv(index=False).encode('utf-8'), file_name="leads.csv", mime="text/csv")
 
     if st.session_state.running and not st.session_state.paused:
         akws = [k.strip() for k in st.session_state.active_kw.split(',') if k.strip()]
@@ -282,11 +285,13 @@ with tab_live:
                             except: pass
                             
                             if w_phone and (phone == "N/A" or not phone): continue
+                            
+                            # 🔥 GLOBAL DEDUPE PRO
                             if w_global:
                                 with sqlite3.connect(DB_NAME) as conn:
                                     if conn.execute("SELECT 1 FROM leads WHERE name=? AND phone=?", (name, phone)).fetchone(): continue
 
-                            # 🔥 ROOT FIX: ARIA-LABEL RATING & REVIEWS EXTRACTION
+                            # 🔥 ROOT FIX: ARIA-LABEL INTERCEPTION FOR RATINGS & REVIEWS
                             full_review = "N/A"; r_numeric = 5.0
                             try:
                                 stars_el = driver.find_element(By.XPATH, '//span[contains(@aria-label, "stars")]')
@@ -296,10 +301,10 @@ with tab_live:
                                     rev_txt = rev_el.text if rev_el.text else rev_el.get_attribute("aria-label")
                                     full_review = f"{stars_txt} ({rev_txt})"
                                 except: full_review = stars_txt
-                                r_numeric = safe_numeric_rating(stars_txt)
+                                r_numeric = safe_math_rating(stars_txt)
                             except: pass
 
-                            # 🔥 ROOT FIX: ANTI-FREEZE MATH CHECK
+                            # 🔥 ROOT FIX: SAFE NEGATIVE FILTER (No Freeze)
                             if w_neg and r_numeric >= 3.5: continue
 
                             st.session_state.progress = min(int(((base_progress + processed + 1) / total_est) * 100), 100)
@@ -309,15 +314,15 @@ with tab_live:
                             try: maps_web = driver.find_element(By.CSS_SELECTOR, 'a[data-item-id="authority"]').get_attribute("href")
                             except: pass
                             
-                            # 🔥 ROOT FIX: SOCIAL VS WEBSITE CLASSIFIER
+                            # 🔥 ROOT FIX: SOCIAL CLASSIFIER (Moves FB/IG to Social column)
                             final_web = maps_web; social_found = "N/A"
                             if any(x in str(maps_web).lower() for x in ["facebook.com", "instagram.com", "linkedin.com", "twitter.com"]):
                                 social_found = maps_web; final_web = "N/A"
 
-                            # PRO DATA SCRAPER
+                            # Deep site crawl
                             email = "N/A"
                             if final_web != "N/A" and (w_social or w_email):
-                                s_crawl, em_crawl = fetch_data_pro(driver, final_web, w_social, w_email)
+                                s_crawl, em_crawl = fetch_deep_socials(driver, final_web, w_social, w_email)
                                 if social_found == "N/A": social_found = s_crawl
                                 email = em_crawl
 
@@ -344,7 +349,7 @@ with tab_live:
             finally: driver.quit()
 
 # ==============================================================================
-# 9. ARCHIVE & MARKETING (FROM APP 16)
+# 9. ARCHIVE & MARKETING (RESTORED FROM APP 16)
 # ==============================================================================
 with tab_archive:
     st.subheader("Persistent History")
@@ -366,7 +371,7 @@ with tab_tools:
     if not all_leads.empty:
         sel = st.selectbox("Analyze Lead", all_leads['name'])
         biz = all_leads[all_leads['name'] == sel].iloc[0]
-        msg = f"Hi {biz['name']}, I noticed your rating is {biz['rating']}. We can help you boost it!"
+        msg = f"Hi {biz['name']}, I noticed your Google rating is {biz['rating']}. We can help you boost it!"
         st.text_area("Generated Outreach Message:", msg, height=100)
 
-st.markdown('<div style="text-align:center;color:#666;padding:30px;">Designed by Chatir Elite Pro - Architect Edition V93</div>', unsafe_allow_html=True)
+st.markdown('<div style="text-align:center;color:#666;padding:30px;">Designed by Chatir Elite Pro - Architect Edition V94</div>', unsafe_allow_html=True)
