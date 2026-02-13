@@ -6,18 +6,13 @@ import re
 import os
 import base64
 import yaml
-import shutil
-import streamlit_authenticator as stauth
 from yaml.loader import SafeLoader
-from selenium import webdriver
-from selenium.webdriver.chrome.service import Service
-from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.common.by import By
-from webdriver_manager.chrome import ChromeDriverManager
+from playwright.sync_api import sync_playwright
+import streamlit_authenticator as stauth
 from urllib.parse import quote
 
 # ==============================================================================
-# 1. GLOBAL CONFIGURATION & STATE (FROM APP 16)
+# 1. GLOBAL CONFIG & STATE (FROM APP 15 & 16)
 # ==============================================================================
 st.set_page_config(page_title="ChatScrap Elite Pro", layout="wide", page_icon="💎") #
 
@@ -26,19 +21,18 @@ if 'running' not in st.session_state: st.session_state.running = False #
 if 'paused' not in st.session_state: st.session_state.paused = False #
 if 'task_index' not in st.session_state: st.session_state.task_index = 0 #
 if 'progress' not in st.session_state: st.session_state.progress = 0 #
-if 'status_msg' not in st.session_state: st.session_state.status_msg = "READY" #
 if 'current_sid' not in st.session_state: st.session_state.current_sid = None #
 
+# SNAPSHOT FIX: Survives Admin Reruns
 if 'active_kw' not in st.session_state: st.session_state.active_kw = "" #
 if 'active_city' not in st.session_state: st.session_state.active_city = "" #
 
 # ==============================================================================
-# 2. DESIGN SYSTEM (WORDPRESS LOGIN + ELITE DASHBOARD + STRIPY PROGRESS)
+# 2. DESIGN SYSTEM (WP LOGIN + STRIPY PROGRESS BAR)
 # ==============================================================================
 st.markdown('<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">', unsafe_allow_html=True) #
 
 if st.session_state.get("authentication_status") is not True:
-    # 🔥 WORDPRESS STYLE FROM SCREENSHOT
     st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap');
@@ -47,31 +41,27 @@ if st.session_state.get("authentication_status") is not True:
         background-color: #161922 !important; padding: 40px !important; border: 1px solid #FF8C00 !important;
         box-shadow: 0 10px 40px rgba(255,140,0,0.2) !important; border-radius: 12px !important; max-width: 420px !important; margin: auto !important;
     }
-    .stButton > button { background: linear-gradient(135deg, #FF8C00 0%, #FF4500 100%) !important; color: white !important; font-weight: 800 !important; height: 50px !important; border-radius: 8px !important; text-transform: uppercase; width: 100% !important; }
+    .stButton > button { background: linear-gradient(135deg, #FF8C00 0%, #FF4500 100%) !important; color: white !important; font-weight: 800 !important; height: 50px !important; border-radius: 8px !important; width: 100% !important; }
     [data-testid="stHeader"], [data-testid="stSidebar"] { display: none; }
     </style>
     """, unsafe_allow_html=True) #
 else:
-    # DASHBOARD STYLE WITH STRIPY PROGRESS
     st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap');
     html, body, [data-testid="stAppViewContainer"] { font-family: 'Inter', sans-serif !important; background-color: #0e1117; }
     .centered-logo { text-align: center; padding: 20px 0 40px 0; }
     .logo-img { width: 280px; filter: drop-shadow(0 0 15px rgba(255,140,0,0.3)); }
-    div[data-testid="stHorizontalBlock"]:has(button) { gap: 5px !important; }
-    .stButton > button { width: 100% !important; height: 50px !important; font-weight: 700 !important; font-size: 14px !important; border: none !important; text-transform: uppercase; letter-spacing: 1px; transition: all 0.3s ease-in-out; border-radius: 8px !important; color: white !important; }
-    div[data-testid="column"]:nth-of-type(1) .stButton > button { background: linear-gradient(135deg, #FF8C00 0%, #FF4500 100%) !important; box-shadow: 0 4px 15px rgba(255,69,0,0.3) !important; }
-    div[data-testid="column"]:nth-of-type(2) .stButton > button { background-color: #1F2937 !important; border: 1px solid #374151 !important; color: #E5E7EB !important; }
-    div[data-testid="column"]:nth-of-type(3) .stButton > button { background: linear-gradient(135deg, #28a745 0%, #218838 100%) !important; color: white !important; box-shadow: 0 4px 15px rgba(40, 167, 69, 0.3) !important; }
-    div[data-testid="column"]:nth-of-type(4) .stButton > button { background: linear-gradient(135deg, #DC2626 0%, #991B1B 100%) !important; box-shadow: 0 4px 15px rgba(220, 38, 38, 0.4) !important; }
+    .stButton > button { height: 50px !important; font-weight: 700 !important; border-radius: 8px !important; color: white !important; }
+    div[data-testid="column"]:nth-of-type(1) .stButton > button { background: linear-gradient(135deg, #FF8C00 0%, #FF4500 100%) !important; }
+    div[data-testid="column"]:nth-of-type(2) .stButton > button { background-color: #1F2937 !important; color: #E5E7EB !important; border: 1px solid #374151 !important; }
+    div[data-testid="column"]:nth-of-type(3) .stButton > button { background: linear-gradient(135deg, #28a745 0%, #218838 100%) !important; }
+    div[data-testid="column"]:nth-of-type(4) .stButton > button { background: linear-gradient(135deg, #DC2626 0%, #991B1B 100%) !important; }
+    /* 🔥 STRIPY PROGRESS BAR UI */
     .prog-container { width: 100%; background: #111827; border-radius: 50px; padding: 4px; border: 1px solid #374151; margin: 25px 0; }
     .prog-bar-fill { height: 16px; background: repeating-linear-gradient(45deg, #FF8C00, #FF8C00 12px, #FF4500 12px, #FF4500 24px); border-radius: 20px; transition: width 0.3s ease-in-out; animation: stripes 1s linear infinite; }
     @keyframes stripes { 0% {background-position: 0 0;} 100% {background-position: 48px 48px;} }
-    [data-testid="stMetricValue"] { color: #FF8C00 !important; font-weight: 800; }
-    section[data-testid="stSidebar"] { background-color: #161922 !important; border-right: 1px solid #31333F; }
     .wa-link { color: #25D366 !important; text-decoration: none !important; font-weight: bold; display: inline-flex; align-items: center; gap: 5px; }
-    .wa-link:hover { text-decoration: underline !important; }
     </style>
     """, unsafe_allow_html=True) #
 
@@ -90,7 +80,7 @@ def init_db():
             website TEXT, email TEXT, address TEXT, whatsapp TEXT)""") #
         cursor.execute("CREATE TABLE IF NOT EXISTS user_credits (username TEXT PRIMARY KEY, balance INTEGER, status TEXT DEFAULT 'active')") #
         
-        # SMART MIGRATION: Add new columns if they don't exist
+        # SMART MIGRATION: Auto-add columns without losing users
         cols = [c[1] for c in cursor.execute("PRAGMA table_info(leads)").fetchall()]
         for col in ["rating", "social_media"]:
             if col not in cols: cursor.execute(f"ALTER TABLE leads ADD COLUMN {col} TEXT")
@@ -124,11 +114,11 @@ if st.session_state.get("authentication_status") is not True:
         try: authenticator.login() #
         except: pass
         if st.session_state["authentication_status"] is False: st.error("Wrong credentials")
-        if st.session_state["authentication_status"] is None: st.info("🔒 Elite Pro - Private Access")
+        if st.session_state["authentication_status"] is None: st.info("🔒 Welcome to Elite Pro.")
         st.stop()
 
 # ==============================================================================
-# 5. SIDEBAR & ADMIN PANEL
+# 5. SIDEBAR & ADMIN PANEL (FROM APP 15/16)
 # ==============================================================================
 with st.sidebar:
     st.title("Profile Settings") #
@@ -161,7 +151,7 @@ with st.sidebar:
     if st.button("Logout"): authenticator.logout('Logout', 'main'); st.session_state.clear(); st.rerun()
 
 # ==============================================================================
-# 6. HEADER LOGO & INPUTS
+# 6. MAIN APP HEADER & INPUTS
 # ==============================================================================
 if os.path.exists("chatscrape.png"):
     with open("chatscrape.png", "rb") as f: b64 = base64.b64encode(f.read()).decode() #
@@ -208,28 +198,24 @@ with st.container():
         if st.button("Stop Search", disabled=not st.session_state.running): st.session_state.running, st.session_state.paused = False, False; st.rerun() #
 
 # ==============================================================================
-# 8. ENGINE & ANTI-FREEZE LOGIC (V83 ROOT FIX)
+# 8. ENGINE & PLAYWRIGHT ROBUST LOGIC (V84)
 # ==============================================================================
-def get_driver():
-    opts = Options(); opts.add_argument("--headless=new"); opts.add_argument("--no-sandbox"); opts.add_argument("--disable-dev-shm-usage")
-    opts.add_argument("--window-size=1920,1080")
-    try: return webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=opts)
-    except: return webdriver.Chrome(options=opts) #
-
-def safe_math_rating(text):
-    """ Converts text like '4.5 stars' to float. Returns 5.0 for N/A to prevent freezing. """
+def safe_calc_rating(text):
+    """ Safely parses '4.1 stars 120 reviews' to 4.1. Returns 5.0 for N/A. """
     try:
-        if not text or text == "N/A": return 5.0
+        if not text or "stars" not in text.lower(): return 5.0
         nums = re.findall(r"(\d+\.\d+|\d+)", text)
         return float(nums[0]) if nums else 5.0
     except: return 5.0
 
-def fetch_deep_social(driver, url, find_socials, find_email):
+def fetch_site_data(page, url, find_socials, find_email):
     social, em = "N/A", "N/A"
     if not url or url == "N/A": return social, em
     try:
-        driver.execute_script("window.open('');"); driver.switch_to.window(driver.window_handles[-1])
-        driver.set_page_load_timeout(10); driver.get(url); time.sleep(3); src = driver.page_source.lower()
+        new_page = page.context.new_page()
+        new_page.goto(url, timeout=15000, wait_until="domcontentloaded")
+        time.sleep(3)
+        src = new_page.content().lower()
         if find_socials:
             patterns = [r'instagram\.com/[a-zA-Z0-9_.]+', r'facebook\.com/[a-zA-Z0-9_.]+', r'linkedin\.com/company/[a-zA-Z0-9_-]+']
             for p in patterns:
@@ -238,9 +224,8 @@ def fetch_deep_social(driver, url, find_socials, find_email):
         if find_email:
             em_m = re.findall(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}", src)
             em = list(set(em_m))[0] if em_m else "N/A"
-        driver.close(); driver.switch_to.window(driver.window_handles[0])
-    except:
-        if len(driver.window_handles)>1: driver.close(); driver.switch_to.window(driver.window_handles[0])
+        new_page.close()
+    except: pass
     return social, em
 
 tab_live, tab_archive, tab_tools = st.tabs(["⚡ Live Data", "📜 Archives", "🤖 Marketing"]) #
@@ -251,8 +236,8 @@ with tab_live:
 
     if st.session_state.results_list:
         df_live = pd.DataFrame(st.session_state.results_list) #
-        table_ui.write(df_live.to_html(escape=False, index=False), unsafe_allow_html=True)
-        download_ui.download_button(label="⬇️ Export Leads CSV", data=df_live.to_csv(index=False).encode('utf-8'), file_name="leads.csv", mime="text/csv")
+        table_ui.write(df_live.to_html(escape=False, index=False), unsafe_allow_html=True) #
+        download_ui.download_button(label="⬇️ Download Leads", data=df_live.to_csv(index=False).encode('utf-8'), file_name="leads.csv", mime="text/csv")
 
     if st.session_state.running and not st.session_state.paused:
         akws = [k.strip() for k in st.session_state.active_kw.split(',') if k.strip()] #
@@ -260,96 +245,97 @@ with tab_live:
         all_tasks = [(c, k) for c in acts for k in akws] #
         
         if all_tasks:
-            driver = get_driver() #
-            try:
-                total_est = len(all_tasks) * limit_in
-                for i, (city, kw) in enumerate(all_tasks):
-                    if i < st.session_state.task_index: continue
-                    if not st.session_state.running: break
-                    base_progress = i * limit_in
-                    status_ui.markdown(f"**Scanning:** `{kw}` in `{city}`... ({i+1}/{len(all_tasks)})")
-                    driver.get(f"https://www.google.com/maps/search/{quote(kw)}+in+{quote(city)}?hl=en&gl=ma")
-                    time.sleep(4)
-                    try:
-                        pane = driver.find_element(By.CSS_SELECTOR, 'div[role="feed"]')
-                        for _ in range(depth_in): driver.execute_script("arguments[0].scrollTop = arguments[0].scrollHeight", pane); time.sleep(1)
-                    except: pass
-                    
-                    items = driver.find_elements(By.XPATH, '//a[contains(@href, "/maps/place/")]')
-                    processed = 0
-                    for item in items:
-                        if processed >= limit_in or not st.session_state.running: break
-                        try:
-                            driver.execute_script("arguments[0].click();", item); time.sleep(2)
-                            name = driver.find_element(By.CSS_SELECTOR, "h1.DUwDvf").text
-                            phone = "N/A"
-                            try: phone = driver.find_element(By.XPATH, '//*[contains(@data-item-id, "phone:tel")]').get_attribute("aria-label").replace("Phone: ", "")
-                            except: pass
-
-                            if w_phone and (phone == "N/A" or not phone): continue
-                            if w_global:
-                                with sqlite3.connect(DB_NAME) as conn:
-                                    if conn.execute("SELECT 1 FROM leads WHERE name=? AND phone=?", (name, phone)).fetchone(): continue
-
-                            # 🔥 ROOT FIX: HYBRID RATING & REVIEW SCRAPER
-                            full_review = "N/A"
-                            rating_val = 5.0
+            with sync_playwright() as p:
+                browser = p.chromium.launch(headless=True)
+                context = browser.new_context(viewport={'width': 1920, 'height': 1080})
+                page = context.new_page()
+                try:
+                    total_est = len(all_tasks) * limit_in
+                    for i, (city, kw) in enumerate(all_tasks):
+                        if i < st.session_state.task_index: continue
+                        if not st.session_state.running: break
+                        base_progress = i * limit_in
+                        status_ui.markdown(f"**Scanning:** `{kw}` in `{city}`... ({i+1}/{len(all_tasks)})")
+                        
+                        page.goto(f"https://www.google.com/maps/search/{quote(kw)}+in+{quote(city)}?hl=en&gl=ma", timeout=60000)
+                        time.sleep(5)
+                        
+                        # Scroll to load items
+                        for _ in range(depth_in):
+                            page.mouse.wheel(0, 5000); time.sleep(1)
+                        
+                        items = page.locator('a[href*="/maps/place/"]').all()
+                        processed = 0
+                        for item in items:
+                            if processed >= limit_in or not st.session_state.running: break
                             try:
-                                stars_el = driver.find_element(By.XPATH, '//span[contains(@aria-label, "stars")]')
-                                stars_text = stars_el.get_attribute("aria-label") 
-                                rating_val = safe_math_rating(stars_text)
+                                item.click(); time.sleep(3)
+                                # 🔥 ROBUST PLAYWRIGHT SELECTORS
+                                name = page.locator('h1.DUwDvf').first.inner_text()
+                                phone = "N/A"
+                                try: phone = page.locator('button[data-item-id*="phone:tel"]').first.get_attribute("aria-label").replace("Phone: ", "")
+                                except: pass
+                                
+                                if w_phone and (phone == "N/A" or not phone): continue
+                                if w_global:
+                                    with sqlite3.connect(DB_NAME) as conn:
+                                        if conn.execute("SELECT 1 FROM leads WHERE name=? AND phone=?", (name, phone)).fetchone(): continue
+
+                                # 🔥 SOLVING THE REVIEW PROBLEM
+                                full_rev = "N/A"; r_val = 5.0
                                 try:
-                                    rev_el = driver.find_element(By.XPATH, '//span[contains(@aria-label, "reviews")]')
-                                    rev_text = rev_el.text if rev_el.text else rev_el.get_attribute("aria-label")
-                                    full_review = f"{stars_text} ({rev_text})"
-                                except: full_review = stars_text
-                            except: pass
+                                    # Target elements containing rating information in aria-labels
+                                    rating_el = page.locator('span[aria-label*="stars"]').first
+                                    full_rev = rating_el.get_attribute("aria-label") # "4.3 stars 120 reviews"
+                                    r_val = safe_calc_rating(full_rev)
+                                except: pass
 
-                            # 🔥 ROOT FIX: ANTI-FREEZE FILTER CHECK
-                            if w_neg and rating_val >= 3.5: continue
+                                # 🔥 SOLVING THE FREEZE PROBLEM (STRICT MATH CHECK)
+                                if w_neg and r_val >= 3.5: continue
 
-                            st.session_state.progress = min(int(((base_progress + processed + 1) / total_est) * 100), 100)
-                            prog_spot.markdown(f'<div class="prog-container"><div class="prog-bar-fill" style="width: {st.session_state.progress}%;"></div></div>', unsafe_allow_html=True) #
-                            
-                            raw_web = driver.find_element(By.CSS_SELECTOR, 'a[data-item-id="authority"]').get_attribute("href") if driver.find_elements(By.CSS_SELECTOR, 'a[data-item-id="authority"]') else "N/A"
-                            
-                            # 🔥 ROOT FIX: SOCIAL CLASSIFIER (FB/IG to Social Media Column)
-                            final_web = raw_web
-                            social_found = "N/A"
-                            if any(x in raw_web.lower() for x in ["facebook.com", "instagram.com", "linkedin.com", "twitter.com"]):
-                                social_found = raw_web
-                                final_web = "N/A"
+                                st.session_state.progress = min(int(((base_progress + processed + 1) / total_est) * 100), 100)
+                                prog_spot.markdown(f'<div class="prog-container"><div class="prog-bar-fill" style="width: {st.session_state.progress}%;"></div></div>', unsafe_allow_html=True) #
 
-                            # PRO DATA SCRAPER (Crawl if website is valid)
-                            email = "N/A"
-                            if final_web != "N/A" and (w_social or w_email):
-                                s_crawl, email = fetch_deep_social(driver, final_web, w_social, w_email)
-                                if social_found == "N/A": social_found = s_crawl
+                                maps_web = "N/A"
+                                try: maps_web = page.locator('a[data-item-id="authority"]').get_attribute("href")
+                                except: pass
+                                
+                                # 🔥 SOLVING THE LINK CLASSIFIER PROBLEM
+                                final_web = maps_web; social_found = "N/A"
+                                if any(x in str(maps_web).lower() for x in ["facebook.com", "instagram.com", "linkedin.com"]):
+                                    social_found = maps_web; final_web = "N/A"
 
-                            wa = "N/A"; cp = re.sub(r'\D', '', phone)
-                            if any(cp.startswith(x) for x in ['2126','2127','06','07']) and not (cp.startswith('2125') or cp.startswith('05')):
-                                wa = f'<a href="https://wa.me/{cp}" target="_blank" class="wa-link"><i class="fab fa-whatsapp"></i> Chat Now</a>' #
-                            
-                            row = {"Keyword":kw, "City":city, "Name":name, "Phone":phone, "WhatsApp":wa, 
-                                   "Website": final_web if w_web else "N/A", "Email": email if w_email else "N/A",
-                                   "Rating/Reviews": full_review, "Social Media": social_found if w_social else "N/A"}
-                            
-                            with sqlite3.connect(DB_NAME) as conn:
-                                conn.execute("""INSERT INTO leads (session_id, keyword, city, country, name, phone, website, email, whatsapp, rating, social_media)
-                                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""", (st.session_state.current_sid, kw, city, country_in, name, phone, row["Website"], row["Email"], wa, full_review, social_found))
-                                if me != 'admin': conn.execute("UPDATE user_credits SET balance=balance-1 WHERE username=?", (me,))
-                                conn.commit()
-                            
-                            st.session_state.results_list.append(row); table_ui.write(pd.DataFrame(st.session_state.results_list).to_html(escape=False, index=False), unsafe_allow_html=True)
-                            processed += 1
-                        except Exception: continue
-                    st.session_state.task_index += 1
-                if st.session_state.task_index >= len(all_tasks) and st.session_state.running:
-                    st.success("🏁 Extraction Finished!"); st.session_state.running = False
-            finally: driver.quit()
+                                # Deep site crawl
+                                email = "N/A"
+                                if final_web != "N/A" and (w_social or w_email):
+                                    s_crawl, em_crawl = fetch_site_data(page, final_web, w_social, w_email)
+                                    if social_found == "N/A": social_found = s_crawl
+                                    email = em_crawl
+
+                                wa = "N/A"; cp = re.sub(r'\D', '', phone)
+                                if any(cp.startswith(x) for x in ['2126','2127','06','07']) and not (cp.startswith('2125') or cp.startswith('05')):
+                                    wa = f'<a href="https://wa.me/{cp}" target="_blank" class="wa-link"><i class="fab fa-whatsapp"></i> Chat Now</a>' #
+                                
+                                row = {"Keyword":kw, "City":city, "Name":name, "Phone":phone, "WhatsApp":wa, 
+                                       "Website": final_web if w_web else "N/A", "Email": email if w_email else "N/A",
+                                       "Rating/Reviews": full_rev, "Social Media": social_found if w_social else "N/A"}
+                                
+                                with sqlite3.connect(DB_NAME) as conn:
+                                    conn.execute("""INSERT INTO leads (session_id, keyword, city, country, name, phone, website, email, whatsapp, rating, social_media)
+                                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""", (st.session_state.current_sid, kw, city, country_in, name, phone, row["Website"], row["Email"], wa, full_rev, social_found))
+                                    if me != 'admin': conn.execute("UPDATE user_credits SET balance=balance-1 WHERE username=?", (me,))
+                                    conn.commit()
+                                
+                                st.session_state.results_list.append(row); table_ui.write(pd.DataFrame(st.session_state.results_list).to_html(escape=False, index=False), unsafe_allow_html=True)
+                                processed += 1
+                            except: continue
+                        st.session_state.task_index += 1
+                    if st.session_state.task_index >= len(all_tasks) and st.session_state.running:
+                        st.success("🏁 Extraction Finished!"); st.session_state.running = False
+                finally: browser.close()
 
 # ==============================================================================
-# 9. ARCHIVE & MARKETING (FROM APP 16)
+# 9. ARCHIVE & MARKETING (FROM APP 15/16)
 # ==============================================================================
 with tab_archive:
     st.subheader("Persistent History") #
@@ -365,14 +351,14 @@ with tab_archive:
                     st.download_button(label="⬇️ Export CSV", data=df_l.to_csv(index=False).encode('utf-8'), file_name=f"archive_{sess['id']}.csv", key=f"btn_{sess['id']}")
 
 with tab_tools:
-    st.subheader("🤖 Marketing Automation")
+    st.subheader("🤖 Marketing Automation") #
+    st.info("💡 AI outreach tools integrated with extracted leads.") #
     with sqlite3.connect(DB_NAME) as conn:
         all_leads = pd.read_sql("SELECT name, keyword, rating FROM leads ORDER BY id DESC LIMIT 50", conn)
     if not all_leads.empty:
-        sel = st.selectbox("Analyze Lead", all_leads['name'])
+        sel = st.selectbox("Select Business", all_leads['name'])
         biz = all_leads[all_leads['name'] == sel].iloc[0]
-        msg = f"Hi {biz['name']}, I noticed you have a {biz['rating']} profile. We can help you boost your online score!"
-        st.text_area("AI Outreach Message:", msg, height=100)
-    else: st.warning("No leads found. Start a search first!")
+        msg = f"Hi {biz['name']}, I noticed your Google profile has {biz['rating']}. Let's work together to boost it!"
+        st.text_area("Generated AI Message:", msg, height=100)
 
-st.markdown('<div style="text-align:center;color:#666;padding:30px;">Designed by Chatir Elite Pro - Architect Edition V83</div>', unsafe_allow_html=True) #
+st.markdown('<div style="text-align:center;color:#666;padding:30px;">Designed by Chatir Elite Pro - Architect Edition V84 (Playwright)</div>', unsafe_allow_html=True) #
