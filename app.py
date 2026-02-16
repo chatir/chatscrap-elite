@@ -17,7 +17,7 @@ from webdriver_manager.chrome import ChromeDriverManager
 from urllib.parse import quote
 
 # ==============================================================================
-# 1. GLOBAL CONFIGURATION & STATE (FROM APP 16)
+# 1. GLOBAL CONFIGURATION & STATE (FROM APP 15 & 16)
 # ==============================================================================
 st.set_page_config(page_title="ChatScrap Elite Pro", layout="wide", page_icon="💎") #
 
@@ -26,15 +26,14 @@ if 'running' not in st.session_state: st.session_state.running = False #
 if 'paused' not in st.session_state: st.session_state.paused = False #
 if 'task_index' not in st.session_state: st.session_state.task_index = 0 #
 if 'progress' not in st.session_state: st.session_state.progress = 0 #
-if 'status_msg' not in st.session_state: st.session_state.status_msg = "READY" #
 if 'current_sid' not in st.session_state: st.session_state.current_sid = None #
 
-# PERSISTENCE (Admin Panel Rerun Fix)
+# PERSISTENCE: Snapshot fix for Admin reruns
 if 'active_kw' not in st.session_state: st.session_state.active_kw = "" #
 if 'active_city' not in st.session_state: st.session_state.active_city = "" #
 
 # ==============================================================================
-# 2. DESIGN SYSTEM (WORDPRESS LOGIN + DASHBOARD + STRIPY PROGRESS)
+# 2. DESIGN SYSTEM (WP LOGIN + STRIPY PROGRESS BAR)
 # ==============================================================================
 st.markdown('<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">', unsafe_allow_html=True) #
 
@@ -64,6 +63,7 @@ else:
     div[data-testid="column"]:nth-of-type(2) .stButton > button { background-color: #1F2937 !important; border: 1px solid #374151 !important; color: #E5E7EB !important; }
     div[data-testid="column"]:nth-of-type(3) .stButton > button { background: linear-gradient(135deg, #28a745 0%, #218838 100%) !important; box-shadow: 0 4px 15px rgba(40, 167, 69, 0.3) !important; }
     div[data-testid="column"]:nth-of-type(4) .stButton > button { background: linear-gradient(135deg, #DC2626 0%, #991B1B 100%) !important; box-shadow: 0 4px 15px rgba(220, 38, 38, 0.4) !important; }
+    /* 🔥 STRIPY PROGRESS BAR UI */
     .prog-container { width: 100%; background: #111827; border-radius: 50px; padding: 4px; border: 1px solid #374151; margin: 25px 0; }
     .prog-bar-fill { height: 16px; background: repeating-linear-gradient(45deg, #FF8C00, #FF8C00 12px, #FF4500 12px, #FF4500 24px); border-radius: 20px; transition: width 0.3s ease-in-out; animation: stripes 1s linear infinite; }
     @keyframes stripes { 0% {background-position: 0 0;} 100% {background-position: 48px 48px;} }
@@ -75,7 +75,7 @@ else:
     """, unsafe_allow_html=True) #
 
 # ==============================================================================
-# 3. DATABASE (V9 RESTORED + MIGRATION)
+# 3. DATABASE (V9 RESTORED + SMART MIGRATION)
 # ==============================================================================
 DB_NAME = "chatscrap_elite_pro_v9.db" #
 
@@ -89,7 +89,7 @@ def init_db():
             website TEXT, email TEXT, address TEXT, whatsapp TEXT)""") #
         cursor.execute("CREATE TABLE IF NOT EXISTS user_credits (username TEXT PRIMARY KEY, balance INTEGER, status TEXT DEFAULT 'active')") #
         
-        # SMART MIGRATION: Auto-add columns without losing users
+        # SMART MIGRATION
         cols = [c[1] for c in cursor.execute("PRAGMA table_info(leads)").fetchall()]
         for col in ["rating", "social_media"]:
             if col not in cols: cursor.execute(f"ALTER TABLE leads ADD COLUMN {col} TEXT")
@@ -116,18 +116,18 @@ authenticator = stauth.Authenticate(config['credentials'], config['cookie']['nam
 if st.session_state.get("authentication_status") is not True:
     if os.path.exists("chatscrape.png"):
         with open("chatscrape.png", "rb") as f: b64 = base64.b64encode(f.read()).decode() #
-        st.markdown(f'<div style="text-align:center; padding-top: 100px; padding-bottom: 20px;"><img src="data:image/png;base64,{b64}" style="width:320px; filter: drop-shadow(0 0 15px rgba(255,140,0,0.3));"></div>', unsafe_allow_html=True)
+        st.markdown(f'<div style="text-align:center; padding-top: 100px; padding-bottom: 20px;"><img src="data:image/png;base64,{b64}" style="width:320px; filter: drop-shadow(0 0 15px rgba(255,140,0,0.3));"></div>', unsafe_allow_html=True) #
     
     col1, col2, col3 = st.columns([1, 1.2, 1]) #
     with col2:
         try: authenticator.login() #
         except: pass
         if st.session_state["authentication_status"] is False: st.error("Login failed")
-        if st.session_state["authentication_status"] is None: st.info("🔒 Elite Pro - Restricted Access")
+        if st.session_state["authentication_status"] is None: st.info("🔒 Elite Pro - Private Access")
         st.stop()
 
 # ==============================================================================
-# 5. SIDEBAR & ADMIN (FROM APP 16)
+# 5. SIDEBAR & ADMIN PANEL
 # ==============================================================================
 with st.sidebar:
     st.title("Profile Settings") #
@@ -144,7 +144,7 @@ with st.sidebar:
             target = st.selectbox("Select User", u_df['username'])
             c1, c2, c3 = st.columns(3)
             if c1.button("💰 +100"): conn.execute("UPDATE user_credits SET balance=balance+100 WHERE username=?", (target,)); conn.commit(); st.rerun()
-            if c2.button("🚫 Status"):
+            if c2.button("🚫 State"):
                 curr = conn.execute("SELECT status FROM user_credits WHERE username=?", (target,)).fetchone()[0]
                 conn.execute("UPDATE user_credits SET status=? WHERE username=?", ('suspended' if curr=='active' else 'active', target)); conn.commit(); st.rerun()
             if c3.button("🗑️ Del"): conn.execute("DELETE FROM user_credits WHERE username=?", (target,)); conn.commit(); st.rerun()
@@ -160,16 +160,16 @@ with st.sidebar:
     if st.button("Logout"): authenticator.logout('Logout', 'main'); st.session_state.clear(); st.rerun()
 
 # ==============================================================================
-# 6. MAIN APP HEADER & INPUTS
+# 6. HEADER LOGO & INPUTS
 # ==============================================================================
 if os.path.exists("chatscrape.png"):
     with open("chatscrape.png", "rb") as f: b64 = base64.b64encode(f.read()).decode() #
-    st.markdown(f'<div class="centered-logo"><img src="data:image/png;base64,{b64}" class="logo-img"></div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="centered-logo"><img src="data:image/png;base64,{b64}" class="logo-img"></div>', unsafe_allow_html=True) #
 
 with st.container():
     c1, c2, c3, c4 = st.columns([3, 3, 2, 1.5]) #
-    kw_in = c1.text_input("Keywords", placeholder="e.g. hotel, cafe", key="kw_in_key") #
-    city_in = c2.text_input("Cities", placeholder="e.g. Agadir, Casa", key="city_in_key") #
+    kw_in = c1.text_input("Keywords", placeholder="e.g. hotel, gym", key="kw_in_key") #
+    city_in = c2.text_input("Cities", placeholder="e.g. Agadir, Rabat", key="city_in_key") #
     country_in = c3.selectbox("Country", ["Morocco", "France", "USA", "Spain", "UAE", "UK"], key="country_in_key") #
     limit_in = c4.number_input("Limit/City", 1, 1000, 20, key="limit_in_key") #
 
@@ -178,7 +178,7 @@ with st.container():
     w_phone = f1.checkbox("Phone Only", True) #
     w_web = f2.checkbox("Website", False) #
     w_email = f3.checkbox("Deep Email", False) #
-    w_social = f4.checkbox("🛡️ Social Media", False)
+    w_social = f4.checkbox("📸 Social Media", False)
     w_global = f5.checkbox("🛡️ Global Dedupe", True)
     
     f6, f7, f8 = st.columns([1.5, 1.5, 2.5])
@@ -207,13 +207,21 @@ with st.container():
         if st.button("Stop Search", disabled=not st.session_state.running): st.session_state.running, st.session_state.paused = False, False; st.rerun() #
 
 # ==============================================================================
-# 8. ENGINE & ROBUST SCRAPER LOGIC (V77 IMPROVEMENTS)
+# 8. ENGINE & ROBUST SELENIUM LOGIC (V87 ROOT FIX)
 # ==============================================================================
 def get_driver():
     opts = Options(); opts.add_argument("--headless=new"); opts.add_argument("--no-sandbox"); opts.add_argument("--disable-dev-shm-usage")
     opts.add_argument("--window-size=1920,1080")
     try: return webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=opts)
     except: return webdriver.Chrome(options=opts) #
+
+def safe_rating_convert(text):
+    """ Safely parses rating like '4.4 stars' to float. Returns 5.0 to prevent freeze. """
+    try:
+        if not text or text == "N/A": return 5.0
+        nums = re.findall(r"(\d+\.\d+|\d+)", text)
+        return float(nums[0]) if nums else 5.0
+    except: return 5.0
 
 def fetch_data_pro(driver, url, find_socials, find_email):
     social, em = "N/A", "N/A"
@@ -224,7 +232,7 @@ def fetch_data_pro(driver, url, find_socials, find_email):
         if find_socials:
             patterns = [r'instagram\.com/[a-zA-Z0-9_.]+', r'facebook\.com/[a-zA-Z0-9_.]+', r'linkedin\.com/company/[a-zA-Z0-9_-]+']
             for p in patterns:
-                m = re.findall(p, src)
+                m = re.findall(p, src); 
                 if m: social = m[0]; break
         if find_email:
             em_m = re.findall(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}", src)
@@ -238,12 +246,12 @@ tab_live, tab_archive, tab_tools = st.tabs(["⚡ Live Data", "📜 Archives", "�
 
 with tab_live:
     prog_spot, status_ui, table_ui, download_ui = st.empty(), st.empty(), st.empty(), st.empty() #
-    prog_spot.markdown(f'<div class="prog-container"><div class="prog-bar-fill" style="width: {st.session_state.progress}%;"></div></div>', unsafe_allow_html=True)
+    prog_spot.markdown(f'<div class="prog-container"><div class="prog-bar-fill" style="width: {st.session_state.progress}%;"></div></div>', unsafe_allow_html=True) #
 
     if st.session_state.results_list:
         df_live = pd.DataFrame(st.session_state.results_list) #
         table_ui.write(df_live.to_html(escape=False, index=False), unsafe_allow_html=True)
-        download_ui.download_button(label="⬇️ Export Results CSV", data=df_live.to_csv(index=False).encode('utf-8'), file_name="leads.csv", mime="text/csv")
+        download_ui.download_button(label="⬇️ Export CSV", data=df_live.to_csv(index=False).encode('utf-8'), file_name="leads.csv", mime="text/csv")
 
     if st.session_state.running and not st.session_state.paused:
         akws = [k.strip() for k in st.session_state.active_kw.split(',') if k.strip()] #
@@ -260,7 +268,7 @@ with tab_live:
                     base_progress = i * limit_in
                     status_ui.markdown(f"**Scanning:** `{kw}` in `{city}`... ({i+1}/{len(all_tasks)})")
                     driver.get(f"https://www.google.com/maps/search/{quote(kw)}+in+{quote(city)}?hl=en&gl=ma")
-                    time.sleep(4)
+                    time.sleep(5)
                     try:
                         pane = driver.find_element(By.CSS_SELECTOR, 'div[role="feed"]')
                         for _ in range(depth_in): driver.execute_script("arguments[0].scrollTop = arguments[0].scrollHeight", pane); time.sleep(1)
@@ -271,47 +279,62 @@ with tab_live:
                     for item in items:
                         if processed >= limit_in or not st.session_state.running: break
                         try:
-                            driver.execute_script("arguments[0].click();", item); time.sleep(2)
+                            driver.execute_script("arguments[0].click();", item); time.sleep(3)
                             name = driver.find_element(By.CSS_SELECTOR, "h1.DUwDvf").text
                             phone = "N/A"
                             try: phone = driver.find_element(By.XPATH, '//*[contains(@data-item-id, "phone:tel")]').get_attribute("aria-label").replace("Phone: ", "")
                             except: pass
-
+                            
                             if w_phone and (phone == "N/A" or not phone): continue
                             if w_global:
                                 with sqlite3.connect(DB_NAME) as conn:
                                     if conn.execute("SELECT 1 FROM leads WHERE name=? AND phone=?", (name, phone)).fetchone(): continue
 
-                            # 🔥 STATED IMPROVEMENT: Scraping Full Text for Ratings & Reviews
-                            full_review = "N/A"
-                            rating_val = 5.0
+                            # 🔥 ROOT FIX: ROBUST RATING EXTRACTION (Stars + Review Count)
+                            full_review = "N/A"; r_val = 5.0
                             try:
-                                # Look for the span that contains "stars" in its aria-label
-                                review_el = driver.find_element(By.XPATH, '//span[contains(@aria-label, "stars")]')
-                                full_review = review_el.get_attribute("aria-label") # e.g., "4.3 stars 126 reviews"
-                                if full_review:
-                                    rating_val = float(re.findall(r"(\d+\.\d+|\d+)", full_review)[0])
+                                # First look for any element with "stars" in its aria-label
+                                stars_el = driver.find_element(By.XPATH, '//span[contains(@aria-label, "stars")]')
+                                stars_text = stars_el.get_attribute("aria-label") 
+                                
+                                try:
+                                    # Look for adjacent review count
+                                    rev_el = driver.find_element(By.XPATH, '//span[contains(@aria-label, "reviews")]')
+                                    rev_text = rev_el.text if rev_el.text else rev_el.get_attribute("aria-label")
+                                    full_review = f"{stars_text} ({rev_text})"
+                                except:
+                                    full_review = stars_text
+                                r_val = safe_rating_convert(stars_text)
                             except: pass
 
-                            # 🔥 STRICT NEGATIVE FILTER (<3.5)
-                            if w_neg and rating_val >= 3.5: continue
+                            # 🔥 ROOT FIX: ANTI-FREEZE FILTER CHECK
+                            if w_neg and r_val >= 3.5: continue
 
                             st.session_state.progress = min(int(((base_progress + processed + 1) / total_est) * 100), 100)
-                            prog_spot.markdown(f'<div class="prog-container"><div class="prog-bar-fill" style="width: {st.session_state.progress}%;"></div></div>', unsafe_allow_html=True)
+                            prog_spot.markdown(f'<div class="prog-container"><div class="prog-bar-fill" style="width: {st.session_state.progress}%;"></div></div>', unsafe_allow_html=True) #
+
+                            maps_web = "N/A"
+                            try: maps_web = driver.find_element(By.CSS_SELECTOR, 'a[data-item-id="authority"]').get_attribute("href")
+                            except: pass
                             
-                            raw_web = driver.find_element(By.CSS_SELECTOR, 'a[data-item-id="authority"]').get_attribute("href") if driver.find_elements(By.CSS_SELECTOR, 'a[data-item-id="authority"]') else "N/A"
-                            
-                            # PRO DATA SCRAPER
-                            social_found, email = "N/A", "N/A"
-                            if raw_web != "N/A" and (w_social or w_email):
-                                social_found, email = fetch_data_pro(driver, raw_web, w_social, w_email)
+                            # 🔥 ROOT FIX: SOCIAL CLASSIFIER (Moves FB/IG to Social Column)
+                            final_web = maps_web; social_found = "N/A"
+                            if any(x in str(maps_web).lower() for x in ["facebook.com", "instagram.com", "linkedin.com", "twitter.com"]):
+                                social_found = maps_web; final_web = "N/A"
+
+                            # Deep site crawl for email/additional socials
+                            email = "N/A"
+                            if final_web != "N/A" and (w_social or w_email):
+                                s_crawl, em_crawl = fetch_data_pro(driver, final_web, w_social, w_email)
+                                if social_found == "N/A": social_found = s_crawl
+                                email = em_crawl
 
                             wa = "N/A"; cp = re.sub(r'\D', '', phone)
                             if any(cp.startswith(x) for x in ['2126','2127','06','07']) and not (cp.startswith('2125') or cp.startswith('05')):
-                                wa = f'<a href="https://wa.me/{cp}" target="_blank" class="wa-link"><i class="fab fa-whatsapp"></i> Chat Now</a>'
+                                wa = f'<a href="https://wa.me/{cp}" target="_blank" class="wa-link"><i class="fab fa-whatsapp"></i> Chat Now</a>' #
                             
                             row = {"Keyword":kw, "City":city, "Name":name, "Phone":phone, "WhatsApp":wa, 
-                                   "Website": raw_web if w_web else "N/A", "Email": email if w_email else "N/A",
+                                   "Website": final_web if w_web else "N/A", "Email": email if w_email else "N/A",
                                    "Rating/Reviews": full_review, "Social Media": social_found if w_social else "N/A"}
                             
                             with sqlite3.connect(DB_NAME) as conn:
@@ -329,7 +352,7 @@ with tab_live:
             finally: driver.quit()
 
 # ==============================================================================
-# 9. ARCHIVE & MARKETING (FROM APP 16)
+# 9. ARCHIVE & MARKETING (FROM APP 15/16)
 # ==============================================================================
 with tab_archive:
     st.subheader("Persistent History") #
@@ -345,14 +368,13 @@ with tab_archive:
                     st.download_button(label="⬇️ Export CSV", data=df_l.to_csv(index=False).encode('utf-8'), file_name=f"archive_{sess['id']}.csv", key=f"btn_{sess['id']}")
 
 with tab_tools:
-    st.subheader("🤖 Marketing Automation")
+    st.subheader("🤖 Marketing Automation") #
     with sqlite3.connect(DB_NAME) as conn:
         all_leads = pd.read_sql("SELECT name, keyword, rating FROM leads ORDER BY id DESC LIMIT 50", conn)
     if not all_leads.empty:
-        sel = st.selectbox("Analyze Business", all_leads['name'])
+        sel = st.selectbox("Analyze Lead", all_leads['name'])
         biz = all_leads[all_leads['name'] == sel].iloc[0]
-        msg = f"Hi {biz['name']}, I noticed you have a profile in {biz['keyword']}. Your rating is {biz['rating']}. We can help you manage your reputation!"
-        st.text_area("AI Outreach Message:", msg, height=100)
-    else: st.warning("No leads found. Start a search first!")
+        msg = f"Hi {biz['name']}, I noticed your Google profile has {biz['rating']}. We can help you boost it!"
+        st.text_area("Generated Outreach Message:", msg, height=100)
 
-st.markdown('<div style="text-align:center;color:#666;padding:30px;">Designed by Chatir Elite Pro - Architect Edition V77</div>', unsafe_allow_html=True) #
+st.markdown('<div style="text-align:center;color:#666;padding:30px;">Designed by Chatir Elite Pro - Architect Edition V87</div>', unsafe_allow_html=True) #
